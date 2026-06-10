@@ -5,7 +5,16 @@ import re
 from datetime import datetime
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from supabase import create_client, Client
+
+# Penanganan pencegahan hard-crash jika modul supabase belum terinstal di environment
+try:
+    from supabase import create_client, Client
+    HAS_SUPABASE = True
+except ModuleNotFoundError:
+    HAS_SUPABASE = False
+
+# Config Halaman dipindahkan ke paling atas (Aturan mutlak Streamlit)
+st.set_page_config(page_title="Data Quality Review - PKBI Jabar", page_icon="📊", layout="wide")
 
 # ==========================================================
 # 0. KONFIGURASI SUPABASE
@@ -15,6 +24,9 @@ SUPABASE_KEY = "sb_publishable_0RXs2YvzFtj2b8K2zeCFvQ_XAMQW1aM"
 
 @st.cache_resource
 def init_supabase():
+    if not HAS_SUPABASE:
+        st.error("⚠️ Library 'supabase' belum terinstal. Silakan tambahkan 'supabase' ke file requirements.txt Anda.")
+        return None
     try:
         return create_client(SUPABASE_URL, SUPABASE_KEY)
     except Exception as e:
@@ -37,9 +49,7 @@ if 'df_tabel_bawah' not in st.session_state:
 if 'df_tabel_atas' not in st.session_state:
     st.session_state['df_tabel_atas'] = None
 
-# Config Halaman
-st.set_page_config(page_title="Data Quality Review - PKBI Jabar", page_icon="📊", layout="wide")
-
+# Custom CSS Styling
 st.markdown("""
     <style>
     .main-title { font-size: 2.2rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.2rem; }
@@ -51,7 +61,7 @@ st.markdown("""
 st.markdown('<div class="main-title">📊 Tools Review Data Massal — PKBI Jabar</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem otomatisasi penelaahan kualitas data berbasis matriks validasi terintegrasi Database.</div>', unsafe_allow_html=True)
 
-# SIDEBAR: Komponen Unggah Berkas (Perbaikan agar variabel terdefinisi)
+# SIDEBAR: Komponen Unggah Berkas
 st.sidebar.header("📁 Pengaturan Berkas")
 files_review = st.sidebar.file_uploader("Unggah Raw Data Excel (Bisa Banyak Berkas)", type=["xlsx"], accept_multiple_files=True)
 file_referensi = st.sidebar.file_uploader("Unggah Data Referensi Semester/Tahun Lalu (Opsional)", type=["xlsx"])
@@ -299,7 +309,7 @@ def jalankan_review_data(df_asli, df_ref=None):
             thn_id = id_clean[4:6]
             nik_for_idx = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
             if len(nik_for_idx) >= 14:
-                thn_nik = nik_for_idx[11:13] # Digit ke 12 dan 13 dengan asumsi petik (') dihitung
+                thn_nik = nik_for_idx[11:13] 
                 if thn_id != thn_nik:
                     tambah_log(DAFTAR_INDIKATOR[10])
 
@@ -313,12 +323,12 @@ def jalankan_review_data(df_asli, df_ref=None):
             if nik_clean.endswith('00'):
                 tambah_log(DAFTAR_INDIKATOR[12])
 
-            # 13. Secara NIK harusnya perempuan bukan laki-laki (JK Laki-laki=1, tapi tgl lahir NIK > 31)
+            # 13. Secara NIK harusnya perempuan bukan laki-laki
             if len(nik_clean) == 16 and jk == '1':
                 nik_for_jk = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
                 if len(nik_for_jk) >= 10:
                     try:
-                        dd_nik = int(nik_for_jk[13:15]) # Digit 14 dan 15 jika tanda petik dihitung
+                        dd_nik = int(nik_for_jk[13:15])
                         if dd_nik > 31: 
                             tambah_log(DAFTAR_INDIKATOR[13])
                     except: pass
@@ -371,7 +381,7 @@ if st.button("🚀 Jalankan Penelaahan Laporan", type="primary"):
                 
                 # Membangun matriks atas berdasarkan DAFTAR_INDIKATOR baru
                 for idx, ind in enumerate(DAFTAR_INDIKATOR):
-                    if idx == 0: continue # Lewati placeholder indeks 0
+                    if idx == 0: continue 
                     r_dict = {"INDIKATOR KESALAHAN DATA": ind}
                     total_ind_err = 0
                     for ssr in active_ssrs:
@@ -456,7 +466,7 @@ if st.session_state['proses_selesai']:
         # --- TOMBOL SIMPAN DATABASE ---
         if st.button("💾 Simpan Progres Validasi & Justifikasi Ke Database", type="secondary"):
             if not supabase:
-                st.error("Koneksi database tidak tersedia.")
+                st.error("Koneksi database tidak tersedia. Periksa kembali instalasi modul 'supabase'.")
             else:
                 sukses_simpan = 0
                 peringatan_justifikasi = False
@@ -484,7 +494,7 @@ if st.session_state['proses_selesai']:
                                 sukses_simpan += 1
                             except Exception as ex:
                                 pass
-                    
+                        
                     if peringatan_justifikasi:
                         st.warning("⚠️ Beberapa teks Justifikasi otomatis diabaikan karena ditulis pada baris indikator kesalahan mutlak (Bukan tipe konfirmasi).")
                     
