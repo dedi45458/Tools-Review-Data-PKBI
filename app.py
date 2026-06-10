@@ -153,19 +153,16 @@ def jalankan_review_data(df_asli, df_ref=None):
 
         def tambah_log(ind_text):
             key_db = f"{v_ssr}_{v_tanggal}_{id_clean}_{ind_text}"
-            is_butuh_konfirmasi = "konfirmasi" in ind_text.lower()
             
-            # JIKA DATA KONFIRMASI SUDAH ADA JUSTIFIKASI DI DATABASE, JANGAN TAMPILKAN SEBAGAI ERROR
-            if is_butuh_konfirmasi and key_db in dict_justifikasi and not dict_revisi.get(key_db, False):
+            # JIKA SUDAH ADA JUSTIFIKASI DI DATABASE, JANGAN ANGGAP SEBAGAI ERROR (DI-SKIP)
+            if key_db in dict_justifikasi and not dict_revisi.get(key_db, False):
                 return
                 
             status_validasi = "-"
             checked_state = False
+            justif_val = dict_justifikasi.get(key_db, "")
             
-            # Kolom Justifikasi dikunci string kosong jika indikator bukan tipe konfirmasi
-            justif_val = dict_justifikasi.get(key_db, "") if is_butuh_konfirmasi else ""
-            
-            # CEK APAKAH ERROR INI BERULANG
+            # CEK APAKAH ERROR INI BERULANG (Pernah dichecklist dulu tapi belum direvisi di excel baru)
             if key_db in dict_revisi:
                 status_validasi = "kesalahan pada ID yang berulang (belum dilakukan revisi)"
                 checked_state = True
@@ -185,7 +182,7 @@ def jalankan_review_data(df_asli, df_ref=None):
                 "Tipe Sasaran": v_tipe
             })
 
-        # --- Contoh Trigger Pengecekan Indikator ---
+        # Contoh Pengecekan Singkat Indikator 
         if not v_petugas or v_petugas == 'nan': tambah_log(DAFTAR_INDIKATOR[1])
         if len(id_clean) != 10: tambah_log(DAFTAR_INDIKATOR[3])
         if len(nik_clean) != 16 and nik_clean != 'nan' and nik_clean != '': tambah_log(DAFTAR_INDIKATOR[14])
@@ -240,6 +237,7 @@ if st.button("🚀 Jalankan Penelaahan Laporan", type="primary"):
                     matrix_rows.append(r_dict)
                 
                 df_atas = pd.DataFrame(matrix_rows)
+                # Filter hapus baris indikator yang sama sekali tidak ada error di semua SSR
                 df_atas = df_atas[df_atas['Jumlah'] > 0]
                 
                 st.session_state['df_tabel_atas'] = df_atas
@@ -255,26 +253,30 @@ if st.button("🚀 Jalankan Penelaahan Laporan", type="primary"):
 # ==========================================================
 if st.session_state['proses_selesai']:
     
-    # --- METRICS ---
-    m1, m2 = st.columns([1, 1])
+    # --- METRICS & DOWNLOAD ---
+    m1, m2, m3 = st.columns([1, 1, 1])
     m1.metric("Total Entri Diperiksa", f"{st.session_state['total_entri']} Baris")
     tot_err = len(st.session_state['df_tabel_bawah']) if st.session_state['df_tabel_bawah'] is not None else 0
-    m2.metric("Total Temuan Kesalahan", f"{tot_err} Kasus")
+    m2.metric("Total Temuan Kasalahan", f"{tot_err} Kasus")
+    m3.write("") # Untuk button download jika diperlukan
 
     st.markdown("---")
     
-    # ------------------------------------------------------
-    # TABEL ATAS: REKAP HASIL REVIEW DATA PER SSR
-    # ------------------------------------------------------
+    # ==========================================================
+    # PERUBAHAN TABEL 2: REKAP HASIL REVIEW DATA PER SSR
+    # ==========================================================
     st.markdown("#### Rekap Hasil Review Data per SSR")
+    
     df_atas_view = st.session_state['df_tabel_atas'].copy()
     
     if not df_atas_view.empty:
+        # Mengubah Format Angka 0 Menjadi Strip (-) dan Center Alignment
         styled_atas = df_atas_view.style.format(
             lambda x: "-" if x == 0 else f"{x}",
             subset=[c for c in df_atas_view.columns if c != "INDIKATOR KESALAHAN DATA"]
         ).set_properties(**{'text-align': 'center'}, subset=[c for c in df_atas_view.columns if c != "INDIKATOR KESALAHAN DATA"])
         
+        # Render Table dengan Column Configuration agar lebar seragam & Freeze Column otomatis aktif
         st.dataframe(
             styled_atas,
             use_container_width=True,
@@ -285,76 +287,66 @@ if st.session_state['proses_selesai']:
             }
         )
     else:
-        st.info("✨ Tidak ditemukan kesalahan data pada berkas.")
+        st.info("✨ Tidak ditemukan kesalahan data pada berkas yang diunggah.")
 
     st.markdown("---")
 
-    # ------------------------------------------------------
-    # TABEL BAWAH: HASIL REVIEW PENJANGKAUAN
-    # ------------------------------------------------------
+    # ==========================================================
+    # PERUBAHAN TABEL 1: HASIL REVIEW PENJANGKAUAN (+ ACTION CEKLIS)
+    # ==========================================================
     st.markdown("#### Hasil Review Penjangkauan")
     
     if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_tabel_bawah'].empty:
+        
+        # Re-order susunan kolom agar Ceklis (Pilih) dan Justifikasi berada di tempat ideal
         kolom_susunan = [
             "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", 
             "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi",
             "Baris Excel", "Kode Petugas", "Nama Kota", "NIK"
         ]
         
-        df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
+        df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan]
         
-        # Render editor tabel
+        # Menggunakan st.data_editor agar Kolom 'Pilih' (Ceklis) & 'Justifikasi' bisa diedit user
         df_hasil_edit = st.data_editor(
             df_bawah_view,
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika baris telah dikonfirmasi/direvisi", default=False),
-                "Justifikasi": st.column_config.TextColumn("Justifikasi (Khusus Baris Konfirmasi)", width=280),
+                "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika baris ini sudah dikonfirmasi/revisi", default=False),
+                "Justifikasi": st.column_config.TextColumn("Justifikasi (Ketik di sini)", width=250),
                 "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("INDIKATOR KESALAHAN DATA", width=350),
                 "validasi hasil review": st.column_config.TextColumn("Validasi Hasil Review", width=250)
             },
-            disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
+            disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]] # Kolom lain dikunci tidak bisa diubah
         )
         
-        # --- TOMBOL SIMPAN DATABASE ---
+        # --- TOMBOL SAVE KE DATABASE SUPABASE ---
         if st.button("💾 Simpan Progres Validasi & Justifikasi Ke Database", type="secondary"):
             if not supabase:
-                st.error("Koneksi database tidak tersedia.")
+                st.error("Koneksi database tidak tersedia. Periksa SUPABASE_KEY Anda.")
             else:
                 sukses_simpan = 0
-                peringatan_justifikasi = False
-                
-                with st.spinner("Menyimpan data..."):
-                    for idx, row_edit in df_hasil_edit.iterrows():
-                        ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
-                        is_butuh_konfirmasi = "konfirmasi" in ind_text.lower()
-                        text_justifikasi = str(row_edit['Justifikasi']).strip()
-                        
-                        # VALIDASI ATURAN: Jika user mengisi justifikasi pada baris MUTLAK (bukan konfirmasi)
-                        if not is_butuh_konfirmasi and text_justifikasi != "":
-                            peringatan_justifikasi = True
-                            text_justifikasi = "" # Paksa kosongkan sebelum dikirim ke database
-                        
-                        # Kirim ke DB jika dicentang ATAU diisi justifikasi (khusus tipe konfirmasi)
-                        if row_edit['Pilih'] or text_justifikasi != "":
+                with st.spinner("Menyimpan perubahan ke database..."):
+                    for _, row_edit in df_hasil_edit.iterrows():
+                        # Hanya proses data yang dicentang ATAU memiliki teks justifikasi
+                        if row_edit['Pilih'] or str(row_edit['Justifikasi']).strip() != "":
                             try:
+                                # Kirim data menggunakan skema Upsert (Jika belum ada dimasukkan, jika sudah ada diupdate)
                                 supabase.table("log_validasi_review").upsert({
                                     "ssr": str(row_edit['Lembaga SSR']),
                                     "tanggal": str(row_edit['Tanggal']),
                                     "id_klien": str(row_edit['ID Klien']),
-                                    "indikator_kesalahan": ind_text,
+                                    "indikator_kesalahan": str(row_edit['INDIKATOR KESALAHAN DATA']),
                                     "is_revisi": bool(row_edit['Pilih']),
-                                    "justifikasi": text_justifikasi
+                                    "justifikasi": str(row_edit['Justifikasi']).strip()
                                 }, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
                                 sukses_simpan += 1
                             except Exception as ex:
                                 pass
                     
-                    if peringatan_justifikasi:
-                        st.warning("⚠️ Beberapa teks Justifikasi otomatis diabaikan karena ditulis pada baris indikator kesalahan mutlak (Bukan tipe konfirmasi).")
-                    
-                    st.success(f"🎉 Sukses memproses {sukses_simpan} baris validasi ke database Supabase!")
+                    st.success(f"🎉 Berhasil menyimpan {sukses_simpan} progres validasi data ke database Supabase!")
+                    # Refresh data state agar langsung memperbarui indikasi status berulang
                     st.rerun()
     else:
-        st.info("✨ Data bersih! Tidak ada kasus validasi.")
+        st.info("✨ Data bersih! Tidak ada baris kesalahan yang perlu divalidasi.")
