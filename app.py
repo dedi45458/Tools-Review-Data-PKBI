@@ -14,7 +14,7 @@ st.set_page_config(page_title="Tools Review PKBI Jabar - Multi-Tabel Laporan", l
 st.title("📊 Tools Review Data Masal (Online) - PKBI Jabar")
 st.markdown("""
 Sistem otomatisasi penelaahan kualitas data Penjangkauan dan Rujukan PKBI Jawa Barat.
-*Aturan validasi telah disesuaikan dengan instruksi matriks terbaru.*
+*Aturan validasi dan daftar media sosial telah disesuaikan dengan instruksi matriks terbaru.*
 """)
 st.divider()
 
@@ -109,7 +109,7 @@ def cek_kode(teks_kolom, kode_target):
     return str(kode_target) in list_kode
 
 # ==========================================================
-# 3. ENGINE VALIDASI PENJANGKAUAN (DENGAN ATURAN BARU ANDA)
+# 3. ENGINE VALIDASI PENJANGKAUAN
 # ==========================================================
 def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
@@ -124,9 +124,17 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
 
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
-    medsoc_keywords = ['whatsapp', 'wa', 'facebook', 'fb', 'instagram', 'ig', 'michat', 'blued', 'tinder', 'hornet', 'telegram', 'tantan', 'grindr', 'twitter']
+    
+    # MASTER DAFTAR MEDSOS TERBARU BERDASARKAN DATA USER
+    medsoc_keywords = [
+        'whatsapp', 'wa', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 
+        'walla', 'sms', 'grindr', 'growlr', 'instagram', 'ig', 'tantan', 
+        'telegram', 'telepon', 'tinder', 'twitter', 'line', 'facebook', 'fb', 
+        'messenger', 'romeo', 'tiktok', 'tagged', 'litmatch', 'scruff', 
+        'wechat', 'threads'
+    ]
 
-    # Pembuatan Map Database Referensi Sesuai Aturan Baru
+    # Pembuatan Map Database Referensi
     ref_ssr_id_to_nik = {}
     ref_nik_ssr_to_id = {}
     
@@ -142,11 +150,9 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
                 id_r = str(r[col_id_ref[0]]).replace("'", "").strip()
                 nik_r = str(r[col_nik_ref[0]]).replace("'", "").replace('.0', '').strip()
                 
-                # Aturan Indikator 8: Parameter kombinasi Lembaga SSR + ID Klien
                 if id_r and id_r != 'nan' and ssr_r and ssr_r != 'nan':
                     ref_ssr_id_to_nik[f"{ssr_r}_{id_r}"] = nik_r
                 
-                # Aturan Indikator 9: Parameter kombinasi NIK + Lembaga SSR (Lewati jika NIK kosong)
                 if nik_r and nik_r != 'nan' and nik_r != '' and ssr_r and ssr_r != 'nan':
                     ref_nik_ssr_to_id[f"{nik_r}_{ssr_r}"] = id_r
 
@@ -162,7 +168,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         v_layanan = str(row.get('Nama Layanan', '')).strip() if pd.notna(row.get('Nama Layanan')) else '-'
         v_tanggal = str(row.get('Tanggal', '')).split(' ')[0] if pd.notna(row.get('Tanggal')) else ''
         
-        # Simpan teks asli untuk pengecekan string/tanda petik
         id_raw = str(row.get('ID Klien', '')).strip()
         id_clean = id_raw.replace("'", "").strip()
         
@@ -202,7 +207,7 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
                 "Keterangan review": f"[{nama_indikator}] {deskripsi_detail}"
             })
 
-        # --- EKSEKUSI LOGIKA ATURAN BARU ---
+        # --- LOGIKA VALIDASI ---
         
         # 1. Kode Petugas Kosong
         if pd.isna(row.get('Kode Petugas')) or str(row.get('Kode Petugas')).strip() == '':
@@ -213,7 +218,7 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
             tambah_log(DAFTAR_INDIKATOR[2], "Tanggal pelaksanaan melebihi tanggal hari ini")
 
         if id_clean and id_clean != 'nan' and id_clean != '':
-            # 3. IDKD kurang/lebih dari 10 digit karakter & wajib alfanumerik
+            # 3. IDKD kurang/lebih dari 10 digit karakter
             if len(id_clean) != 10 or not id_clean.isalnum():
                 tambah_log(DAFTAR_INDIKATOR[3], f"IDKD berjumlah {len(id_clean)} karakter (Harus 10 digit kombinasi huruf & angka tanpa simbol)")
             
@@ -241,37 +246,32 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         if pd.notna(umur) and str(umur).strip() != '':
             try:
                 val_umur = float(umur)
-                # 8. Usia KD dibawah 16 tahun (Aturan teks: dibawah 17 tahun)
                 if val_umur < 17: 
                     tambah_log(DAFTAR_INDIKATOR[11], f"Usia di bawah 17 tahun ({val_umur} tahun)")
-                # 9. Usia KD diatas 70 tahun
                 if val_umur > 70: 
                     tambah_log(DAFTAR_INDIKATOR[12], f"Usia di atas 70 tahun ({val_umur} tahun)")
             except: pass
 
-        # 10. Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (Tanda petik dihitung)
+        # 10. Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK
         if id_clean and len(id_clean) == 10 and nik_clean and len(nik_clean) == 16:
             thn_id = id_clean[4:6]
-            # Sesuaikan dengan hitungan user jika string menyertakan tanda petik (') di excel
             nik_with_quote = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
             if len(nik_with_quote) >= 13:
-                thn_nik = nik_with_quote[11:13] # Digit ke 12 & 13 (1-based index -> 11 & 12)
+                thn_nik = nik_with_quote[11:13]
                 if thn_id != thn_nik:
                     tambah_log(DAFTAR_INDIKATOR[13], f"Tahun lahir IDKD ({thn_id}) tidak sama dengan Tahun lahir NIK ({thn_nik})")
 
-        # 11. NIK kurang/lebih dari 16 digit (tanpa menghitung petik)
+        # 11. NIK kurang/lebih dari 16 digit
         if nik_clean and nik_clean != 'nan' and nik_clean != '':
             if len(nik_clean) != 16:
                 tambah_log(DAFTAR_INDIKATOR[14], f"NIK berjumlah {len(nik_clean)} digit (Harus wajib 16 digit)")
-            
-            # 12. Kesalahan dalam penulisan NIK (00) di akhir
             if nik_clean.endswith('00'):
                 tambah_log(DAFTAR_INDIKATOR[15], "Penulisan NIK dummy (diakhiri angka 00)")
 
         # 13. Secara NIK harusnya perempuan bukan laki-laki
         if len(nik_clean) == 16 and jk == '1':
             try:
-                dd_nik = int(nik_clean[6:8]) # Komponen tanggal lahir di NIK asli
+                dd_nik = int(nik_clean[6:8])
                 if dd_nik > 31:
                     tambah_log(DAFTAR_INDIKATOR[16], f"Klien Laki-laki (1) tapi tanggal lahir di NIK menunjukkan angka {dd_nik} (Harusnya Perempuan >40)")
             except: pass
@@ -288,7 +288,7 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         elif jns_kontak == '3' and jns_kegiatan != '8':
             tambah_log(DAFTAR_INDIKATOR[18], f"Kontak Virtual/VO (3) tidak sinkron dengan Kegiatan {jns_kegiatan} (Harusnya wajib 8)")
 
-        # --- PENGECEKAN LAIN-LAIN (TETAP DIPERTAHANKAN) ---
+        # --- VALIDASI LAINNYA ---
         if '.' in id_raw: tambah_log(DAFTAR_INDIKATOR[6], "Ada tanda titik (.) pada penulisan IDKD")
         if ' ' in id_raw: tambah_log(DAFTAR_INDIKATOR[7], "Ada spasi pada penulisan IDKD")
         if pd.notna(umur) and str(umur).strip() != '':
@@ -298,7 +298,7 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
             except: pass
 
         is_vo = (jns_kontak == '3')
-        any_medsoc_in_lokasi = any(kw in lokasi.lower() for kw in medsos_keywords)
+        any_medsoc_in_lokasi = any(kw in lokasi.lower() for kw in medsoc_keywords)
 
         if jns_kontak in ['1', '2']:
             if vc1 == '' or vc1 == 'nan': tambah_log(DAFTAR_INDIKATOR[19], "Tatap muka tapi VC1 kosong")
@@ -362,9 +362,9 @@ tombol_proses = st.button("🚀 Jalankan Penelaahan & Tampilkan 2 Tabel", type="
 
 if tombol_proses:
     if not files_review:
-        st.error("⚠️ **Gagal Mengeksekusi:** Silakan unggah minimal satu berkas **Raw Data Penjangkauan (.xlsx)** di menu sidebar kiri terlebih dahulu!")
+        st.error("⚠️ **Gagal Mengeksekusi:** Silakan unggah berkas Raw Data terlebih dahulu!")
     else:
-        with st.spinner("Sedang memproses validasi data sesuai aturan terbaru..."):
+        with st.spinner("Sedang memproses validasi data..."):
             unique_ssrs = set()
             total_records_processed = 0
             
@@ -378,8 +378,7 @@ if tombol_proses:
                         for s in ssrs_in_file:
                             if s and s != 'nan' and s != '': unique_ssrs.add(s)
                         total_records_processed += (len(df_temp) - start_row)
-                except:
-                    pass
+                except: pass
                     
             list_ssr_unik = sorted(list(unique_ssrs))
             if not list_ssr_unik:
@@ -400,13 +399,13 @@ if tombol_proses:
                 except Exception as e:
                     st.error(f"Gagal memproses file {file.name}: {e}")
             
-            # --- TABEL 1: DETAIL LOG PER BARIS ---
+            # TABEL 1
             if semua_rekap_kesalahan:
                 df_tabel_1 = pd.concat(semua_rekap_kesalahan, ignore_index=True)
             else:
                 df_tabel_1 = pd.DataFrame(columns=['Nama File', 'Baris Excel', 'Lembaga SSR', 'Kode Petugas', 'Nama Kota', 'Nama Layanan', 'Tanggal', 'ID Klien', 'NIK', 'Tipe Sasaran', 'Keterangan review'])
             
-            # --- TABEL 2: REKAP MATRIK PER SSR ---
+            # TABEL 2
             matrix_data = []
             for idx, ind in enumerate(DAFTAR_INDIKATOR, 1):
                 row_dict = {"No.": idx, "INDIKATOR KESALAHAN DATA": ind}
@@ -426,13 +425,11 @@ if tombol_proses:
                 
             df_tabel_2_matrik = pd.DataFrame(matrix_data)
             
-            # ==========================================================
-            # 5. GENERATOR EXCEL FILE (2 SHEET)
-            # ==========================================================
+            # GENERATOR EXCEL FILE
             output_stream = io.BytesIO()
             wb = openpyxl.Workbook()
             
-            # SHEET 1: REKAP MATRIK SSR
+            # SHEET 1
             ws_dash = wb.active
             ws_dash.title = "Tabel 2 - Rekap Matrik SSR"
             ws_dash.views.sheetView[0].showGridLines = True
@@ -519,7 +516,7 @@ if tombol_proses:
             
             ws_dash.column_dimensions['B'].width = 65
 
-            # SHEET 2: DETAIL LOG KESALAHAN
+            # SHEET 2
             ws_detail = wb.create_sheet(title="Tabel 1 - Detail Per Baris")
             ws_detail.views.sheetView[0].showGridLines = True
             kolom_log = ['Nama File', 'Baris Excel', 'Lembaga SSR', 'Kode Petugas', 'Nama Kota', 'Nama Layanan', 'Tanggal', 'ID Klien', 'NIK', 'Tipe Sasaran', 'Keterangan review']
