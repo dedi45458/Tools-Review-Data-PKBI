@@ -578,8 +578,8 @@ if st.session_state['proses_selesai']:
     st.success("🎉 Berhasil Memproses Data! Kedua tabel kini tersedia di bawah ini:")
     
     tab_matrik, tab_detail = st.tabs([
-        "📊 Tabel 2: Rekap Matrik SSR (Format Dinamis)", 
-        "🔍 Tabel 1: Detail Kesalahan Per Baris (Format Ringkas)"
+        "📊 Rekap SSR", 
+        "🔍 Hasil Reeview Penjangkauan"
     ])
     
     with tab_matrik:
