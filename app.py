@@ -1,16 +1,24 @@
 import streamlit as st
-
-# TAMBAHKAN KODE INI DI BARIS ATAS
-if 'total_entri' not in st.session_state:
-    st.session_state['total_entri'] = 0
-
-import streamlit as st
 import pandas as pd
 import io
 import re
 from datetime import datetime
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+# ==========================================================
+# 0. INISIALISASI SESSION STATE (Wajib di Baris Paling Atas!)
+# ==========================================================
+if 'total_entri' not in st.session_state:
+    st.session_state['total_entri'] = 0
+if 'proses_selesai' not in st.session_state:
+    st.session_state['proses_selesai'] = False
+if 'data_unduhan' not in st.session_state:
+    st.session_state['data_unduhan'] = None
+if 'tabel_1_detail' not in st.session_state:
+    st.session_state['tabel_1_detail'] = None
+if 'tabel_2_matrik' not in st.session_state:
+    st.session_state['tabel_2_matrik'] = None
 
 # ==========================================================
 # 1. KONFIGURASI UTAMA & THEME MODERN
@@ -48,18 +56,6 @@ st.markdown("""
 
 st.markdown('<div class="main-title">📊 Tools Review Data Massal — PKBI Jabar</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem otomatisasi penelaahan kualitas data Penjangkauan dan Rujukan PKBI Jawa Barat berbasis matriks validasi terbaru.</div>', unsafe_allow_html=True)
-
-# Inisialisasi State di bagian atas agar tidak memicu KeyError saat rerun otomatis
-if 'proses_selesai' not in st.session_state:
-    st.session_state['proses_selesai'] = False
-if 'data_unduhan' not in st.session_state:
-    st.session_state['data_unduhan'] = None
-if 'tabel_1_detail' not in st.session_state:
-    st.session_state['tabel_1_detail'] = None
-if 'tabel_2_matrik' not in st.session_state:
-    st.session_state['tabel_2_matrik'] = None
-if 'total_entri' not in st.session_state:
-    st.session_state['total_entri'] = 0
 
 # MASTER LIST 50 INDIKATOR KESALAHAN
 DAFTAR_INDIKATOR = [
@@ -546,9 +542,9 @@ if tombol_proses:
                     c_cell.alignment = Alignment(horizontal="center")
                     total_row_err += count_err
                 
-                j_cell = ws_dash.cell(row=current_row, column=col_jml, value=total_row_err if total_row_err > 0 else "-")
-                j_cell.alignment = Alignment(horizontal="center")
-                j_cell.fill = fill_orange_summary
+                ws_dash.cell(row=current_row, column=col_jml, value=total_row_err if total_row_err > 0 else "-")
+                ws_dash.cell(row=current_row, column=col_jml).alignment = Alignment(horizontal="center")
+                ws_dash.cell(row=current_row, column=col_jml).fill = fill_orange_summary
                 
                 pct_val = (total_row_err / total_records_processed) if total_records_processed > 0 else 0
                 p_cell = ws_dash.cell(row=current_row, column=col_pct, value=pct_val)
@@ -602,31 +598,13 @@ if st.session_state['proses_selesai']:
     with m1:
         st.metric(label="Total Entri Data Diperiksa", value=f"{st.session_state['total_entri']} Baris")
     with m2:
-        total_error = len(st.session_state['tabel_1_detail'])
-        st.metric(label="Total Temuan Log Kesalahan", value=f"{total_error} Kasus", delta=f"{'⚠️ Perlu Tindakan' if total_error > 0 else '✅ Data Bersih'}")
+        total_error = len(st.session_state['tabel_1_detail']) if st.session_state['tabel_1_detail'] is not None else 0
+        st.metric(label="Total Temuan Log Kesalahan", value=f"{total_error} Baris")
     with m3:
         st.download_button(
-            label="📥 Unduh File Excel Komplit (.xlsx)",
+            label="📥 Unduh Hasil Review (.xlsx)",
             data=st.session_state['data_unduhan'],
-            file_name=f"Hasil_Review_Data_PKBI_Jabar_{datetime.now().strftime('%d%m%Y')}.xlsx",
+            file_name=f"Hasil_Review_Data_PKBI_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
-        
-    st.markdown("---")
-    
-    # STRUKTUR TAB PREVIEW INTERACTIVE
-    tab1, tab2 = st.tabs(["📋 Tabel 2 - Matrik Ringkasan SSR", "🔍 Tabel 1 - Detail Log Kesalahan Per Baris"])
-    
-    with tab1:
-        st.markdown("##### Ringkasan Distribusi Temuan Masalah per Lembaga SSR")
-        if st.session_state['tabel_2_matrik'] is not None:
-            # Hilangkan index bawaan pandas agar tampilan tabel bersih
-            st.dataframe(st.session_state['tabel_2_matrik'].reset_index(drop=True), use_container_width=True)
-            
-    with tab2:
-        st.markdown("##### Log Temuan Data Tidak Sinkron (Detail Per Baris)")
-        if st.session_state['tabel_1_detail'] is not None and not st.session_state['tabel_1_detail'].empty:
-            st.dataframe(st.session_state['tabel_1_detail'].reset_index(drop=True), use_container_width=True)
-        else:
-            st.success("✨ Luar biasa! Tidak ditemukan anomali atau kesalahan data dari berkas laporan yang diperiksa.")
