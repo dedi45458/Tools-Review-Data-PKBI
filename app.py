@@ -1,199 +1,208 @@
 import streamlit as st
 import pandas as pd
 import io
+import datetime
 
 # ==========================================================
-# 1. KONFIGURASI HALAMAN & TAMPILAN UTAMA
+# 1. KONFIGURASI HALAMAN UTAMA STREAMLIT
 # ==========================================================
-st.set_page_config(page_title="Tools Review PKBI Jabar", layout="wide")
+st.set_page_config(
+    page_title="Tools Review PKBI Jabar", 
+    layout="wide", 
+    initial_sidebar_state="expanded"
+)
 
-st.title("📊 Tools Review Data Masal (Online)")
-st.write("Sistem otomatisasi pemeriksaan kualitas data Penjangkauan dan Rujukan PKBI Jawa Barat.")
+st.title("📊 Tools Review Data Masal (Online) - PKBI Jabar")
+st.markdown("""
+Sistem otomatisasi pemeriksaan kualitas data Penjangkauan dan Rujukan PKBI Jawa Barat. 
+Script ini mengonversi aturan *blueprint* formula Excel menjadi mesin validasi berbasis Python.
+""")
 st.divider()
 
-# Inisialisasi Session State agar data hasil eksekusi tidak hilang saat interaksi UI
-if 'file_proses_selesai' not in st.session_state:
-    st.session_state['file_proses_selesai'] = False
-if 'output_excel_data' not in st.session_state:
-    st.session_state['output_excel_data'] = None
+# Inisialisasi Session State agar hasil eksekusi persisten
+if 'proses_selesai' not in st.session_state:
+    st.session_state['proses_selesai'] = False
+if 'data_unduhan' not in st.session_state:
+    st.session_state['data_unduhan'] = None
+if 'rekap_tampilan' not in st.session_state:
+    st.session_state['rekap_tampilan'] = None
 
 # ==========================================================
-# 2. MENU UNGGAH FILE (LAYOUT 2 KOLOM)
+# 2. INTERFACE UNGGAH FILE
 # ==========================================================
-st.subheader("📁 Menu Unggah File")
+st.sidebar.header("📁 Menu Unggah Berkas")
+file_referensi = st.sidebar.file_uploader(
+    "1️⃣ Database Referensi (.xlsx)", 
+    type=["xlsx"], 
+    help="Unggah database master (Data HIV+, Validasi NIK, dll) untuk keperluan VLOOKUP silang."
+)
 
-kolom_kiri, kolom_kanan = st.columns(2)
-
-with kolom_kiri:
-    st.markdown("### 1️⃣ Database Referensi")
-    st.caption("Unggah data master / acuan (misal: Database HIV+, Validasi NIK, dll)")
-    file_referensi = st.file_uploader(
-        "Pilih file database referensi", 
-        type=["xlsx"], 
-        key="upload_referensi"
-    )
-
-with kolom_kanan:
-    st.markdown("### 2️⃣ Data yang Direview")
-    st.caption("Unggah data lapangan bulanan (File Penjangkauan & Rujukan sekaligus)")
-    files_review = st.file_uploader(
-        "Pilih file penjangkauan & rujukan", 
-        type=["xlsx", "xlsb"], 
-        accept_multiple_files=True, 
-        key="upload_review"
-    )
-
-st.divider()
+files_review = st.sidebar.file_uploader(
+    "2️⃣ Data Lapangan (.xlsx, .xlsb)", 
+    type=["xlsx", "xlsb"], 
+    accept_multiple_files=True,
+    help="Unggah satu atau banyak file bulanan Penjangkauan/Rujukan yang ingin diperiksa."
+)
 
 # ==========================================================
-# 3. FUNGSI LOGIKA VALIDASI (KONVERSI FORMULA EXCEL)
+# 3. ENGINE VALIDASI: KONVERSI FORMULA EXCEL KE PYTHON
 # ==========================================================
-def jalankan_validasi_logika(df, df_ref=None):
+def jalankan_validasi_logika(df, df_ref=None, nama_file=""):
     """
-    Fungsi ini merepresentasikan sheet 'rekap kesalahan' dan 'blueprint formula'.
-    Setiap indikator kesalahan dikonversi dari formula Excel ke Pandas Python.
+    Fungsi inti yang menerjemahkan aturan logis dari Excel blueprint 
+    ke dalam manipulasi matriks data menggunakan Pandas.
     """
     list_kesalahan = []
     
-    # Pastikan nama kolom disesuaikan dengan header file asli Anda
-    # Contoh Indikator 1: Validasi Format NIK (Harus 16 Digit) -> Padanan Excel: =IF(LEN(A2)<>16; "Salah"; "Benar")
-    if 'NIK' in df.columns:
-        invalid_nik = df[df['NIK'].astype(str).str.strip().str.len() != 16]
-        for idx, row in invalid_nik.iterrows():
-            list_kesalahan.append({
-                "Baris/Row": idx + 2, # +2 karena index pandas mulai dari 0 dan baris 1 adalah header Excel
-                "Kolom Target": "NIK",
-                "Indikator Review": "Format NIK Tidak Valid",
-                "Deskripsi Kesalahan": f"Panjang NIK adalah {len(str(row['NIK']))} digit (Harus 16 digit)",
-                "Nilai Eksisting": row['NIK']
-            })
+    # Standarisasi nama kolom agar tidak sensitif spasi/huruf besar-kecil
+    df.columns = [str(c).strip() for c in df.columns]
+    if df_ref is not None:
+        df_ref.columns = [str(c).strip() for c in df_ref.columns]
 
-    # Contoh Indikator 2: Keselarasan Tanggal -> Padanan Excel: =IF(Tgl_Rujukan < Tgl_Penjangkauan; "Eror"; "OK")
-    if 'Tanggal Penjangkauan' in df.columns and 'Tanggal Rujukan' in df.columns:
-        df['Tanggal Penjangkauan'] = pd.to_datetime(df['Tanggal Penjangkauan'], errors='coerce')
-        df['Tanggal Rujukan'] = pd.to_datetime(df['Tanggal Rujukan'], errors='coerce')
+    # Looping mendeteksi kesalahan per baris data
+    for idx, row in df.iterrows():
+        no_baris = idx + 2 # Konversi indeks Python (0) ke nomor baris Excel (2)
         
-        invalid_date = df[df['Tanggal Rujukan'] < df['Tanggal Penjangkauan']]
-        for idx, row in invalid_date.iterrows():
-            list_kesalahan.append({
-                "Baris/Row": idx + 2,
-                "Kolom Target": "Tanggal Rujukan",
-                "Indikator Review": "Tanggal Rujukan Tidak Logis",
-                "Deskripsi Kesalahan": "Tanggal rujukan mendahului tanggal penjangkauan",
-                "Nilai Eksisting": f"Jangkau: {row['Tanggal Penjangkauan'].strftime('%Y-%m-%d')}, Rujuk: {row['Tanggal Rujukan'].strftime('%Y-%m-%d')}"
-            })
+        # ------------------------------------------------------------------
+        # INDIKATOR 1: Kolom Wajib Tidak Boleh Kosong (ISBLANK / COUNTA)
+        # ------------------------------------------------------------------
+        kolom_wajib = ['Nama', 'Tanggal Penjangkauan', 'Status', 'Kab/Kota']
+        for kol in kolom_wajib:
+            if kol in df.columns:
+                nilai = str(row[kol]).strip()
+                if nilai == "" or nilai == "nan" or pd.isna(row[kol]):
+                    list_kesalahan.append({
+                        "Nama File": nama_file, "Baris": no_baris, "Kolom Target": kol,
+                        "Indikator Review": "Kolom Wajib Kosong",
+                        "Deskripsi Kesalahan": f"Kolom {kol} tidak boleh kosong.",
+                        "Nilai Eksisting": "-"
+                    })
 
-    # Contoh Indikator 3: Integrasi VLOOKUP dengan Database Referensi
-    # Excel: =VLOOKUP(B2; 'Database Referensi'!A:B; 2; FALSE) -> Jika #N/A berarti data rujukan tidak ada di master
-    if df_ref is not None and 'ID Pasien' in df.columns and 'ID Pasien' in df_ref.columns:
-        # Cari ID Pasien di df yang tidak ada di df_ref
-        id_missing = df[~df['ID Pasien'].isin(df_ref['ID Pasien'])]
-        for idx, row in id_missing.iterrows():
-            list_kesalahan.append({
-                "Baris/Row": idx + 2,
-                "Kolom Target": "ID Pasien",
-                "Indikator Review": "ID Tidak Terdaftar di Database Referensi",
-                "Deskripsi Kesalahan": "ID Pasien tidak ditemukan pada data master referensi (Gagal VLOOKUP)",
-                "Nilai Eksisting": row['ID Pasien']
-            })
+        # ------------------------------------------------------------------
+        # INDIKATOR 2: Validasi Format & Panjang NIK (LEN <> 16)
+        # Excel: =IF(LEN(TRIM(NIK))<>16; "Salah"; "Benar")
+        # ------------------------------------------------------------------
+        if 'NIK' in df.columns and not pd.isna(row['NIK']):
+            nik_str = str(row['NIK']).replace(".0", "").strip() # bersihkan format float jika ada
+            if nik_str != "" and nik_str != "nan" and len(nik_str) != 16:
+                list_kesalahan.append({
+                    "Nama File": nama_file, "Baris": no_baris, "Kolom Target": "NIK",
+                    "Indikator Review": "Format NIK Tidak Valid",
+                    "Deskripsi Kesalahan": f"Panjang NIK terdeteksi {len(nik_str)} digit. Harus tepat 16 digit.",
+                    "Nilai Eksisting": nik_str
+                })
+
+        # ------------------------------------------------------------------
+        # INDIKATOR 3: Logika Urutan Tanggal (Tanggal Rujukan < Tanggal Jangkau)
+        # Excel: =IF(Tgl_Rujuk < Tgl_Jangkau; "Tanggal Terbalik"; "OK")
+        # ------------------------------------------------------------------
+        if 'Tanggal Penjangkauan' in df.columns and 'Tanggal Rujukan' in df.columns:
+            tgl_jangkau = pd.to_datetime(row['Tanggal Penjangkauan'], errors='coerce')
+            tgl_rujuk = pd.to_datetime(row['Tanggal Rujukan'], errors='coerce')
             
-    # 💡 SILAKAN TAMBAHKAN INDIKATOR LAIN SESUAI BLUEPRINT ANDA DI SINI 💡
-    # Gunakan pola penkondisian df[kondisi_salah] lalu loop ke list_kesalahan
-    
+            if pd.notna(tgl_jangkau) and pd.notna(tgl_rujuk):
+                if tgl_rujuk < tgl_jangkau:
+                    list_kesalahan.append({
+                        "Nama File": nama_file, "Baris": no_baris, "Kolom Target": "Tanggal Rujukan",
+                        "Indikator Review": "Kronologi Tanggal Terbalik",
+                        "Deskripsi Kesalahan": "Tanggal rujukan terjadi sebelum tanggal penjangkauan dilakukan.",
+                        "Nilai Eksisting": f"Jangkau: {tgl_jangkau.strftime('%Y-%m-%d')} | Rujuk: {tgl_rujuk.strftime('%Y-%m-%d')}"
+                    })
+
+        # ------------------------------------------------------------------
+        # INDIKATOR 4: Validasi Silang / VLOOKUP dengan Database Referensi
+        # Excel: =IF(ISNA(VLOOKUP(ID_Pasien; Referensi!A:B; 1; FALSE)); "Tidak Valid"; "Valid")
+        # ------------------------------------------------------------------
+        if df_ref is not None and 'ID Pasien' in df.columns and 'ID Pasien' in df_ref.columns:
+            id_target = str(row['ID Pasien']).strip()
+            if id_target != "" and id_target != "nan":
+                # Lakukan pengecekan apakah ID ada di kolom ID Pasien data referensi
+                if id_target not in df_ref['ID Pasien'].astype(str).str.strip().values:
+                    list_kesalahan.append({
+                        "Nama File": nama_file, "Baris": no_baris, "Kolom Target": "ID Pasien",
+                        "Indikator Review": "Data Tidak Terdaftar (Gagal VLOOKUP)",
+                        "Deskripsi Kesalahan": "ID Pasien ini tidak ditemukan pada database referensi pusat.",
+                        "Nilai Eksisting": id_target
+                    })
+
+        # 💡 SUNTIKAN FORMULA BARU: Tambahkan logika if-statement tambahan di sini 
+        # sesuai baris indikator baru pada lembar kerja Excel Anda.
+
     return pd.DataFrame(list_kesalahan)
 
 # ==========================================================
-# 4. TOMBOL EKSEKUSI UTAMA
+# 4. KONTROL ALUR EKSEKUSI DATA
 # ==========================================================
 if files_review:
-    st.success(f"✅ Berhasil memuat {len(files_review)} file untuk direview.")
+    st.info(f"📊 **{len(files_review)} file** siap diproses sistem. Klik tombol di bawah untuk memulai pencocokan.")
     
-    if file_referensi:
-        st.info("💡 Sistem mendeteksi Database Referensi aktif. Rumus berbasis VLOOKUP siap dijalankan.")
-    else:
-        st.warning("⚠️ Perhatian: Anda belum mengunggah Database Referensi. Indikator review yang membutuhkan data pembanding akan dilewati otomatis.")
-    
-    # TOMBOL EKSEKUSI VALIDASI
-    tombol_eksekusi = st.button("🚀 Jalankan Validasi & Review Data", type="primary")
-    
-    if tombol_eksekusi:
-        with st.spinner("Sedang mengeksekusi logika rumus dan menyusun rekap kesalahan..."):
+    # Tombol Eksekusi Validasi Utama
+    if st.button("🚀 Mulai Review & Terapkan Formula", type="primary"):
+        with st.spinner("Sedang menerapkan formula kompilasi data..."):
             
-            # Membaca database referensi jika diunggah
+            # Memuat lembar database referensi jika diunggah user
             df_ref = None
             if file_referensi:
                 try:
                     df_ref = pd.read_excel(file_referensi)
                 except Exception as e:
-                    st.error(f"Gagal membaca data referensi: {e}")
+                    st.error(f"Gagal memuat database referensi: {e}")
             
-            # Memory stream untuk menampung output excel baru
+            # Wadah penampung
+            gabungan_rekap_kesalahan = []
             output_stream = io.BytesIO()
             
-            # List untuk menampung semua dataframe rekap kesalahan dari seluruh file
-            semua_rekap_kesalahan = []
-            
-            # Gunakan ExcelWriter untuk membuat file Excel multi-sheet
             with pd.ExcelWriter(output_stream, engine='openpyxl') as writer:
-                
                 for file in files_review:
                     try:
-                        # Baca sheet utama dari file yang direview
+                        # Baca sheet aktif dari file instansi lapangan
                         df_target = pd.read_excel(file)
                         
-                        # Jalankan fungsi validasi indikator
-                        df_hasil_rekap = jalankan_validasi_logika(df_target, df_ref)
+                        # Jalankan mesin interpretasi logika
+                        df_hasil = jalankan_validasi_logika(df_target, df_ref, nama_file=file.name)
                         
-                        if not df_hasil_rekap.empty:
-                            df_hasil_rekap['Nama File'] = file.name
-                            semua_rekap_kesalahan.append(df_hasil_rekap)
+                        if not df_hasil.empty:
+                            gabungan_rekap_kesalahan.append(df_hasil)
                         
-                        # Beri tanda status validasi sederhana di dalam sheet data asli
-                        df_target['STATUS_REVIEW'] = "Selesai Diperiksa"
+                        # Simpan salinan sheet asli ke dalam output file baru
+                        clean_sheet_name = file.name[:25].replace(".xlsx", "").replace(".xls", "")
+                        df_target.to_excel(writer, sheet_name=clean_sheet_name, index=False)
                         
-                        # Simpan data asli ke dalam sheet tersendiri (nama sheet dipotong agar aman maks 31 karakter)
-                        sheet_name = file.name[:25].replace(".xlsx", "").replace(".xls", "")
-                        df_target.to_excel(writer, sheet_name=sheet_name, index=False)
-                        
-                        st.write(f"🔹 File **{file.name}** selesai diproses.")
                     except Exception as e:
-                        st.error(f"❌ Gagal memproses file {file.name}. Error: {str(e)}")
+                        st.sidebar.error(f"Eror pada berkas {file.name}: {e}")
                 
-                # Menggabungkan rekap kesalahan dari semua file ke sheet tersendiri
-                if semua_rekap_kesalahan:
-                    df_rekap_total = pd.concat(semua_rekap_kesalahan, ignore_index=True)
-                    # Mengatur urutan kolom agar rapi
-                    kolom_order = ['Nama File', 'Baris/Row', 'Kolom Target', 'Indikator Review', 'Deskripsi Kesalahan', 'Nilai Eksisting']
-                    df_rekap_total = df_rekap_total[kolom_order]
+                # Konsolidasi seluruh temuan eror ke satu sheet utama
+                if gabungan_rekap_kesalahan:
+                    df_final_rekap = pd.concat(gabungan_rekap_kesalahan, ignore_index=True)
                 else:
-                    # Jika tidak ada kesalahan sama sekali
-                    df_rekap_total = pd.DataFrame(columns=['Nama File', 'Status', 'Catatan'])
-                    df_rekap_total.loc[0] = ['Semua File', 'Bersih', 'Tidak ditemukan kesalahan data berdasarkan indikator aktif.']
+                    df_final_rekap = pd.DataFrame(columns=['Nama File', 'Status', 'Catatan'])
+                    df_final_rekap.loc[0] = ['Semua Berkas', 'CLEAN', 'Tidak ditemukan anomali / kesalahan input data.']
                 
-                # Simpan sheet Rekap Kesalahan di urutan paling depan/awal file excel
-                df_rekap_total.to_excel(writer, sheet_name="REKAP KESALAHAN", index=False)
+                # Tulis lembar REKAP KESALAHAN di posisi lembar paling awal
+                df_final_rekap.to_excel(writer, sheet_name="REKAP KESALAHAN", index=False)
             
-            # Simpan hasil akhir ke session state
-            st.session_state['output_excel_data'] = output_stream.getvalue()
-            st.session_state['file_proses_selesai'] = True
-            
-            st.success("🎉 Proses Eksekusi Selesai! Pratinjau Lembar Rekap Kesalahan ada di bawah ini:")
-            st.dataframe(df_rekap_total, use_container_width=True)
+            # Simpan status ke dalam session state agar tidak hilang saat diunduh
+            st.session_state['data_unduhan'] = output_stream.getvalue()
+            st.session_state['rekap_tampilan'] = df_final_rekap
+            st.session_state['proses_selesai'] = True
 
-# ==========================================================
-# 5. MENU UNDUH HASIL REVIEW
-# ==========================================================
-if st.session_state['file_proses_selesai']:
-    st.divider()
-    st.subheader("📥 Unduh Hasil Review")
-    st.write("Silakan unduh dokumen Excel yang telah berisi sheet **'REKAP KESALAHAN'** di bagian paling awal.")
-    
-    st.download_button(
-        label="🟢 Download Excel Hasil Review (.xlsx)",
-        data=st.session_state['output_excel_data'],
-        file_name="REKAP_HASIL_REVIEW_PKBI_JABAR.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    # Menampilkan tabel rekap kesalahan jika proses berhasil dilakukan
+    if st.session_state['proses_selesai']:
+        st.success("🎉 Analisis selesai! Lembar kendali kesalahan berhasil dibentuk.")
+        
+        # Tampilkan visualisasi tabel langsung pada browser streamlit
+        st.subheader("📋 Ringkasan Indikator Kesalahan Terdeteksi")
+        st.dataframe(st.session_state['rekap_tampilan'], use_container_width=True)
+        
+        # Penyediaan tombol download hasil kompilasi
+        st.divider()
+        st.subheader("📥 Unduh File Laporan")
+        st.download_button(
+            label="🟢 Download Dokumen Hasil Review (.xlsx)",
+            data=st.session_state['data_unduhan'],
+            file_name="REKAP_HASIL_REVIEW_PKBI_JABAR.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 else:
-    if not files_review:
-        st.info("👋 Selamat datang! Silakan unggah berkas data pada menu di atas untuk memulai analisis.")
+    # Komponen visual edukasi awal jika aplikasi kosong data
+    st.info("👋 Selamat datang! Silakan unggah file database referensi dan data bulanan pada panel menu sebelah kiri untuk memulai pemeriksaan otomatis.")
