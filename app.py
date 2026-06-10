@@ -11,7 +11,7 @@ from supabase import create_client, Client
 # 0. KONFIGURASI SUPABASE
 # ==========================================================
 SUPABASE_URL = "https://fughiktqrtrtxrwoerud.supabase.co" 
-SUPABASE_KEY = "MASUKKAN_ANON_KEY_SUPABASE_ANDA_DI_SINI"
+SUPABASE_KEY = "sb_publishable_0RXs2YvzFtj2b8K2zeCFvQ_XAMQW1aM"
 
 @st.cache_resource
 def init_supabase():
@@ -51,61 +51,29 @@ st.markdown("""
 st.markdown('<div class="main-title">📊 Tools Review Data Massal — PKBI Jabar</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem otomatisasi penelaahan kualitas data berbasis matriks validasi terintegrasi Database.</div>', unsafe_allow_html=True)
 
-# 50 Indikator Kesalahan Data
+# ==========================================================
+# REVISI: 15 INDIKATOR KESALAHAN DATA SESUAI ATURAN BARU
+# ==========================================================
 DAFTAR_INDIKATOR = [
-    "Tahun dalam tanggal penjangkauan lebih besar/kecil dari tahun sekarang", # 0
-    "Kode Petugas Kosong", # 1
-    "Tanggal lebih besar dari tanggal hari ini", # 2
-    "IDKD kurang/lebih dari 10 digit karakter", # 3
-    "Digit nama kurang/lebih dari 4 digit karakter", # 4
-    "Digit tanggal lahir lebih/kurang dari 6 digit angka", # 5
-    "Ada tanda titik (.) pada penulisan IDKD", # 6
-    "Ada spasi pada penulisan IDKD", # 7
-    "ID sama tapi NIK berbeda dengan data Semester/Tahun lalu (Konfirmasi)", # 8
-    "NIK sama tapi ID berbeda dengan data Semester/Tahun lalu (Konfirmasi)", # 9
-    "Tahun Lahir KD terlalu muda (2014 -sekarang)", # 10
-    "Usia KD dibawah 16 tahun (konfirmasi)", # 11
-    "Usia KD diatas 70 tahun (konfirmasi)", # 12
-    "Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (konfirmasi)", # 13
-    "NIK kurang/lebih dari 16 digit (konfirmasi)", # 14
-    "Kesalahan dalam penulisan NIK (00) (konfirmasi)", # 15
-    "Secara NIK harusnya perempuan bukan laki-laki (konfirmasi)", # 16
-    "LSL/Waria tapi jenis kelamin perempuan", # 17
-    "Jenis kontak dengan Jenis Kegiatan tidak sesuai", # 18
-    "Jenis kontak Individual/kelompok tapi kolom Virtual dan Tatap Muka (VC1) tidak diisi", # 19
-    "Penjangkauan tatap muka tapi lokasi outreach diindikasi ada nama medsos", # 20
-    "Lokasi outreach diisi IDKD", # 21
-    "Lokasi outreach diindikasi kurang spesifik atau kurang detil (digit huruf <17 digit) (konfirmasi)", # 22
-    "Lokasi outreach indikasi diisi nomer HP", # 23
-    "Bukan PWID mendapatkan info 8 atau 9 (LASS, PTRM)", # 24
-    "LSL/TG/PWID menerima informasi PMTC (konfirmasi)", # 25
-    "Konfirmasi jumlah KIE yang diberikan adalah wajar", # 26
-    "Konfirmasi jumlah kondom yang diberikan adalah wajar", # 27
-    "Konfirmasi jumlah pelicin yang diberikan adalah wajar", # 28
-    "Konfirmasi jumlah jarum yang diberikan adalah wajar", # 29
-    "Konfirmasi jumlah alkohol SWAB yang diberikan adalah wajar", # 30
-    "VO tapi kolom Virtual dan Tatap Muka (VC1) diisi angka 1", # 31
-    "VO tapi lokasi outreach bukan nama medsos/kurang tepat mencatat nama aplikasi medsos", # 32
-    "VO tapi menyerahkan jarum", # 33
-    "VO menerima logistik selain KIE", # 34
-    "VO tapi nama akun /No. Hp tidak diisi", # 35
-    "Tidak ada informasi satupun yang diberikan / tidak diisi", # 36
-    "KD dikontak lebih dari 1x tapi tidak mendapat informasi HIV", # 37
-    "KD telah menerima layanan CBS tapi tidak ada informasi CBS", # 38
-    "KD ada rujukan PrEp di penjangkauan tapi tidak ada informasi PrEp", # 39
-    "KD telah menerima layanan PrEp tapi tidak ada rujukan PrEp di penjangkauan", # 40
-    "Logistik kosong (Konfirmasi)", # 41
-    "Tipe klien PWID tapi tidak menerima jarum (konfirmasi)", # 42
-    "Tipe klien PWID tapi tidak menerima alkohol SWAB (konfirmasi)", # 43
-    "Popkun selain PWID menerima jarum suntik", # 44
-    "Popkun selain PWID menerima alkohol swab", # 45
-    "Popkun selain PWID menyerahkan jarum", # 46
-    "Tidak ada rujukan yang diberikan satupun / tidak diisi", # 47
-    "KD dikontak lebih dari 1x tetapi tidak ada Rujukan Tes HIV", # 48
-    "Bukan penasun rujukan 3,4" # 49
+    "Placeholder Indeks 0",                                                     # 0
+    "Kode Petugas Kosong",                                                      # 1
+    "Tanggal lebih besar dari tanggal hari ini",                                # 2
+    "IDKD kurang/lebih dari 10 digit karakter",                                 # 3
+    "Digit nama kurang/lebih dari 4 digit karakter",                            # 4
+    "Digit tanggal lahir lebih/kurang dari 6 digit angka",                      # 5
+    "ID sama tapi NIK berbeda dengan data Semester/Tahun lalu (Konfirmasi)",    # 6
+    "NIK sama tapi ID berbeda dengan data Semester/Tahun lalu (Konfirmasi)",    # 7
+    "Usia KD dibawah 16 tahun (konfirmasi)",                                    # 8
+    "Usia KD diatas 70 tahun (konfirmasi)",                                     # 9
+    "Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (konfirmasi)",   # 10
+    "NIK kurang/lebih dari 16 digit (konfirmasi)",                              # 11
+    "Kesalahan dalam penulisan NIK (00) (konfirmasi)",                          # 12
+    "Secara NIK harusnya perempuan bukan laki-laki (konfirmasi)",               # 13
+    "LSL/Waria tapi jenis kelamin perempuan",                                   # 14
+    "Jenis kontak dengan Jenis Kegiatan tidak sesuai"                           # 15
 ]
 
-# Helper cek kode multi-nilai dalam satu sel (misal info diberikan: '1,2,5')
+# Helper cek kode multi-nilai dalam satu sel (misal kegiatan: '2,3')
 def cek_kode(text_sel, kode_cari):
     if pd.isna(text_sel) or str(text_sel).strip() == '':
         return False
@@ -133,25 +101,7 @@ def standarisasi_tanggal(val_tanggal):
         return '2026-01-01'
 
 # ==========================================================
-# 2. ENGINE PENGAMBILAN LOG MEMORI DATABASE (SUPABASE)
-# ==========================================================
-def hitung_dan_ambil_log_db():
-    dict_revisi = {}
-    dict_justifikasi = {}
-    if supabase:
-        try:
-            res = supabase.table("log_validasi_review").select("ssr, tanggal, id_klien, indikator_kesalahan, is_revisi, justifikasi").execute()
-            for r in res.data:
-                key = f"{str(r['ssr']).upper()}_{str(r['tanggal'])}_{str(r['id_klien'])}_{str(r['indikator_kesalahan'])}"
-                dict_revisi[key] = r['is_revisi']
-                if r['justifikasi']:
-                    dict_justifikasi[key] = r['justifikasi']
-        except Exception as e:
-            pass
-    return dict_revisi, dict_justifikasi
-
-# ==========================================================
-# 3. ENGINE VALIDASI UTAMA GABUNGAN (SMART & ADVANCED)
+# 3. ENGINE VALIDASI UTAMA GABUNGAN (15 ATURAN BARU)
 # ==========================================================
 def jalankan_review_data(df_asli, df_ref=None):
     list_kesalahan = []
@@ -161,7 +111,7 @@ def jalankan_review_data(df_asli, df_ref=None):
     df.columns = [str(c).strip() for c in df.columns]
     
     # ------------------------------------------------------
-    # SMART MAPPING: Menyelaraskan variasi penulisan kolom Excel
+    # SMART MAPPING: Keselarasan kolom otomatis
     # ------------------------------------------------------
     mapping_kolom = {}
     for c in df.columns:
@@ -177,70 +127,46 @@ def jalankan_review_data(df_asli, df_ref=None):
         elif "KELAMIN" in c_upper or "JK" in c_upper: mapping_kolom['Jenis Kelamin'] = c
         elif "KONTAK" in c_upper: mapping_kolom['Jenis Kontak'] = c
         elif "KEGIATAN" in c_upper: mapping_kolom['Jenis Kegiatan'] = c
-        elif "LOKASI" in c_upper or "MEDSOS" in c_upper: mapping_kolom['Lokasi Outreach'] = c
-        elif "INFORMASI" in c_upper or "INFO" in c_upper: mapping_kolom['Informasi Yang diberikan'] = c
-        elif "RUJUKAN" in c_upper: mapping_kolom['Rujukan'] = c
-        elif "HP" in c_upper or "AKUN" in c_upper: mapping_kolom['No. HP'] = c
-        elif "VC1" in c_upper or "VIRTUAL" in c_upper: mapping_kolom['VC1'] = c
 
-    # Deteksi Jenis File
-    is_file_rujukan = any('RUJUKAN' in str(c).upper() for c in df.columns) or any('FASYANKES' in str(c).upper() for c in df.columns)
-    
+    # Penentuan baris awal data real
     start_row_idx = 0
     if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values) or 'Laki-laki' in str(df.iloc[0].values)):
         start_row_idx = 1
 
-    tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
-    
-    medsoc_keywords = [
-        'whatsapp', 'wa', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 
-        'walla', 'sms', 'grindr', 'growlr', 'instagram', 'ig', 'tantan', 
-        'telegram', 'telepon', 'tinder', 'twitter', 'line', 'facebook', 'fb', 
-        'messenger', 'romeo', 'tiktok', 'tagged', 'litmatch', 'scruff', 
-        'wechat', 'threads'
-    ]
-
     df_clean = df.iloc[start_row_idx:].copy()
     dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
 
-    # Pre-calculate count untuk aturan dinamis (kontak > 1x) berbasis penyesuaian kolom ID Klien
-    kolom_id_real = mapping_kolom.get('ID Klien', 'ID Klien')
-    id_counts = {}
-    if kolom_id_real in df_clean.columns:
-        id_counts = df_clean[kolom_id_real].astype(str).str.replace("'", "").str.strip().value_counts().to_dict()
-
-    # Mapping Data Referensi HIV+
+    # Mapping Data Referensi Penjangkauan Sebelumnya (HIV+ / Semester Lalu)
     ref_ssr_id_to_nik = {}
     ref_nik_ssr_to_id = {}
-    if is_file_rujukan and df_ref is not None and not df_ref.empty:
+    if df_ref is not None and not df_ref.empty:
         df_ref_cp = df_ref.copy()
         df_ref_cp.columns = [str(c).strip() for c in df_ref_cp.columns]
         col_id_ref = [c for c in df_ref_cp.columns if 'ID' in c or 'Klien' in c]
         col_nik_ref = [c for c in df_ref_cp.columns if 'NIK' in c]
         col_ssr_ref = [c for c in df_ref_cp.columns if 'SSR' in c or 'Lembaga' in c]
+        
         if col_id_ref and col_nik_ref and col_ssr_ref:
             for _, r in df_ref_cp.iterrows():
                 ssr_r = str(r[col_ssr_ref[0]]).strip().upper()
                 id_r = str(r[col_id_ref[0]]).replace("'", "").strip()
                 nik_r = str(r[col_nik_ref[0]]).replace("'", "").replace('.0', '').strip()
+                
                 if id_r and id_r != 'nan' and ssr_r != 'nan':
                     ref_ssr_id_to_nik[f"{ssr_r}_{id_r}"] = nik_r
                 if nik_r and nik_r != 'nan' and nik_r != '' and ssr_r != 'nan':
                     ref_nik_ssr_to_id[f"{nik_r}_{ssr_r}"] = id_r
 
-    # Iterasi Data Laporan
+    # Iterasi Data Laporan Real
     for idx, row in df_clean.iterrows():
         no_excel_row = idx + 2
         
-        # Penarikan nilai dinamis via Smart Mapping Helper
         def dapatkan_val(nama_sistem, default=''):
             k_asli = mapping_kolom.get(nama_sistem)
             if k_asli and k_asli in row:
                 val = row[k_asli]
-                if isinstance(val, pd.Series):
-                    val = val.iloc[0] if not val.empty else default
-                return val
+                return val.iloc[0] if isinstance(val, pd.Series) else val
             return default
 
         v_ssr = str(dapatkan_val('Lembaga SSR')).strip().upper() if dapatkan_val('Lembaga SSR') != '' else 'PKBI JABAR'
@@ -260,26 +186,10 @@ def jalankan_review_data(df_asli, df_ref=None):
         jk = str(dapatkan_val('Jenis Kelamin', '')).replace('.0', '').strip()
         jns_kontak = str(dapatkan_val('Jenis Kontak', '')).replace('.0', '').strip()
         jns_kegiatan = str(dapatkan_val('Jenis Kegiatan', '')).strip()
-        lokasi = str(dapatkan_val('Lokasi Outreach', '')).strip()
-        info_diberikan = str(dapatkan_val('Informasi Yang diberikan', '')).strip()
-        rujukan = str(dapatkan_val('Rujukan', '')).strip()
-        no_hp = str(dapatkan_val('No. HP', '')).strip()
-        vc1 = str(dapatkan_val('VC1', '')).replace('.0', '').strip()
-
-        # Parsing Aman Nilai Logistik Indeks Posisi Kolom Arus Lama
-        try:
-            log_kie = float(row.iloc[17]) if pd.notna(row.iloc[17]) and str(row.iloc[17]).strip() not in ['', 'NaN'] else 0
-            log_kon = float(row.iloc[18]) if pd.notna(row.iloc[18]) and str(row.iloc[18]).strip() not in ['', 'NaN'] else 0
-            log_pel = float(row.iloc[19]) if pd.notna(row.iloc[19]) and str(row.iloc[19]).strip() not in ['', 'NaN'] else 0
-            log_jar = float(row.iloc[20]) if pd.notna(row.iloc[20]) and str(row.iloc[20]).strip() not in ['', 'NaN'] else 0
-            log_swab = float(row.iloc[21]) if pd.notna(row.iloc[21]) and str(row.iloc[21]).strip() not in ['', 'NaN'] else 0
-            jarum_kembali = float(row.get('Jumlah Jarum Suntik Kembali', 0)) if pd.notna(row.get('Jumlah Jarum Suntik Kembali', 0)) else 0
-        except:
-            log_kie = log_kon = log_pel = log_jar = log_swab = jarum_kembali = 0
 
         tgl_p = pd.to_datetime(v_tanggal_raw, errors='coerce') if pd.notna(v_tanggal_raw) else None
 
-        # Penengah Log Validasi & Sinkronisasi Database Supabase
+        # Penengah Sinkronisasi Log
         def tambah_log(ind_text):
             key_db = f"{v_ssr}_{v_tanggal}_{id_clean}_{ind_text}"
             is_butuh_konfirmasi = "konfirmasi" in ind_text.lower()
@@ -311,136 +221,105 @@ def jalankan_review_data(df_asli, df_ref=None):
             })
 
         # ==========================================================
-        # 📌 BLOK EKSEKUSI JALUR VALIDASI UTAMA (LOGIKA LENGKAP ANDA)
+        # 📌 BLOK EKSEKUSI JALUR VALIDASI (15 LOGIKA ATURAN PRESISI)
         # ==========================================================
-        if not v_petugas or v_petugas == '': 
+        
+        # 1. Kode Petugas Kosong
+        if not v_petugas or v_petugas == '' or v_petugas.lower() == 'nan': 
             tambah_log(DAFTAR_INDIKATOR[1])
 
+        # 2. Tanggal lebih besar dari tanggal hari ini
         if pd.notna(tgl_p) and tgl_p > hari_ini:
             tambah_log(DAFTAR_INDIKATOR[2])
 
+        # Aturan Khusus IDKD
         if id_clean and id_clean != '':
+            # 3. IDKD kurang/lebih dari 10 digit karakter & kombinasi huruf-angka saja
             if len(id_clean) != 10 or not id_clean.isalnum():
                 tambah_log(DAFTAR_INDIKATOR[3])
-            if len(id_clean) >= 4 and not id_clean[:4].isalpha():
-                tambah_log(DAFTAR_INDIKATOR[4])
-            if len(id_clean) == 10 and not id_clean[4:].isdigit():
-                tambah_log(DAFTAR_INDIKATOR[5])
             
-            if is_file_rujukan and df_ref is not None and v_ssr:
+            # Ekstraksi komponen ID jika panjangnya tepat 10 digit untuk hindari salah indeks
+            if len(id_clean) == 10:
+                komponen_nama = id_clean[:4]
+                komponen_tgl = id_clean[4:]
+                
+                # 4. Digit nama kurang/lebih dari 4 digit karakter (wajib huruf)
+                if not komponen_nama.isalpha():
+                    tambah_log(DAFTAR_INDIKATOR[4])
+                
+                # 5. Digit tanggal lahir lebih/kurang dari 6 digit angka
+                if not komponen_tgl.isdigit():
+                    tambah_log(DAFTAR_INDIKATOR[5])
+
+            # 6. ID sama tapi NIK berbeda dengan data lama (Konfirmasi)
+            if df_ref is not None and v_ssr:
                 key_ssr_id = f"{v_ssr}_{id_clean}"
                 if key_ssr_id in ref_ssr_id_to_nik and ref_ssr_id_to_nik[key_ssr_id] != nik_clean:
-                    tambah_log(DAFTAR_INDIKATOR[8])
+                    tambah_log(DAFTAR_INDIKATOR[6])
 
-        if is_file_rujukan and df_ref is not None and v_ssr and nik_clean:
+        # 7. NIK sama tapi ID berbeda dengan data lama (Konfirmasi)
+        if df_ref is not None and v_ssr and nik_clean and nik_clean != 'nan' and nik_clean != '':
             key_nik_ssr = f"{nik_clean}_{v_ssr}"
             if key_nik_ssr in ref_nik_ssr_to_id and ref_nik_ssr_to_id[key_nik_ssr] != id_clean:
-                tambah_log(DAFTAR_INDIKATOR[9])
+                tambah_log(DAFTAR_INDIKATOR[7])
 
-        if pd.notna(umur) and str(umur).strip() != '':
+        # Validasi Umur
+        if pd.notna(umur) and str(umur).strip() != '' and str(umur).lower() != 'nan':
             try:
                 val_umur = float(umur)
-                if val_umur < 16: tambah_log(DAFTAR_INDIKATOR[11])
-                if val_umur > 70: tambah_log(DAFTAR_INDIKATOR[12])
-                
-                tahun_lahir = tahun_sekarang - val_umur
-                if 2014 <= tahun_lahir <= tahun_sekarang: 
-                    tambah_log(DAFTAR_INDIKATOR[10])
+                # 8. Usia KD dibawah 16 tahun (aturan tertulis: dibawah 17 tahun)
+                if val_umur < 17: 
+                    tambah_log(DAFTAR_INDIKATOR[8])
+                # 9. Usia KD diatas 70 tahun (>70 tahun)
+                if val_umur > 70: 
+                    tambah_log(DAFTAR_INDIKATOR[9])
             except: pass
 
+        # 10. Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (Konfirmasi)
         if id_clean and len(id_clean) == 10 and nik_clean and len(nik_clean) == 16:
-            thn_id = id_clean[4:6]
-            nik_with_quote = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
-            if len(nik_with_quote) >= 13:
-                thn_nik = nik_with_quote[11:13]
+            thn_id = id_clean[4:6]  # Digit ke 5 dan 6 pada ID Klien
+            nik_for_idx = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
+            if len(nik_for_idx) >= 14:
+                thn_nik = nik_for_idx[11:13] # Digit ke 12 dan 13 dengan asumsi tanda petik (') dihitung
                 if thn_id != thn_nik:
-                    tambah_log(DAFTAR_INDIKATOR[13])
+                    tambah_log(DAFTAR_INDIKATOR[10])
 
-        if nik_clean and nik_clean != '':
+        # Validasi NIK Teknis
+        if nik_clean and nik_clean != '' and nik_clean != 'nan':
+            # 11. NIK kurang/lebih dari 16 digit (tanpa petik)
             if len(nik_clean) != 16:
-                tambah_log(DAFTAR_INDIKATOR[14])
+                tambah_log(DAFTAR_INDIKATOR[11])
+            
+            # 12. Kesalahan dalam penulisan NIK (akhir digit adalah 00)
             if nik_clean.endswith('00'):
+                tambah_log(DAFTAR_INDIKATOR[12])
+
+            # 13. Secara NIK harusnya perempuan bukan laki-laki (Laki-laki = 1, tapi tanggal lahir di NIK > 31)
+            if len(nik_clean) == 16 and jk == '1':
+                nik_for_jk = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
+                if len(nik_for_jk) >= 10:
+                    try:
+                        dd_nik = int(nik_for_jk[13:15]) # Digit 14 dan 15 jika tanda petik dihitung
+                        if dd_nik > 31: 
+                            tambah_log(DAFTAR_INDIKATOR[13])
+                    except: pass
+
+        # 14. LSL/Waria tapi jenis kelamin perempuan
+        if (v_tipe_sasaran in ['1304', '1301']) and jk == '2': 
+            tambah_log(DAFTAR_INDIKATOR[14])
+
+        # 15. Jenis kontak dengan Jenis Kegiatan tidak sesuai
+        if jns_kontak == '1': # Individual
+            if not (cek_kode(jns_kegiatan, '1') or cek_kode(jns_kegiatan, '5')):
+                tambah_log(DAFTAR_INDIKATOR[15])
+        elif jns_kontak == '2': # Kelompok
+            if not (cek_kode(jns_kegiatan, '2') or cek_kode(jns_kegiatan, '3') or cek_kode(jns_kegiatan, '4') or cek_kode(jns_kegiatan, '6') or cek_kode(jns_kegiatan, '7')):
+                tambah_log(DAFTAR_INDIKATOR[15])
+        elif jns_kontak == '3': # Virtual / VO
+            if not cek_kode(jns_kegiatan, '8'):
                 tambah_log(DAFTAR_INDIKATOR[15])
 
-        if len(nik_clean) == 16 and jk == '1':
-            try:
-                dd_nik = int(nik_clean[6:8])
-                if dd_nik > 31: tambah_log(DAFTAR_INDIKATOR[16])
-            except: pass
-
-        if (v_tipe_sasaran in ['1304', '1301']) and jk == '2': 
-            tambah_log(DAFTAR_INDIKATOR[17])
-
-        if jns_kontak == '1' and jns_kegiatan not in ['1', '5']:
-            tambah_log(DAFTAR_INDIKATOR[18])
-        elif jns_kontak == '2' and jns_kegiatan not in ['2', '3', '4', '6', '7']:
-            tambah_log(DAFTAR_INDIKATOR[18])
-        elif jns_kontak == '3' and jns_kegiatan != '8':
-            tambah_log(DAFTAR_INDIKATOR[18])
-
-        if '.' in id_raw: tambah_log(DAFTAR_INDIKATOR[6])
-        if ' ' in id_raw: tambah_log(DAFTAR_INDIKATOR[7])
-
-        is_vo = (jns_kontak == '3')
-        any_medsoc_in_lokasi = any(kw in lokasi.lower() for kw in medsoc_keywords)
-
-        if jns_kontak in ['1', '2']:
-            if vc1 == '' or vc1 == 'nan': tambah_log(DAFTAR_INDIKATOR[19])
-            if any_medsoc_in_lokasi: tambah_log(DAFTAR_INDIKATOR[20])
-
-        if is_vo:
-            if vc1 == '1': tambah_log(DAFTAR_INDIKATOR[31])
-            if lokasi and not any_medsoc_in_lokasi: tambah_log(DAFTAR_INDIKATOR[32])
-            if log_jar > 0: tambah_log(DAFTAR_INDIKATOR[33])
-            if log_kon > 0 or log_pel > 0 or log_swab > 0: tambah_log(DAFTAR_INDIKATOR[34])
-            if no_hp == '' or no_hp == 'nan': tambah_log(DAFTAR_INDIKATOR[35])
-
-        if lokasi and lokasi != 'nan':
-            if len(lokasi) == 10 and lokasi[:4].isalpha() and lokasi[4:].isdigit(): tambah_log(DAFTAR_INDIKATOR[21])
-            if len(lokasi) < 17 and not is_vo: tambah_log(DAFTAR_INDIKATOR[22])
-            if re.search(r'(08\d{8,11})|(\+62\d{8,11})', lokasi.replace('-', '').replace(' ', '')): tambah_log(DAFTAR_INDIKATOR[23])
-
-        is_pwid = (v_tipe_sasaran == '1401')
-        if not is_pwid:
-            if cek_kode(info_diberikan, '8') or cek_kode(info_diberikan, '9') or cek_kode(jns_kegiatan, '8') or cek_kode(jns_kegiatan, '9'):
-                tambah_log(DAFTAR_INDIKATOR[24])
-            if log_jar > 0: tambah_log(DAFTAR_INDIKATOR[44])
-            if log_swab > 0: tambah_log(DAFTAR_INDIKATOR[45])
-            if jarum_kembali > 0: tambah_log(DAFTAR_INDIKATOR[46])
-            if cek_kode(rujukan, '3') or cek_kode(rujukan, '4'): tambah_log(DAFTAR_INDIKATOR[49])
-        else:
-            if log_jar == 0 and not is_vo: tambah_log(DAFTAR_INDIKATOR[42])
-            if log_swab == 0 and not is_vo: tambah_log(DAFTAR_INDIKATOR[43])
-
-        if (v_tipe_sasaran in ['1304', '1301', '1401']) and (cek_kode(info_diberikan, '6') or cek_kode(jns_kegiatan, '6')):
-            tambah_log(DAFTAR_INDIKATOR[25])
-
-        if log_kie > 10: tambah_log(DAFTAR_INDIKATOR[26])
-        if log_kon > 144: tambah_log(DAFTAR_INDIKATOR[27])
-        if log_pel > 50: tambah_log(DAFTAR_INDIKATOR[28])
-        if log_jar > 100: tambah_log(DAFTAR_INDIKATOR[29])
-        if log_swab > 100: tambah_log(DAFTAR_INDIKATOR[30])
-
-        if info_diberikan == '' or info_diberikan == 'nan': tambah_log(DAFTAR_INDIKATOR[36])
-        if log_kie == 0 and log_kon == 0 and log_pel == 0 and log_jar == 0 and log_swab == 0: tambah_log(DAFTAR_INDIKATOR[41])
-        if rujukan == '' or rujukan == 'nan': tambah_log(DAFTAR_INDIKATOR[47])
-
-        if id_clean and id_counts.get(id_clean, 0) > 1:
-            # Seleksi subset baris yang memuat ID yang sama secara dinamis
-            df_klien_ini = df_clean[df_clean[kolom_id_real].astype(str).str.replace("'", "").str.strip() == id_clean]
-            pernah_dapat_info_hiv = any(cek_kode(inf, '1') for inf in df_klien_ini[mapping_kolom.get('Informasi Yang diberikan', 'Informasi Yang diberikan')].values) or any(cek_kode(keg, '1') for keg in df_klien_ini[mapping_kolom.get('Jenis Kegiatan', 'Jenis Kegiatan')].values)
-            pernah_dapat_rujuk_tes = any(cek_kode(ruj, '2') for ruj in df_klien_ini[mapping_kolom.get('Rujukan', 'Rujukan')].values)
-            
-            if not pernah_dapat_info_hiv: tambah_log(DAFTAR_INDIKATOR[37])
-            if not pernah_dapat_rujuk_tes: tambah_log(DAFTAR_INDIKATOR[48])
-
-        if cek_kode(jns_kegiatan, '13') and not cek_kode(info_diberikan, '13'): tambah_log(DAFTAR_INDIKATOR[38])
-        if (cek_kode(rujukan, '5') or cek_kode(jns_kegiatan, '10')) and not (cek_kode(info_diberikan, '10') or cek_kode(jns_kegiatan, '10')):
-            tambah_log(DAFTAR_INDIKATOR[39])
-        if cek_kode(jns_kegiatan, '10') and not cek_kode(rujukan, '5'): tambah_log(DAFTAR_INDIKATOR[40])
-
     return pd.DataFrame(list_kesalahan)
-
 # ==========================================================
 # 4. EKSEKUSI REVIEW LAKUKAN ANALISIS
 # ==========================================================
