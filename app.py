@@ -443,20 +443,25 @@ if st.session_state['proses_selesai']:
         m2.metric("Total Temuan Log Kesalahan", f"{tot_err} Kasus")
 
     # --- TABEL ATAS: REKAP HASIL REVIEW DATA PER SSR ---
-    st.markdown("#### Rekap Hasil Review Data per SSR")
+    st.markdown("#### 📊 Rekap Hasil Review Data per SSR")
     df_atas_view = st.session_state['df_tabel_atas'].copy() if st.session_state['df_tabel_atas'] is not None else pd.DataFrame()
     
     if not df_atas_view.empty:
-        format_rules = {col: (lambda x: "-" if x == 0 else f"{x}") for col in df_atas_view.columns if col != '%'}
-        format_rules['%'] = lambda x: f"{x:.1f}%"
+        # PENTING: Paksa konversi ke numerik agar angka muncul
+        for col in df_atas_view.columns:
+            if col != 'INDIKATOR KESALAHAN DATA': # Kecuali kolom teks
+                df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
         
         st.dataframe(
-            df_atas_view.style.format(format_rules).set_properties(**{'text-align': 'center'}),
+            df_atas_view,
             use_container_width=True,
-            column_config={col: st.column_config.NumberColumn(col, width="medium") for col in df_atas_view.columns if col != '%'}
+            column_config={
+                "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
+                "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100)
+            }
         )
     else:
-        st.info("✨ Tidak ada rekapan karena file data bersih dari kesalahan.")
+        st.info("✨ Tidak ada rekapan karena data bersih.")
 
     st.markdown("---")
 
@@ -543,32 +548,39 @@ if st.session_state['proses_selesai']:
         try:
             # Ambil data
             res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
+            
             if res_tren.data:
                 df_tren = pd.DataFrame(res_tren.data)
                 df_tren['Tanggal'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
                 
-                # 1. Tambahkan opsi 'SEMUA' di daftar dropdown
-                daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
-                pilihan_ssr = st.selectbox("Pilih Lembaga SSR untuk Dilihat Trennya:", daftar_ssr)
+                # MEMBATASI LEBAR DROPDOWN DENGAN COLUMNS (agar tidak memenuhi layar)
+                col_kiri, col_kanan = st.columns([1, 2])
+                with col_kiri:
+                    daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
+                    pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr)
                 
-                # 2. Logika filter data
+                # Logika Filter & Pivot Data
                 if pilihan_ssr == "SEMUA":
-                    df_filtered_tren = df_tren
-                    # Jika SEMUA, kita grouping berdasarkan Tanggal saja untuk melihat total kesalahan harian
-                    df_pivot = df_filtered_tren.pivot_table(index='Tanggal', aggfunc='size')
+                    # Jika SEMUA, grouping total kesalahan harian (Aggregasi Makro)
+                    df_pivot = df_tren.pivot_table(index='Tanggal', aggfunc='size')
                     st.write(f"📈 Tren total kesalahan seluruh SSR per tanggal:")
                 else:
-                    df_filtered_tren = df_tren[df_tren['ssr'] == pilihan_ssr]
-                    # Jika per SSR, kita lihat tren berdasarkan indikatornya
-                    df_pivot = df_filtered_tren.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size').fillna(0)
+                    # Jika per SSR, lihat tren berdasarkan detail indikator
+                    df_filtered = df_tren[df_tren['ssr'] == pilihan_ssr]
+                    df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size').fillna(0)
                     st.write(f"📈 Tren kesalahan untuk: **{pilihan_ssr}**")
                 
-                # 3. Tampilkan grafik
+                # Tampilkan grafik dengan Area Chart agar lebih informatif
                 if not df_pivot.empty:
-                    st.line_chart(df_pivot)
+                    # Memastikan format angka integer agar rapi
+                    if isinstance(df_pivot, pd.Series):
+                        df_pivot = df_pivot.to_frame(name="Total Kesalahan")
+                    
+                    st.area_chart(df_pivot)
                 else:
                     st.info("Data belum tersedia untuk filter ini.")
             else:
-                st.info("Belum ada rekam jejak log review.")
+                st.info("Belum ada rekam jejak log review tersimpan di database.")
+                
         except Exception as e:
-            st.caption(f"Gagal memuat grafik: {e}")
+            st.error(f"Terjadi kesalahan saat memuat grafik: {e}")
