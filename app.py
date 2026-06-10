@@ -541,32 +541,34 @@ if st.session_state['proses_selesai']:
     
     if supabase:
         try:
-            # Mengambil seluruh data riwayat gabungan dari database Anda
+            # Ambil data
             res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
             if res_tren.data:
                 df_tren = pd.DataFrame(res_tren.data)
+                df_tren['Tanggal'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
                 
-                # Mengubah timestamp created_at menjadi format tanggal yang mudah dibaca
-                df_tren['Tanggal Keluar Log'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
+                # 1. Tambahkan opsi 'SEMUA' di daftar dropdown
+                daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
+                pilihan_ssr = st.selectbox("Pilih Lembaga SSR untuk Dilihat Trennya:", daftar_ssr)
                 
-                col_sel1, col_sel2 = st.columns([1, 2])
-                with col_sel1:
-                    pilihan_ssr_tren = st.selectbox("Pilih SSR untuk Grafik Tren:", sorted(df_tren['ssr'].unique()))
-                
-                df_filtered_tren = df_tren[df_tren['ssr'] == pilihan_ssr_tren]
-                
-                # Membuat tabel pivot akumulasi hitungan frekuensi kesalahan per tanggal review
-                df_pivot_tren = df_filtered_tren.pivot_table(
-                    index='Tanggal Keluar Log', 
-                    columns='indikator_kesalahan', 
-                    aggfunc='size'
-                ).fillna(0)
-                
-                if not df_pivot_tren.empty:
-                    st.line_chart(df_pivot_tren)
+                # 2. Logika filter data
+                if pilihan_ssr == "SEMUA":
+                    df_filtered_tren = df_tren
+                    # Jika SEMUA, kita grouping berdasarkan Tanggal saja untuk melihat total kesalahan harian
+                    df_pivot = df_filtered_tren.pivot_table(index='Tanggal', aggfunc='size')
+                    st.write(f"📈 Tren total kesalahan seluruh SSR per tanggal:")
                 else:
-                    st.caption("Belum cukup variasi tanggal untuk memetakan grafik garis.")
+                    df_filtered_tren = df_tren[df_tren['ssr'] == pilihan_ssr]
+                    # Jika per SSR, kita lihat tren berdasarkan indikatornya
+                    df_pivot = df_filtered_tren.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size').fillna(0)
+                    st.write(f"📈 Tren kesalahan untuk: **{pilihan_ssr}**")
+                
+                # 3. Tampilkan grafik
+                if not df_pivot.empty:
+                    st.line_chart(df_pivot)
+                else:
+                    st.info("Data belum tersedia untuk filter ini.")
             else:
-                st.info("Belum ada rekam jejak log review tersimpan di database.")
+                st.info("Belum ada rekam jejak log review.")
         except Exception as e:
-            st.caption(f"Grafik tren tidak dapat dimuat sementara: {e}")
+            st.caption(f"Gagal memuat grafik: {e}")
