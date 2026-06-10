@@ -8,9 +8,8 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from supabase import create_client, Client
 
 # ==========================================================
-# 0. KONFIGURASI SUPABASE (Sesuaikan dengan Akun Anda)
+# 0. KONFIGURASI SUPABASE
 # ==========================================================
-# Ganti dengan URL dan Anon Key Supabase Anda sendiri
 SUPABASE_URL = "https://fughiktqrtrtxrwoerud.supabase.co" 
 SUPABASE_KEY = "MASUKKAN_ANON_KEY_SUPABASE_ANDA_DI_SINI"
 
@@ -110,7 +109,7 @@ def hitung_dan_ambil_log_db():
     return dict_revisi, dict_justifikasi
 
 # ==========================================================
-# 4. ENGINE VALIDASI UTAMA
+# 4. ENGINE VALIDASI UTAMA (PERBAIKAN ITERROWS & SERIE BUG)
 # ==========================================================
 def jalankan_review_data(df_asli, df_ref=None):
     list_kesalahan = []
@@ -124,7 +123,7 @@ def jalankan_review_data(df_asli, df_ref=None):
     if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values) or 'Laki-laki' in str(df.iloc[0].values)):
         start_row_idx = 1
 
-    hari_ini = pd.Timestamp(datetime.now().date())
+    df_clean = df.iloc[start_row_idx:].copy()
     dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
 
     # Logika Pencocokan HIV+ (Hanya untuk File Rujukan)
@@ -139,33 +138,51 @@ def jalankan_review_data(df_asli, df_ref=None):
             for _, r in df_ref_cp.iterrows():
                 ref_ssr_id_to_nik[f"{str(r[col_ssr_ref[0]]).strip().upper()}_{str(r[col_id_ref[0]]).strip()}"] = str(r[col_nik_ref[0]]).strip()
 
-    for idx in range(start_row_idx, len(df)):
-        row = df.iloc[idx]
+    # Loop Menggunakan iterrows() demi kestabilan tipe data baris tunggal
+    for idx, row in df_clean.iterrows():
         no_excel_row = idx + 2
         
-        v_ssr = str(row.get('Lembaga SSR', '')).strip().upper() if pd.notna(row.get('Lembaga SSR')) else ''
-        v_tanggal = str(row.get('Tanggal', '')).split(' ')[0] if pd.notna(row.get('Tanggal')) else ''
-        id_clean = str(row.get('ID Klien', '')).replace("'", "").strip()
-        nik_clean = str(row.get('NIK', '')).replace("'", "").replace('.0', '').strip()
-        v_petugas = str(row.get('Kode Petugas', '')).replace("'", "").strip()
-        v_kota = str(row.get('Nama Kota', '')).strip()
-        v_tipe = str(row.get('Tipe Sasaran', row.get('Tipe Klien', ''))).strip()
+        # Ekstraksi nilai aman dari potensi duplikasi objek Series
+        val_ssr = row.get('Lembaga SSR', '')
+        if isinstance(val_ssr, pd.Series): val_ssr = val_ssr.iloc[0] if not val_ssr.empty else ''
+        v_ssr = str(val_ssr).strip().upper() if pd.notna(val_ssr) else ''
+        
+        val_tang = row.get('Tanggal', '')
+        if isinstance(val_tang, pd.Series): val_tang = val_tang.iloc[0] if not val_tang.empty else ''
+        v_tanggal = str(val_tang).split(' ')[0].strip() if pd.notna(val_tang) else ''
+        
+        val_id = row.get('ID Klien', '')
+        if isinstance(val_id, pd.Series): val_id = val_id.iloc[0] if not val_id.empty else ''
+        id_clean = str(val_id).replace("'", "").strip()
+        
+        val_nik = row.get('NIK', '')
+        if isinstance(val_nik, pd.Series): val_nik = val_nik.iloc[0] if not val_nik.empty else ''
+        nik_clean = str(val_nik).replace("'", "").replace('.0', '').strip()
+        
+        val_pet = row.get('Kode Petugas', '')
+        if isinstance(val_pet, pd.Series): val_pet = val_pet.iloc[0] if not val_pet.empty else ''
+        v_petugas = str(val_pet).replace("'", "").strip()
+        
+        val_kot = row.get('Nama Kota', '')
+        if isinstance(val_kot, pd.Series): val_kot = val_kot.iloc[0] if not val_kot.empty else ''
+        v_kota = str(val_kot).strip()
+        
+        val_tip = row.get('Tipe Sasaran', row.get('Tipe Klien', ''))
+        if isinstance(val_tip, pd.Series): val_tip = val_tip.iloc[0] if not val_tip.empty else ''
+        v_tipe = str(val_tip).strip()
 
         def tambah_log(ind_text):
             key_db = f"{v_ssr}_{v_tanggal}_{id_clean}_{ind_text}"
             is_butuh_konfirmasi = "konfirmasi" in ind_text.lower()
             
-            # JIKA DATA KONFIRMASI SUDAH ADA JUSTIFIKASI DI DATABASE, JANGAN TAMPILKAN SEBAGAI ERROR
+            # Jika data konfirmasi sudah ada di DB, lewati agar data bersih dari layar kerja
             if is_butuh_konfirmasi and key_db in dict_justifikasi and not dict_revisi.get(key_db, False):
                 return
                 
             status_validasi = "-"
             checked_state = False
-            
-            # Kolom Justifikasi dikunci string kosong jika indikator bukan tipe konfirmasi
             justif_val = dict_justifikasi.get(key_db, "") if is_butuh_konfirmasi else ""
             
-            # CEK APAKAH ERROR INI BERULANG
             if key_db in dict_revisi:
                 status_validasi = "kesalahan pada ID yang berulang (belum dilakukan revisi)"
                 checked_state = True
@@ -185,12 +202,17 @@ def jalankan_review_data(df_asli, df_ref=None):
                 "Tipe Sasaran": v_tipe
             })
 
-        # --- Contoh Trigger Pengecekan Indikator ---
-        if not v_petugas or v_petugas == 'nan': tambah_log(DAFTAR_INDIKATOR[1])
-        if len(id_clean) != 10: tambah_log(DAFTAR_INDIKATOR[3])
-        if len(nik_clean) != 16 and nik_clean != 'nan' and nik_clean != '': tambah_log(DAFTAR_INDIKATOR[14])
+        # --- Evaluasi Pemicu Validasi Indikator ---
+        if not v_petugas or v_petugas.lower() == 'nan' or v_petugas == '': 
+            tambah_log(DAFTAR_INDIKATOR[1])
+            
+        if id_clean != '' and id_clean.lower() != 'nan' and len(id_clean) != 10: 
+            tambah_log(DAFTAR_INDIKATOR[3])
+            
+        if nik_clean != '' and nik_clean.lower() != 'nan' and len(nik_clean) != 16: 
+            tambah_log(DAFTAR_INDIKATOR[14])
         
-        # Validasi silang khusus rujukan
+        # Validasi silang rujukan vs data referensi histori semester lalu
         if is_file_rujukan and df_ref is not None:
             key_match = f"{v_ssr}_{id_clean}"
             if key_match in ref_ssr_id_to_nik and ref_ssr_id_to_nik[key_match] != nik_clean:
@@ -225,7 +247,6 @@ if st.button("🚀 Jalankan Penelaahan Laporan", type="primary"):
             if all_errs:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
                 
-                # MEMBUAT TABEL ATAS SECARA DINAMIS (Hanya SSR yang memiliki temuan)
                 active_ssrs = sorted(list(all_detected_ssrs))
                 matrix_rows = []
                 for idx, ind in enumerate(DAFTAR_INDIKATOR, 1):
@@ -255,7 +276,6 @@ if st.button("🚀 Jalankan Penelaahan Laporan", type="primary"):
 # ==========================================================
 if st.session_state['proses_selesai']:
     
-    # --- METRICS ---
     m1, m2 = st.columns([1, 1])
     m1.metric("Total Entri Diperiksa", f"{st.session_state['total_entri']} Baris")
     tot_err = len(st.session_state['df_tabel_bawah']) if st.session_state['df_tabel_bawah'] is not None else 0
@@ -263,9 +283,7 @@ if st.session_state['proses_selesai']:
 
     st.markdown("---")
     
-    # ------------------------------------------------------
-    # TABEL ATAS: REKAP HASIL REVIEW DATA PER SSR
-    # ------------------------------------------------------
+    # TABEL ATAS: REKAP MATRIKS DATA PER SSR
     st.markdown("#### Rekap Hasil Review Data per SSR")
     df_atas_view = st.session_state['df_tabel_atas'].copy()
     
@@ -289,9 +307,7 @@ if st.session_state['proses_selesai']:
 
     st.markdown("---")
 
-    # ------------------------------------------------------
-    # TABEL BAWAH: HASIL REVIEW PENJANGKAUAN
-    # ------------------------------------------------------
+    # TABEL BAWAH: DATA EDITOR DETAIL TEMUAN KASUS
     st.markdown("#### Hasil Review Penjangkauan")
     
     if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_tabel_bawah'].empty:
@@ -303,7 +319,6 @@ if st.session_state['proses_selesai']:
         
         df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
         
-        # Render editor tabel
         df_hasil_edit = st.data_editor(
             df_bawah_view,
             use_container_width=True,
@@ -331,12 +346,10 @@ if st.session_state['proses_selesai']:
                         is_butuh_konfirmasi = "konfirmasi" in ind_text.lower()
                         text_justifikasi = str(row_edit['Justifikasi']).strip()
                         
-                        # VALIDASI ATURAN: Jika user mengisi justifikasi pada baris MUTLAK (bukan konfirmasi)
                         if not is_butuh_konfirmasi and text_justifikasi != "":
                             peringatan_justifikasi = True
-                            text_justifikasi = "" # Paksa kosongkan sebelum dikirim ke database
+                            text_justifikasi = "" 
                         
-                        # Kirim ke DB jika dicentang ATAU diisi justifikasi (khusus tipe konfirmasi)
                         if row_edit['Pilih'] or text_justifikasi != "":
                             try:
                                 supabase.table("log_validasi_review").upsert({
