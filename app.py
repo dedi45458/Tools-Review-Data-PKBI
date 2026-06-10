@@ -51,6 +51,11 @@ st.markdown("""
 st.markdown('<div class="main-title">📊 Tools Review Data Massal — PKBI Jabar</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem otomatisasi penelaahan kualitas data berbasis matriks validasi terintegrasi Database.</div>', unsafe_allow_html=True)
 
+# SIDEBAR: Komponen Unggah Berkas (Perbaikan agar variabel terdefinisi)
+st.sidebar.header("📁 Pengaturan Berkas")
+files_review = st.sidebar.file_uploader("Unggah Raw Data Excel (Bisa Banyak Berkas)", type=["xlsx"], accept_multiple_files=True)
+file_referensi = st.sidebar.file_uploader("Unggah Data Referensi Semester/Tahun Lalu (Opsional)", type=["xlsx"])
+
 # ==========================================================
 # REVISI: 15 INDIKATOR KESALAHAN DATA SESUAI ATURAN BARU
 # ==========================================================
@@ -101,7 +106,25 @@ def standarisasi_tanggal(val_tanggal):
         return '2026-01-01'
 
 # ==========================================================
-# 3. ENGINE VALIDASI UTAMA GABUNGAN (15 ATURAN BARU)
+# 2. ENGINE PENGAMBILAN LOG MEMORI DATABASE (SUPABASE)
+# ==========================================================
+def hitung_dan_ambil_log_db():
+    dict_revisi = {}
+    dict_justifikasi = {}
+    if supabase:
+        try:
+            res = supabase.table("log_validasi_review").select("ssr, tanggal, id_klien, indikator_kesalahan, is_revisi, justifikasi").execute()
+            for r in res.data:
+                key = f"{str(r['ssr']).upper()}_{str(r['tanggal'])}_{str(r['id_klien'])}_{str(r['indikator_kesalahan'])}"
+                dict_revisi[key] = r['is_revisi']
+                if r['justifikasi']:
+                    dict_justifikasi[key] = r['justifikasi']
+        except Exception as e:
+            pass
+    return dict_revisi, dict_justifikasi
+
+# ==========================================================
+# 3. ENGINE VALIDASI UTAMA GABUNGAN (15 ATURAN BARU PRESISI)
 # ==========================================================
 def jalankan_review_data(df_asli, df_ref=None):
     list_kesalahan = []
@@ -110,9 +133,7 @@ def jalankan_review_data(df_asli, df_ref=None):
     df = df_asli.copy()
     df.columns = [str(c).strip() for c in df.columns]
     
-    # ------------------------------------------------------
-    # SMART MAPPING: Keselarasan kolom otomatis
-    # ------------------------------------------------------
+    # Smart Mapping penyesuaian kolom Excel
     mapping_kolom = {}
     for c in df.columns:
         c_upper = c.upper().replace("_", " ").replace(".", "")
@@ -128,7 +149,6 @@ def jalankan_review_data(df_asli, df_ref=None):
         elif "KONTAK" in c_upper: mapping_kolom['Jenis Kontak'] = c
         elif "KEGIATAN" in c_upper: mapping_kolom['Jenis Kegiatan'] = c
 
-    # Penentuan baris awal data real
     start_row_idx = 0
     if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values) or 'Laki-laki' in str(df.iloc[0].values)):
         start_row_idx = 1
@@ -137,7 +157,7 @@ def jalankan_review_data(df_asli, df_ref=None):
     df_clean = df.iloc[start_row_idx:].copy()
     dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
 
-    # Mapping Data Referensi Penjangkauan Sebelumnya (HIV+ / Semester Lalu)
+    # Mapping Data Referensi Penjangkauan Sebelumnya (Semester Lalu)
     ref_ssr_id_to_nik = {}
     ref_nik_ssr_to_id = {}
     if df_ref is not None and not df_ref.empty:
@@ -189,7 +209,6 @@ def jalankan_review_data(df_asli, df_ref=None):
 
         tgl_p = pd.to_datetime(v_tanggal_raw, errors='coerce') if pd.notna(v_tanggal_raw) else None
 
-        # Penengah Sinkronisasi Log
         def tambah_log(ind_text):
             key_db = f"{v_ssr}_{v_tanggal}_{id_clean}_{ind_text}"
             is_butuh_konfirmasi = "konfirmasi" in ind_text.lower()
@@ -221,7 +240,7 @@ def jalankan_review_data(df_asli, df_ref=None):
             })
 
         # ==========================================================
-        # 📌 BLOK EKSEKUSI JALUR VALIDASI (15 LOGIKA ATURAN PRESISI)
+        # 📌 EKSEKUSI JALUR VALIDASI (15 LOGIKA ATURAN PRESISI)
         # ==========================================================
         
         # 1. Kode Petugas Kosong
@@ -238,12 +257,12 @@ def jalankan_review_data(df_asli, df_ref=None):
             if len(id_clean) != 10 or not id_clean.isalnum():
                 tambah_log(DAFTAR_INDIKATOR[3])
             
-            # Ekstraksi komponen ID jika panjangnya tepat 10 digit untuk hindari salah indeks
+            # Ekstraksi komponen ID jika panjangnya tepat 10 digit
             if len(id_clean) == 10:
                 komponen_nama = id_clean[:4]
                 komponen_tgl = id_clean[4:]
                 
-                # 4. Digit nama kurang/lebih dari 4 digit karakter (wajib huruf)
+                # 4. Digit nama kurang/lebih dari 4 digit karakter (huruf)
                 if not komponen_nama.isalpha():
                     tambah_log(DAFTAR_INDIKATOR[4])
                 
@@ -251,13 +270,13 @@ def jalankan_review_data(df_asli, df_ref=None):
                 if not komponen_tgl.isdigit():
                     tambah_log(DAFTAR_INDIKATOR[5])
 
-            # 6. ID sama tapi NIK berbeda dengan data lama (Konfirmasi)
+            # 6. ID sama tapi NIK berbeda dengan data Semester/Tahun lalu (Konfirmasi)
             if df_ref is not None and v_ssr:
                 key_ssr_id = f"{v_ssr}_{id_clean}"
                 if key_ssr_id in ref_ssr_id_to_nik and ref_ssr_id_to_nik[key_ssr_id] != nik_clean:
                     tambah_log(DAFTAR_INDIKATOR[6])
 
-        # 7. NIK sama tapi ID berbeda dengan data lama (Konfirmasi)
+        # 7. NIK sama tapi ID berbeda dengan data Semester/Tahun lalu (Konfirmasi)
         if df_ref is not None and v_ssr and nik_clean and nik_clean != 'nan' and nik_clean != '':
             key_nik_ssr = f"{nik_clean}_{v_ssr}"
             if key_nik_ssr in ref_nik_ssr_to_id and ref_nik_ssr_to_id[key_nik_ssr] != id_clean:
@@ -267,7 +286,7 @@ def jalankan_review_data(df_asli, df_ref=None):
         if pd.notna(umur) and str(umur).strip() != '' and str(umur).lower() != 'nan':
             try:
                 val_umur = float(umur)
-                # 8. Usia KD dibawah 16 tahun (aturan tertulis: dibawah 17 tahun)
+                # 8. Usia KD dibawah 16 tahun (aturan: jika < 17 tahun)
                 if val_umur < 17: 
                     tambah_log(DAFTAR_INDIKATOR[8])
                 # 9. Usia KD diatas 70 tahun (>70 tahun)
@@ -277,24 +296,24 @@ def jalankan_review_data(df_asli, df_ref=None):
 
         # 10. Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (Konfirmasi)
         if id_clean and len(id_clean) == 10 and nik_clean and len(nik_clean) == 16:
-            thn_id = id_clean[4:6]  # Digit ke 5 dan 6 pada ID Klien
+            thn_id = id_clean[4:6]
             nik_for_idx = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
             if len(nik_for_idx) >= 14:
-                thn_nik = nik_for_idx[11:13] # Digit ke 12 dan 13 dengan asumsi tanda petik (') dihitung
+                thn_nik = nik_for_idx[11:13] # Digit ke 12 dan 13 dengan asumsi petik (') dihitung
                 if thn_id != thn_nik:
                     tambah_log(DAFTAR_INDIKATOR[10])
 
         # Validasi NIK Teknis
         if nik_clean and nik_clean != '' and nik_clean != 'nan':
-            # 11. NIK kurang/lebih dari 16 digit (tanpa petik)
+            # 11. NIK kurang/lebih dari 16 digit
             if len(nik_clean) != 16:
                 tambah_log(DAFTAR_INDIKATOR[11])
             
-            # 12. Kesalahan dalam penulisan NIK (akhir digit adalah 00)
+            # 12. Kesalahan dalam penulisan NIK (akhir digit 00)
             if nik_clean.endswith('00'):
                 tambah_log(DAFTAR_INDIKATOR[12])
 
-            # 13. Secara NIK harusnya perempuan bukan laki-laki (Laki-laki = 1, tapi tanggal lahir di NIK > 31)
+            # 13. Secara NIK harusnya perempuan bukan laki-laki (JK Laki-laki=1, tapi tgl lahir NIK > 31)
             if len(nik_clean) == 16 and jk == '1':
                 nik_for_jk = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
                 if len(nik_for_jk) >= 10:
@@ -309,17 +328,18 @@ def jalankan_review_data(df_asli, df_ref=None):
             tambah_log(DAFTAR_INDIKATOR[14])
 
         # 15. Jenis kontak dengan Jenis Kegiatan tidak sesuai
-        if jns_kontak == '1': # Individual
+        if jns_kontak == '1': 
             if not (cek_kode(jns_kegiatan, '1') or cek_kode(jns_kegiatan, '5')):
                 tambah_log(DAFTAR_INDIKATOR[15])
-        elif jns_kontak == '2': # Kelompok
+        elif jns_kontak == '2': 
             if not (cek_kode(jns_kegiatan, '2') or cek_kode(jns_kegiatan, '3') or cek_kode(jns_kegiatan, '4') or cek_kode(jns_kegiatan, '6') or cek_kode(jns_kegiatan, '7')):
                 tambah_log(DAFTAR_INDIKATOR[15])
-        elif jns_kontak == '3': # Virtual / VO
+        elif jns_kontak == '3': 
             if not cek_kode(jns_kegiatan, '8'):
                 tambah_log(DAFTAR_INDIKATOR[15])
 
     return pd.DataFrame(list_kesalahan)
+
 # ==========================================================
 # 4. EKSEKUSI REVIEW LAKUKAN ANALISIS
 # ==========================================================
@@ -346,10 +366,12 @@ if st.button("🚀 Jalankan Penelaahan Laporan", type="primary"):
 
             if all_errs:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
-                
                 active_ssrs = sorted(list(all_detected_ssrs))
                 matrix_rows = []
-                for idx, ind in enumerate(DAFTAR_INDIKATOR, 1):
+                
+                # Membangun matriks atas berdasarkan DAFTAR_INDIKATOR baru
+                for idx, ind in enumerate(DAFTAR_INDIKATOR):
+                    if idx == 0: continue # Lewati placeholder indeks 0
                     r_dict = {"INDIKATOR KESALAHAN DATA": ind}
                     total_ind_err = 0
                     for ssr in active_ssrs:
@@ -375,7 +397,6 @@ if st.button("🚀 Jalankan Penelaahan Laporan", type="primary"):
 # 5. TAMPILAN INTERFACE & INTERAKSI DATA
 # ==========================================================
 if st.session_state['proses_selesai']:
-    
     m1, m2 = st.columns([1, 1])
     m1.metric("Total Entri Diperiksa", f"{st.session_state['total_entri']} Baris")
     tot_err = len(st.session_state['df_tabel_bawah']) if st.session_state['df_tabel_bawah'] is not None else 0
