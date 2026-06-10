@@ -7,14 +7,14 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ==========================================================
-# 1. KONFIGURASI UTAMA STREAMLIT ONLINE
+# 1. KONFIGURASI UTAMA STREAMLIT
 # ==========================================================
 st.set_page_config(page_title="Tools Review PKBI Jabar - Multi-Tabel Laporan", layout="wide")
 
 st.title("📊 Tools Review Data Masal (Online) - PKBI Jabar")
 st.markdown("""
 Sistem otomatisasi penelaahan kualitas data Penjangkauan dan Rujukan PKBI Jawa Barat.
-*Aturan validasi dan daftar media sosial telah disesuaikan dengan instruksi matriks terbaru.*
+*Kolom Detail telah disederhanakan dan perhitungan Matrik SSR telah diperbaiki secara otomatis.*
 """)
 st.divider()
 
@@ -125,7 +125,7 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
     
-    # MASTER DAFTAR MEDSOS TERBARU BERDASARKAN DATA USER
+    # MASTER DAFTAR 26 MEDSOS VALIDATION
     medsoc_keywords = [
         'whatsapp', 'wa', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 
         'walla', 'sms', 'grindr', 'growlr', 'instagram', 'ig', 'tantan', 
@@ -134,7 +134,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         'wechat', 'threads'
     ]
 
-    # Pembuatan Map Database Referensi
     ref_ssr_id_to_nik = {}
     ref_nik_ssr_to_id = {}
     
@@ -165,7 +164,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         v_ssr = str(row.get('Lembaga SSR', '')).strip().upper() if pd.notna(row.get('Lembaga SSR')) else ''
         v_petugas = str(row.get('Kode Petugas', '')).replace("'", "").strip() if pd.notna(row.get('Kode Petugas')) else ''
         v_kota = str(row.get('Nama Kota', '')).strip() if pd.notna(row.get('Nama Kota')) else ''
-        v_layanan = str(row.get('Nama Layanan', '')).strip() if pd.notna(row.get('Nama Layanan')) else '-'
         v_tanggal = str(row.get('Tanggal', '')).split(' ')[0] if pd.notna(row.get('Tanggal')) else ''
         
         id_raw = str(row.get('ID Klien', '')).strip()
@@ -200,97 +198,81 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
 
         def tambah_log(nama_indikator, deskripsi_detail):
             list_kesalahan.append({
-                "Nama File": nama_file, "Baris Excel": no_excel_row, "Lembaga SSR": v_ssr,
-                "Kode Petugas": v_petugas, "Nama Kota": v_kota, "Nama Layanan": v_layanan,
-                "Tanggal": v_tanggal, "ID Klien": id_clean, "NIK": nik_clean, "Tipe Sasaran": v_tipe_sasaran,
-                "Nama Indikator Murni": nama_indikator,
-                "Keterangan review": f"[{nama_indikator}] {deskripsi_detail}"
+                "Baris Excel": no_excel_row, 
+                "Lembaga SSR": v_ssr,
+                "Indikator Kesalahan": nama_indikator, 
+                "Kode Petugas": v_petugas, 
+                "Nama Kota": v_kota, 
+                "Tanggal": v_tanggal, 
+                "ID Klien": id_clean, 
+                "NIK": nik_clean, 
+                "Tipe Sasaran": v_tipe_sasaran
             })
 
         # --- LOGIKA VALIDASI ---
-        
-        # 1. Kode Petugas Kosong
         if pd.isna(row.get('Kode Petugas')) or str(row.get('Kode Petugas')).strip() == '':
             tambah_log(DAFTAR_INDIKATOR[1], "Kode petugas kosong")
 
-        # 2. Tanggal lebih besar dari tanggal hari ini
         if pd.notna(tgl_p) and tgl_p > hari_ini:
             tambah_log(DAFTAR_INDIKATOR[2], "Tanggal pelaksanaan melebihi tanggal hari ini")
 
         if id_clean and id_clean != 'nan' and id_clean != '':
-            # 3. IDKD kurang/lebih dari 10 digit karakter
             if len(id_clean) != 10 or not id_clean.isalnum():
-                tambah_log(DAFTAR_INDIKATOR[3], f"IDKD berjumlah {len(id_clean)} karakter (Harus 10 digit kombinasi huruf & angka tanpa simbol)")
-            
-            # 4. Digit nama kurang/lebih dari 4 digit karakter
+                tambah_log(DAFTAR_INDIKATOR[3], "IDKD tidak sesuai 10 digit")
             if len(id_clean) >= 4 and not id_clean[:4].isalpha():
-                tambah_log(DAFTAR_INDIKATOR[4], f"4 digit awal IDKD wajib huruf (Terbaca: '{id_clean[:4]}')")
-                
-            # 5. Digit tanggal lahir kurang/lebih dari 6 digit angka
+                tambah_log(DAFTAR_INDIKATOR[4], "4 digit awal wajib huruf")
             if len(id_clean) == 10 and not id_clean[4:].isdigit():
-                tambah_log(DAFTAR_INDIKATOR[5], f"6 digit akhir IDKD wajib angka (Terbaca: '{id_clean[4:]}')")
+                tambah_log(DAFTAR_INDIKATOR[5], "6 digit akhir wajib angka")
 
-            # 6. ID sama tapi NIK berbeda dengan data Semester/Tahun lalu
             if df_ref is not None and v_ssr:
                 key_ssr_id = f"{v_ssr}_{id_clean}"
                 if key_ssr_id in ref_ssr_id_to_nik and ref_ssr_id_to_nik[key_ssr_id] != nik_clean:
-                    tambah_log(DAFTAR_INDIKATOR[8], f"ID terikat NIK berbeda dengan semester lalu pada SSR {v_ssr}")
+                    tambah_log(DAFTAR_INDIKATOR[8], "ID terikat NIK berbeda dengan semester lalu")
 
-        # 7. NIK sama tapi ID berbeda dengan data Semester/Tahun lalu
         if df_ref is not None and v_ssr and nik_clean and nik_clean != 'nan' and nik_clean != '':
             key_nik_ssr = f"{nik_clean}_{v_ssr}"
             if key_nik_ssr in ref_nik_ssr_to_id and ref_nik_ssr_to_id[key_nik_ssr] != id_clean:
-                tambah_log(DAFTAR_INDIKATOR[9], f"NIK terikat ID berbeda dengan semester lalu pada SSR {v_ssr}")
+                tambah_log(DAFTAR_INDIKATOR[9], "NIK terikat ID berbeda dengan semester lalu")
 
-        # Pengecekan Umur
         if pd.notna(umur) and str(umur).strip() != '':
             try:
                 val_umur = float(umur)
-                if val_umur < 17: 
-                    tambah_log(DAFTAR_INDIKATOR[11], f"Usia di bawah 17 tahun ({val_umur} tahun)")
-                if val_umur > 70: 
-                    tambah_log(DAFTAR_INDIKATOR[12], f"Usia di atas 70 tahun ({val_umur} tahun)")
+                if val_umur < 17: tambah_log(DAFTAR_INDIKATOR[11], "Usia di bawah 17 tahun")
+                if val_umur > 70: tambah_log(DAFTAR_INDIKATOR[12], "Usia di atas 70 tahun")
             except: pass
 
-        # 10. Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK
         if id_clean and len(id_clean) == 10 and nik_clean and len(nik_clean) == 16:
             thn_id = id_clean[4:6]
             nik_with_quote = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
             if len(nik_with_quote) >= 13:
                 thn_nik = nik_with_quote[11:13]
                 if thn_id != thn_nik:
-                    tambah_log(DAFTAR_INDIKATOR[13], f"Tahun lahir IDKD ({thn_id}) tidak sama dengan Tahun lahir NIK ({thn_nik})")
+                    tambah_log(DAFTAR_INDIKATOR[13], "Tahun lahir IDKD beda dengan NIK")
 
-        # 11. NIK kurang/lebih dari 16 digit
         if nik_clean and nik_clean != 'nan' and nik_clean != '':
             if len(nik_clean) != 16:
-                tambah_log(DAFTAR_INDIKATOR[14], f"NIK berjumlah {len(nik_clean)} digit (Harus wajib 16 digit)")
+                tambah_log(DAFTAR_INDIKATOR[14], "NIK tidak 16 digit")
             if nik_clean.endswith('00'):
-                tambah_log(DAFTAR_INDIKATOR[15], "Penulisan NIK dummy (diakhiri angka 00)")
+                tambah_log(DAFTAR_INDIKATOR[15], "NIK dummy 00")
 
-        # 13. Secara NIK harusnya perempuan bukan laki-laki
         if len(nik_clean) == 16 and jk == '1':
             try:
                 dd_nik = int(nik_clean[6:8])
-                if dd_nik > 31:
-                    tambah_log(DAFTAR_INDIKATOR[16], f"Klien Laki-laki (1) tapi tanggal lahir di NIK menunjukkan angka {dd_nik} (Harusnya Perempuan >40)")
+                if dd_nik > 31: tambah_log(DAFTAR_INDIKATOR[16], "NIK terindikasi perempuan")
             except: pass
 
-        # 14. LSL/Waria tapi jenis kelamin perempuan
         if (v_tipe_sasaran in ['1304', '1301']) and jk == '2': 
-            tambah_log(DAFTAR_INDIKATOR[17], f"Populasi LSL/Waria ({v_tipe_sasaran}) tetapi Jenis Kelamin dicatat Perempuan (2)")
+            tambah_log(DAFTAR_INDIKATOR[17], "LSL/Waria mencatat Perempuan")
 
-        # 15. Jenis kontak dengan Jenis Kegiatan tidak sesuai
         if jns_kontak == '1' and jns_kegiatan not in ['1', '5']:
-            tambah_log(DAFTAR_INDIKATOR[18], f"Kontak Individual (1) tidak sinkron dengan Kegiatan {jns_kegiatan} (Harusnya 1 atau 5)")
+            tambah_log(DAFTAR_INDIKATOR[18], "Kontak Individual tidak sinkron")
         elif jns_kontak == '2' and jns_kegiatan not in ['2', '3', '4', '6', '7']:
-            tambah_log(DAFTAR_INDIKATOR[18], f"Kontak Kelompok (2) tidak sinkron dengan Kegiatan {jns_kegiatan} (Harusnya 2,3,4,6,7)")
+            tambah_log(DAFTAR_INDIKATOR[18], "Kontak Kelompok tidak sinkron")
         elif jns_kontak == '3' and jns_kegiatan != '8':
-            tambah_log(DAFTAR_INDIKATOR[18], f"Kontak Virtual/VO (3) tidak sinkron dengan Kegiatan {jns_kegiatan} (Harusnya wajib 8)")
+            tambah_log(DAFTAR_INDIKATOR[18], "Kontak Virtual wajib kegiatan 8")
 
-        # --- VALIDASI LAINNYA ---
-        if '.' in id_raw: tambah_log(DAFTAR_INDIKATOR[6], "Ada tanda titik (.) pada penulisan IDKD")
-        if ' ' in id_raw: tambah_log(DAFTAR_INDIKATOR[7], "Ada spasi pada penulisan IDKD")
+        if '.' in id_raw: tambah_log(DAFTAR_INDIKATOR[6], "Ada titik di IDKD")
+        if ' ' in id_raw: tambah_log(DAFTAR_INDIKATOR[7], "Ada spasi di IDKD")
         if pd.notna(umur) and str(umur).strip() != '':
             try:
                 val_umur = float(umur)
@@ -301,93 +283,72 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         any_medsoc_in_lokasi = any(kw in lokasi.lower() for kw in medsoc_keywords)
 
         if jns_kontak in ['1', '2']:
-            if vc1 == '' or vc1 == 'nan': tambah_log(DAFTAR_INDIKATOR[19], "Tatap muka tapi VC1 kosong")
-            if any_medsoc_in_lokasi: tambah_log(DAFTAR_INDIKATOR[20], "Tatap muka tapi lokasi ada nama medsos")
+            if vc1 == '' or vc1 == 'nan': tambah_log(DAFTAR_INDIKATOR[19], "VC1 kosong")
+            if any_medsoc_in_lokasi: tambah_log(DAFTAR_INDIKATOR[20], "Tatap muka mencatat medsos")
 
         if is_vo:
-            if vc1 == '1': tambah_log(DAFTAR_INDIKATOR[31], "VO tapi VC1 diisi angka 1")
-            if lokasi and not any_medsoc_in_lokasi: tambah_log(DAFTAR_INDIKATOR[32], "VO tapi lokasi outreach bukan nama medsos")
-            if log_jar > 0: tambah_log(DAFTAR_INDIKATOR[33], "VO tapi menyerahkan jarum")
-            if log_kon > 0 or log_pel > 0 or log_swab > 0: tambah_log(DAFTAR_INDIKATOR[34], "VO menerima logistik selain KIE")
-            if no_hp == '' or no_hp == 'nan': tambah_log(DAFTAR_INDIKATOR[35], "VO tapi nama akun / No HP kosong")
+            if vc1 == '1': tambah_log(DAFTAR_INDIKATOR[31], "VO tapi VC1 terisi angka 1")
+            if lokasi and not any_medsoc_in_lokasi: tambah_log(DAFTAR_INDIKATOR[32], "VO tapi lokasi bukan medsos")
+            if log_jar > 0: tambah_log(DAFTAR_INDIKATOR[33], "VO menyerahkan jarum")
+            if log_kon > 0 or log_pel > 0 or log_swab > 0: tambah_log(DAFTAR_INDIKATOR[34], "VO menerima logistik non-KIE")
+            if no_hp == '' or no_hp == 'nan': tambah_log(DAFTAR_INDIKATOR[35], "VO akun kosong")
 
         if lokasi and lokasi != 'nan':
             if len(lokasi) == 10 and lokasi[:4].isalpha() and lokasi[4:].isdigit(): tambah_log(DAFTAR_INDIKATOR[21], "Lokasi diisi IDKD")
-            if len(lokasi) < 17 and not is_vo: tambah_log(DAFTAR_INDIKATOR[22], "Lokasi outreach kurang detil (<17 digit)")
-            if re.search(r'(08\d{8,11})|(\+62\d{8,11})', lokasi.replace('-', '').replace(' ', '')): tambah_log(DAFTAR_INDIKATOR[23], "Lokasi diisi nomor HP")
+            if len(lokasi) < 17 and not is_vo: tambah_log(DAFTAR_INDIKATOR[22], "Lokasi kurang spesifik")
+            if re.search(r'(08\d{8,11})|(\+62\d{8,11})', lokasi.replace('-', '').replace(' ', '')): tambah_log(DAFTAR_INDIKATOR[23], "Lokasi berisi HP")
 
         is_pwid = (v_tipe_sasaran == '1401')
         if not is_pwid:
             if cek_kode(info_diberikan, '8') or cek_kode(info_diberikan, '9') or cek_kode(jns_kegiatan, '8') or cek_kode(jns_kegiatan, '9'):
-                tambah_log(DAFTAR_INDIKATOR[24], "Bukan PWID mendapatkan info LASS/PTRM")
-            if log_jar > 0: tambah_log(DAFTAR_INDIKATOR[44], "Popkun selain PWID menerima jarum")
-            if log_swab > 0: tambah_log(DAFTAR_INDIKATOR[45], "Popkun selain PWID menerima alkohol swab")
-            if jarum_kembali > 0: tambah_log(DAFTAR_INDIKATOR[46], "Popkun selain PWID menyerahkan jarum")
-            if cek_kode(rujukan, '3') or cek_kode(rujukan, '4'): tambah_log(DAFTAR_INDIKATOR[49], "Bukan penasun rujukan 3,4")
+                tambah_log(DAFTAR_INDIKATOR[24], "Bukan PWID mendapat LASS/PTRM")
+            if log_jar > 0: tambah_log(DAFTAR_INDIKATOR[44], "Bukan PWID menerima jarum")
+            if log_swab > 0: tambah_log(DAFTAR_INDIKATOR[45], "Bukan PWID menerima alkohol swab")
+            if jarum_kembali > 0: tambah_log(DAFTAR_INDIKATOR[46], "Bukan PWID mengembalikan jarum")
+            if cek_kode(rujukan, '3') or cek_kode(rujukan, '4'): tambah_log(DAFTAR_INDIKATOR[49], "Bukan PWID rujukan 3,4")
         else:
-            if log_jar == 0 and not is_vo: tambah_log(DAFTAR_INDIKATOR[42], "Tipe klien PWID tapi tidak menerima jarum")
-            if log_swab == 0 and not is_vo: tambah_log(DAFTAR_INDIKATOR[43], "Tipe klien PWID tapi tidak menerima alkohol swab")
+            if log_jar == 0 and not is_vo: tambah_log(DAFTAR_INDIKATOR[42], "PWID tidak menerima jarum")
+            if log_swab == 0 and not is_vo: tambah_log(DAFTAR_INDIKATOR[43], "PWID tidak menerima alkohol swab")
 
         if (v_tipe_sasaran in ['1304', '1301', '1401']) and (cek_kode(info_diberikan, '6') or cek_kode(jns_kegiatan, '6')):
-            tambah_log(DAFTAR_INDIKATOR[25], "LSL/TG/PWID menerima informasi PMTC")
+            tambah_log(DAFTAR_INDIKATOR[25], "Menerima informasi PMTC")
 
-        if log_kie > 10: tambah_log(DAFTAR_INDIKATOR[26], "KIE tidak wajar (>10)")
-        if log_kon > 144: tambah_log(DAFTAR_INDIKATOR[27], "Kondom tidak wajar (>144)")
-        if log_pel > 50: tambah_log(DAFTAR_INDIKATOR[28], "Pelicin tidak wajar (>50)")
-        if log_jar > 100: tambah_log(DAFTAR_INDIKATOR[29], "Jarum tidak wajar (>100)")
-        if log_swab > 100: tambah_log(DAFTAR_INDIKATOR[30], "Alkohol swab tidak wajar (>100)")
+        if log_kie > 10: tambah_log(DAFTAR_INDIKATOR[26], "KIE tidak wajar")
+        if log_kon > 144: tambah_log(DAFTAR_INDIKATOR[27], "Kondom tidak wajar")
+        if log_pel > 50: tambah_log(DAFTAR_INDIKATOR[28], "Pelicin tidak wajar")
+        if log_jar > 100: tambah_log(DAFTAR_INDIKATOR[29], "Jarum tidak wajar")
+        if log_swab > 100: tambah_log(DAFTAR_INDIKATOR[30], "Swab tidak wajar")
 
-        if info_diberikan == '' or info_diberikan == 'nan': tambah_log(DAFTAR_INDIKATOR[36], "Tidak ada informasi satupun yang diberikan")
+        if info_diberikan == '' or info_diberikan == 'nan': tambah_log(DAFTAR_INDIKATOR[36], "Info kosong")
         if log_kie == 0 and log_kon == 0 and log_pel == 0 and log_jar == 0 and log_swab == 0: tambah_log(DAFTAR_INDIKATOR[41], "Logistik kosong")
-        if rujukan == '' or rujukan == 'nan': tambah_log(DAFTAR_INDIKATOR[47], "Tidak ada rujukan yang diberikan satupun")
+        if rujukan == '' or rujukan == 'nan': tambah_log(DAFTAR_INDIKATOR[47], "Rujukan kosong")
 
         if id_clean and id_counts.get(id_clean, 0) > 1:
             df_klien_ini = df[df['ID Klien'].astype(str).str.replace("'", "").str.strip() == id_clean]
             pernah_dapat_info_hiv = any(cek_kode(inf, '1') for inf in df_klien_ini['Informasi Yang diberikan'].values) or any(cek_kode(keg, '1') for keg in df_klien_ini['Jenis Kegiatan'].values)
             pernah_dapat_rujuk_tes = any(cek_kode(ruj, '2') for ruj in df_klien_ini['Rujukan'].values)
-            if not pernah_dapat_info_hiv: tambah_log(DAFTAR_INDIKATOR[37], "KD dikontak lebih dari 1x tapi tidak mendapat info HIV")
-            if not pernah_dapat_rujuk_tes: tambah_log(DAFTAR_INDIKATOR[48], "KD dikontak lebih dari 1x tetapi tidak ada Rujukan Tes HIV")
+            if not pernah_dapat_info_hiv: tambah_log(DAFTAR_INDIKATOR[37], "Kontak >1x tanpa info HIV")
+            if not pernah_dapat_rujuk_tes: tambah_log(DAFTAR_INDIKATOR[48], "Kontak >1x tanpa rujukan tes")
 
-        if cek_kode(jns_kegiatan, '13') and not cek_kode(info_diberikan, '13'): tambah_log(DAFTAR_INDIKATOR[38], "KD telah menerima layanan CBS tapi tidak ada info CBS")
+        if cek_kode(jns_kegiatan, '13') and not cek_kode(info_diberikan, '13'): tambah_log(DAFTAR_INDIKATOR[38], "Layanan CBS tanpa info CBS")
         if (cek_kode(rujukan, '5') or cek_kode(jns_kegiatan, '10')) and not (cek_kode(info_diberikan, '10') or cek_kode(jns_kegiatan, '10')):
-            tambah_log(DAFTAR_INDIKATOR[39], "KD ada rujukan PrEp tapi tidak ada informasi PrEp")
-        if cek_kode(jns_kegiatan, '10') and not cek_kode(rujukan, '5'): tambah_log(DAFTAR_INDIKATOR[40], "KD telah menerima layanan PrEp tapi tidak ada rujukan PrEp")
+            tambah_log(DAFTAR_INDIKATOR[39], "Rujukan PrEp tanpa info PrEp")
+        if cek_kode(jns_kegiatan, '10') and not cek_kode(rujukan, '5'): tambah_log(DAFTAR_INDIKATOR[40], "Layanan PrEp tanpa rujukan PrEp")
 
     return pd.DataFrame(list_kesalahan)
 
 # ==========================================================
 # 4. TOMBOL EKSEKUSI UTAMA
 # ==========================================================
-tombol_proses = st.button("🚀 Jalankan Penelaahan & Tampilkan 2 Tabel", type="primary")
+tombol_proses = st.button("🚀 Jalankan Penelaahan & Sinkronkan 2 Tabel", type="primary")
 
 if tombol_proses:
     if not files_review:
         st.error("⚠️ **Gagal Mengeksekusi:** Silakan unggah berkas Raw Data terlebih dahulu!")
     else:
-        with st.spinner("Sedang memproses validasi data..."):
+        with st.spinner("Sedang menghitung validasi data..."):
             unique_ssrs = set()
             total_records_processed = 0
-            
-            for file in files_review:
-                try:
-                    df_temp = pd.read_excel(file)
-                    df_temp.columns = [str(c).strip() for c in df_temp.columns]
-                    if 'Lembaga SSR' in df_temp.columns:
-                        start_row = 1 if len(df_temp) > 0 and ('dd/mm/yyyy' in str(df_temp.iloc[0].values) or 'Laki-laki' in str(df_temp.iloc[0].values)) else 0
-                        ssrs_in_file = df_temp.iloc[start_row:]['Lembaga SSR'].dropna().astype(str).str.strip().upper().unique()
-                        for s in ssrs_in_file:
-                            if s and s != 'nan' and s != '': unique_ssrs.add(s)
-                        total_records_processed += (len(df_temp) - start_row)
-                except: pass
-                    
-            list_ssr_unik = sorted(list(unique_ssrs))
-            if not list_ssr_unik:
-                list_ssr_unik = ["BINA MUDA GEMILANG", "YAYASAN SRIKANDI PASUNDAN", "LENSA SUKABUMI"]
-
-            df_ref = None
-            if file_referensi:
-                try: df_ref = pd.read_excel(file_referensi)
-                except: pass
             
             semua_rekap_kesalahan = []
             for file in files_review:
@@ -396,23 +357,45 @@ if tombol_proses:
                     df_rekap_file = jalankan_review_penjangkauan(df_target, df_ref, nama_file=file.name)
                     if not df_rekap_file.empty:
                         semua_rekap_kesalahan.append(df_rekap_file)
+                        
+                    # Ekstrak nama SSR unik dari file
+                    df_target.columns = [str(c).strip() for c in df_target.columns]
+                    if 'Lembaga SSR' in df_target.columns:
+                        start_row = 1 if len(df_target) > 0 and ('dd/mm/yyyy' in str(df_target.iloc[0].values) or 'Laki-laki' in str(df_target.iloc[0].values)) else 0
+                        ssrs_in_file = df_target.iloc[start_row:]['Lembaga SSR'].dropna().astype(str).str.strip().upper().unique()
+                        for s in ssrs_in_file:
+                            if s and s != 'nan' and s != '': unique_ssrs.add(s)
+                        total_records_processed += (len(df_target) - start_row)
                 except Exception as e:
                     st.error(f"Gagal memproses file {file.name}: {e}")
             
-            # TABEL 1
+            # Buat Tabel 1 (Detail Per Baris) sesuai request kolom baru
+            kolom_log_final = ['Baris Excel', 'Lembaga SSR', 'Indikator Kesalahan', 'Kode Petugas', 'Nama Kota', 'Tanggal', 'ID Klien', 'NIK', 'Tipe Sasaran']
+            
             if semua_rekap_kesalahan:
                 df_tabel_1 = pd.concat(semua_rekap_kesalahan, ignore_index=True)
+                # Tambahkan SSR dari temuan error ke daftar SSR unik jika belum tercatat
+                for s in df_tabel_1['Lembaga SSR'].dropna().astype(str).str.strip().upper().unique():
+                    if s and s != 'nan': unique_ssrs.add(s)
             else:
-                df_tabel_1 = pd.DataFrame(columns=['Nama File', 'Baris Excel', 'Lembaga SSR', 'Kode Petugas', 'Nama Kota', 'Nama Layanan', 'Tanggal', 'ID Klien', 'NIK', 'Tipe Sasaran', 'Keterangan review'])
+                df_tabel_1 = pd.DataFrame(columns=kolom_log_final)
             
-            # TABEL 2
+            list_ssr_unik = sorted(list(unique_ssrs))
+            if not list_ssr_unik:
+                list_ssr_unik = ["BINA MUDA GEMILANG", "YAYASAN SRIKANDI PASUNDAN", "LENSA SUKABUMI"]
+            
+            # Buat Tabel 2 (Rekap Matrik SSR) - PERBAIKAN LOGIKA PERHITUNGAN KETAT
             matrix_data = []
             for idx, ind in enumerate(DAFTAR_INDIKATOR, 1):
                 row_dict = {"No.": idx, "INDIKATOR KESALAHAN DATA": ind}
                 total_row_err = 0
                 for ssr in list_ssr_unik:
                     if not df_tabel_1.empty:
-                        count_err = len(df_tabel_1[(df_tabel_1['Nama Indikator Murni'] == ind) & (df_tabel_1['Lembaga SSR'] == ssr)])
+                        # Menggunakan string stripping dan case-insensitive agar kalkulasi 100% akurat dan sinkron
+                        count_err = len(df_tabel_1[
+                            (df_tabel_1['Indikator Kesalahan'].astype(str).str.strip() == str(ind).strip()) & 
+                            (df_tabel_1['Lembaga SSR'].astype(str).str.strip().str.upper() == str(ssr).strip().upper())
+                        ])
                     else:
                         count_err = 0
                     row_dict[ssr] = count_err
@@ -425,11 +408,11 @@ if tombol_proses:
                 
             df_tabel_2_matrik = pd.DataFrame(matrix_data)
             
-            # GENERATOR EXCEL FILE
+            # GENERATOR EXCEL FILE MENGGUNAKAN OPENPYXL
             output_stream = io.BytesIO()
             wb = openpyxl.Workbook()
             
-            # SHEET 1
+            # --- SHEET 1: REKAP MATRIK ---
             ws_dash = wb.active
             ws_dash.title = "Tabel 2 - Rekap Matrik SSR"
             ws_dash.views.sheetView[0].showGridLines = True
@@ -491,7 +474,10 @@ if tombol_proses:
                 total_row_err = 0
                 for i, ssr in enumerate(list_ssr_unik):
                     if not df_tabel_1.empty:
-                        count_err = len(df_tabel_1[(df_tabel_1['Nama Indikator Murni'] == ind) & (df_tabel_1['Lembaga SSR'] == ssr)])
+                        count_err = len(df_tabel_1[
+                            (df_tabel_1['Indikator Kesalahan'].astype(str).str.strip() == str(ind).strip()) & 
+                            (df_tabel_1['Lembaga SSR'].astype(str).str.strip().str.upper() == str(ssr).strip().upper())
+                        ])
                     else:
                         count_err = 0
                     val_cell = count_err if count_err > 0 else "-"
@@ -516,31 +502,36 @@ if tombol_proses:
             
             ws_dash.column_dimensions['B'].width = 65
 
-            # SHEET 2
+            # --- SHEET 2: DETAIL PER BARIS (BERSIH & MINIMALIS) ---
             ws_detail = wb.create_sheet(title="Tabel 1 - Detail Per Baris")
             ws_detail.views.sheetView[0].showGridLines = True
-            kolom_log = ['Nama File', 'Baris Excel', 'Lembaga SSR', 'Kode Petugas', 'Nama Kota', 'Nama Layanan', 'Tanggal', 'ID Klien', 'NIK', 'Tipe Sasaran', 'Keterangan review']
             
-            ws_detail.append(kolom_log)
-            for c_idx, col_name in enumerate(kolom_log, 1):
+            ws_detail.append(kolom_log_final)
+            for c_idx, col_name in enumerate(kolom_log_final, 1):
                 cell = ws_detail.cell(row=1, column=c_idx)
                 cell.font = font_header
                 cell.fill = fill_blue_header
                 cell.border = thin_border
                 
             if not df_tabel_1.empty:
-                for r_data in df_tabel_1[kolom_log].values.tolist():
+                # Pastikan susunan kolom sesuai dengan kolom_log_final
+                df_urut = df_tabel_1[kolom_log_final]
+                for r_data in df_urut.values.tolist():
                     ws_detail.append(r_data)
-                    for c_idx in range(1, len(kolom_log) + 1):
-                        ws_detail.cell(row=ws_detail.max_row, column=c_idx).font = font_data
-                        ws_detail.cell(row=ws_detail.max_row, column=c_idx).border = thin_border
+                    for c_idx in range(1, len(kolom_log_final) + 1):
+                        cell = ws_detail.cell(row=ws_detail.max_row, column=c_idx)
+                        cell.font = font_data
+                        cell.border = thin_border
+                        if c_idx in [1, 4, 6]: # Baris, Kode, Tanggal dibuat rata tengah
+                            cell.alignment = Alignment(horizontal="center")
             else:
-                ws_detail.append(["CLEAN", "Tidak ditemukan kesalahan data."])
+                ws_detail.append(["CLEAN", "Tidak ditemukan kesalahan data sama sekali."])
             
             wb.save(output_stream)
             
+            # Masukkan hasil ke session state agar aman dari refresh
             st.session_state['data_unduhan'] = output_stream.getvalue()
-            st.session_state['tabel_1_detail'] = df_tabel_1
+            st.session_state['tabel_1_detail'] = df_tabel_1[kolom_log_final] if not df_tabel_1.empty else df_tabel_1
             st.session_state['tabel_2_matrik'] = df_tabel_2_matrik
             st.session_state['proses_selesai'] = True
 
@@ -548,19 +539,19 @@ if tombol_proses:
 # 5. BLOCK OUTPUT INTERFACE UTAMA STREAMLIT
 # ==========================================================
 if st.session_state['proses_selesai']:
-    st.success("🎉 Berhasil Memproses Data! Kedua tabel kini tersedia di bawah ini:")
+    st.success("🎉 Berhasil Memproses Data! Hitungan Matrik SSR & Detail Per Baris Sudah Sinkron.")
     
     tab_matrik, tab_detail = st.tabs([
-        "📊 Tabel 2: Rekap Matrik SSR (Format Baru)", 
-        "🔍 Tabel 1: Detail Kesalahan Per Baris"
+        "📊 Tabel 2: Rekap Matrik SSR (Sinkron Otomatis)", 
+        "🔍 Tabel 1: Detail Kesalahan Per Baris (Kolom Bersih)"
     ])
     
     with tab_matrik:
-        st.subheader("📋 Pratinjau Rekapitulasi Matrik Jumlah Error per Lembaga SSR")
+        st.subheader("📋 Rekapitulasi Matrik Jumlah Error per Lembaga SSR")
         st.dataframe(st.session_state['tabel_2_matrik'], use_container_width=True, hide_index=True)
         
     with tab_detail:
-        st.subheader("🔍 Pratinjau Detail Log Kesalahan Teknis Baris per Baris")
+        st.subheader("🔍 Detail Log Kesalahan Baris per Baris (Tanpa File, Layanan & Keterangan)")
         st.dataframe(st.session_state['tabel_1_detail'], use_container_width=True, hide_index=True)
         
     st.divider()
@@ -568,6 +559,6 @@ if st.session_state['proses_selesai']:
     st.download_button(
         label="🟢 Download Excel Laporan Komparasi (Berisi 2 Tabel Lengkap) (.xlsx)",
         data=st.session_state['data_unduhan'],
-        file_name=f"REVIEW_DATA_LENGKAP_2_TABEL_{datetime.now().strftime('%d%m%y')}.xlsx",
+        file_name=f"REVIEW_DATA_SINKRON_SSR_{datetime.now().strftime('%d%m%y')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
