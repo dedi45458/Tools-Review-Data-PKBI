@@ -7,16 +7,41 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ==========================================================
-# 1. KONFIGURASI UTAMA STREAMLIT ONLINE
+# 1. KONFIGURASI UTAMA & THEME MODERN
 # ==========================================================
-st.set_page_config(page_title="Tools Review PKBI Jabar - Multi-Tabel Laporan", layout="wide")
+st.set_page_config(
+    page_title="Data Quality Review - PKBI Jabar", 
+    page_icon="📊", 
+    layout="wide"
+)
 
-st.title("📊 Tools Review Data Masal (Online) - PKBI Jabar")
+# Custom CSS untuk tampilan UI yang lebih bersih dan profesional
 st.markdown("""
-Sistem otomatisasi penelaahan kualitas data Penjangkauan dan Rujukan PKBI Jawa Barat.
-*Aturan validasi dan daftar media sosial telah disesuaikan dengan instruksi matriks terbaru.*
-""")
-st.divider()
+    <style>
+    .main-title {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #1E3A8A;
+        margin-bottom: 0.2rem;
+    }
+    .sub-title {
+        font-size: 1.1rem;
+        color: #4B5563;
+        margin-bottom: 1.5rem;
+    }
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    div[data-testid="stExpander"] {
+        border-radius: 8px;
+        border: 1px solid #E5E7EB;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.markdown('<div class="main-title">📊 Tools Review Data Massal — PKBI Jabar</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Sistem otomatisasi penelaahan kualitas data Penjangkauan dan Rujukan PKBI Jawa Barat berbasis matriks validasi terbaru.</div>', unsafe_allow_html=True)
 
 # Inisialisasi State agar data tidak hilang saat interaksi UI
 if 'proses_selesai' not in st.session_state:
@@ -83,24 +108,31 @@ DAFTAR_INDIKATOR = [
 ]
 
 # ==========================================================
-# 2. PANEL SIDEBAR UNTUK UNGGAH BERKAS
+# 2. PANEL SIDEBAR UNTUK UNGGAH BERKAS (UI ENHANCED)
 # ==========================================================
-st.sidebar.header("📁 Menu Unggah Berkas")
-file_referensi = st.sidebar.file_uploader(
-    "1️⃣ Data Semester / Tahun Lalu (.xlsx)", 
-    type=["xlsx"]
-)
-
-files_review = st.sidebar.file_uploader(
-    "2️⃣ Raw Data Penjangkauan (.xlsx)", 
-    type=["xlsx"], 
-    accept_multiple_files=True
-)
-
-if files_review:
-    st.sidebar.success(f"📂 Terbaca {len(files_review)} file Penjangkauan.")
-else:
-    st.sidebar.info("💡 Silakan unggah file Penjangkauan terlebih dahulu.")
+with st.sidebar:
+    st.markdown("### 📁 Menu Unggah Berkas")
+    st.markdown("Pastikan format berkas sesuai standar laporan SSR.")
+    
+    file_referensi = st.file_uploader(
+        "1️⃣ Data Semester / Tahun Lalu (.xlsx)", 
+        type=["xlsx"],
+        help="Digunakan untuk validasi silang kecocokan IDK Klien & NIK"
+    )
+    
+    st.markdown("---")
+    
+    files_review = st.file_uploader(
+        "2️⃣ Raw Data Penjangkauan (.xlsx)", 
+        type=["xlsx"], 
+        accept_multiple_files=True,
+        help="Bisa memilih lebih dari 1 file sekaligus"
+    )
+    
+    if files_review:
+        st.success(f"📂 Terbaca {len(files_review)} file Penjangkauan.")
+    else:
+        st.info("💡 Silakan unggah file Penjangkauan untuk memulai analisis.")
 
 def cek_kode(teks_kolom, kode_target):
     if pd.isna(teks_kolom): return False
@@ -125,7 +157,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
     
-    # MASTER DAFTAR MEDSOS TERBARU
     medsoc_keywords = [
         'whatsapp', 'wa', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 
         'walla', 'sms', 'grindr', 'growlr', 'instagram', 'ig', 'tantan', 
@@ -134,7 +165,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         'wechat', 'threads'
     ]
 
-    # Pembuatan Map Database Referensi
     ref_ssr_id_to_nik = {}
     ref_nik_ssr_to_id = {}
     
@@ -162,7 +192,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         row = df.iloc[idx]
         no_excel_row = idx + 2
         
-        # PENTING: Mengubah nama SSR menjadi UPPERCASE murni agar sinkron dengan tabel rekap
         v_ssr = str(row.get('Lembaga SSR', '')).strip().upper() if pd.notna(row.get('Lembaga SSR')) else ''
         v_petugas = str(row.get('Kode Petugas', '')).replace("'", "").strip() if pd.notna(row.get('Kode Petugas')) else ''
         v_kota = str(row.get('Nama Kota', '')).strip() if pd.notna(row.get('Nama Kota')) else ''
@@ -199,7 +228,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce') if pd.notna(tgl_raw) else None
 
         def tambah_log(nama_indikator, deskripsi_detail):
-            # Mengeluarkan kolom Nama File, Nama Layanan, dan Keterangan Review sesuai permintaan user
             list_kesalahan.append({
                 "Baris Excel": no_excel_row, 
                 "Lembaga SSR": v_ssr,
@@ -212,42 +240,30 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
                 "INDIKATOR KESALAHAN DATA": nama_indikator
             })
 
-        # --- LOGIKA VALIDASI ---
-        
-        # 1. Kode Petugas Kosong
+        # --- LOGIKA VALIDASI INDIKATOR ---
         if pd.isna(row.get('Kode Petugas')) or str(row.get('Kode Petugas')).strip() == '':
             tambah_log(DAFTAR_INDIKATOR[1], "Kode petugas kosong")
 
-        # 2. Tanggal lebih besar dari tanggal hari ini
         if pd.notna(tgl_p) and tgl_p > hari_ini:
             tambah_log(DAFTAR_INDIKATOR[2], "Tanggal pelaksanaan melebihi tanggal hari ini")
 
         if id_clean and id_clean != 'nan' and id_clean != '':
-            # 3. IDKD kurang/lebih dari 10 digit karakter
             if len(id_clean) != 10 or not id_clean.isalnum():
                 tambah_log(DAFTAR_INDIKATOR[3], f"IDKD berjumlah {len(id_clean)} karakter")
-            
-            # 4. Digit nama kurang/lebih dari 4 digit karakter
             if len(id_clean) >= 4 and not id_clean[:4].isalpha():
                 tambah_log(DAFTAR_INDIKATOR[4], f"4 digit awal IDKD wajib huruf")
-                
-            # 5. Digit tanggal lahir kurang/lebih dari 6 digit angka
             if len(id_clean) == 10 and not id_clean[4:].isdigit():
                 tambah_log(DAFTAR_INDIKATOR[5], f"6 digit akhir IDKD wajib angka")
-
-            # 6. ID sama tapi NIK berbeda dengan data Semester/Tahun lalu
             if df_ref is not None and v_ssr:
                 key_ssr_id = f"{v_ssr}_{id_clean}"
                 if key_ssr_id in ref_ssr_id_to_nik and ref_ssr_id_to_nik[key_ssr_id] != nik_clean:
                     tambah_log(DAFTAR_INDIKATOR[8], f"ID terikat NIK berbeda dengan semester lalu")
 
-        # 7. NIK sama tapi ID berbeda dengan data Semester/Tahun lalu
         if df_ref is not None and v_ssr and nik_clean and nik_clean != 'nan' and nik_clean != '':
             key_nik_ssr = f"{nik_clean}_{v_ssr}"
             if key_nik_ssr in ref_nik_ssr_to_id and ref_nik_ssr_to_id[key_nik_ssr] != id_clean:
                 tambah_log(DAFTAR_INDIKATOR[9], f"NIK terikat ID berbeda dengan semester lalu")
 
-        # Pengecekan Umur
         if pd.notna(umur) and str(umur).strip() != '':
             try:
                 val_umur = float(umur)
@@ -257,7 +273,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
                     tambah_log(DAFTAR_INDIKATOR[12], f"Usia di atas 70 tahun")
             except: pass
 
-        # 10. Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK
         if id_clean and len(id_clean) == 10 and nik_clean and len(nik_clean) == 16:
             thn_id = id_clean[4:6]
             nik_with_quote = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
@@ -266,14 +281,12 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
                 if thn_id != thn_nik:
                     tambah_log(DAFTAR_INDIKATOR[13], f"Tahun lahir IDKD tidak sama dengan Tahun lahir NIK")
 
-        # 11. NIK kurang/lebih dari 16 digit
         if nik_clean and nik_clean != 'nan' and nik_clean != '':
             if len(nik_clean) != 16:
                 tambah_log(DAFTAR_INDIKATOR[14], f"NIK berjumlah {len(nik_clean)} digit")
             if nik_clean.endswith('00'):
                 tambah_log(DAFTAR_INDIKATOR[15], "Penulisan NIK dummy")
 
-        # 13. Secara NIK harusnya perempuan bukan laki-laki
         if len(nik_clean) == 16 and jk == '1':
             try:
                 dd_nik = int(nik_clean[6:8])
@@ -281,11 +294,9 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
                     tambah_log(DAFTAR_INDIKATOR[16], f"Klien Laki-laki (1) tapi NIK menunjukkan Perempuan")
             except: pass
 
-        # 14. LSL/Waria tapi jenis kelamin perempuan
         if (v_tipe_sasaran in ['1304', '1301']) and jk == '2': 
             tambah_log(DAFTAR_INDIKATOR[17], f"Populasi LSL/Waria tetapi Jenis Kelamin Perempuan")
 
-        # 15. Jenis kontak dengan Jenis Kegiatan tidak sesuai
         if jns_kontak == '1' and jns_kegiatan not in ['1', '5']:
             tambah_log(DAFTAR_INDIKATOR[18], f"Kontak Individual tidak sinkron dengan Kegiatan")
         elif jns_kontak == '2' and jns_kegiatan not in ['2', '3', '4', '6', '7']:
@@ -293,11 +304,9 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         elif jns_kontak == '3' and jns_kegiatan != '8':
             tambah_log(DAFTAR_INDIKATOR[18], f"Kontak Virtual/VO tidak sinkron dengan Kegiatan")
 
-        # --- VALIDASI LAINNYA ---
         if '.' in id_raw: tambah_log(DAFTAR_INDIKATOR[6], "Ada tanda titik (.) pada penulisan IDKD")
         if ' ' in id_raw: tambah_log(DAFTAR_INDIKATOR[7], "Ada spasi pada penulisan IDKD")
         
-        # Penanganan Tahun Lahir Terlalu Muda Aman dari Kebocoran Objek Tanggal Excel
         if pd.notna(umur) and str(umur).strip() != '':
             try:
                 val_umur = float(umur)
@@ -367,17 +376,19 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
     return pd.DataFrame(list_kesalahan)
 
 # ==========================================================
-# 4. TOMBOL EKSEKUSI UTAMA (DENGAN MASTER LIST SSR)
+# 4. TOMBOL EKSEKUSI UTAMA
 # ==========================================================
-tombol_proses = st.button("🚀 Jalankan Penelaahan & Tampilkan 2 Tabel", type="primary")
+# Desain layout tombol proses agar terfokus di bagian atas tengah halaman
+col_btn, _ = st.columns([1, 2])
+with col_btn:
+    tombol_proses = st.button("🚀 Jalankan Penelaahan Laporan", type="primary", use_container_width=True)
 
 if tombol_proses:
     if not files_review:
-        st.error("⚠️ **Gagal Mengeksekusi:** Silakan unggah berkas Raw Data terlebih dahulu!")
+        st.error("⚠️ **Gagal Mengeksekusi:** Silakan unggah berkas Raw Data terlebih dahulu di sidebar!")
     else:
-        with st.spinner("Sedang memproses validasi data..."):
+        with st.spinner("Sedang memproses validasi data, mohon tunggu..."):
             
-            # --- PERBAIKAN: Gunakan Master List sebagai base ---
             MASTER_LIST_SSR = [
                 "BINA MUDA GEMILANG", "YAYASAN PONTIANAK PLUS - OUTREACH", "YAYASAN PESONA BENGKULU", 
                 "YAYASAN SRIKANDI PASUNDAN", "GRAPIKS", "LENSA SUKABUMI", "PETIK", 
@@ -386,10 +397,9 @@ if tombol_proses:
                 "YAYASAN VESTA INDONESIA", "WAHANA CITA INDONESIA"
             ]
             
-            unique_ssrs = set(MASTER_LIST_SSR) # Memulai dengan daftar master
+            unique_ssrs = set(MASTER_LIST_SSR)
             total_records_processed = 0
             
-            # Menambah SSR dari file jika ada yang belum terdaftar di Master List
             for file in files_review:
                 try:
                     df_temp = pd.read_excel(file)
@@ -399,14 +409,13 @@ if tombol_proses:
                         ssrs_in_file = df_temp.iloc[start_row:]['Lembaga SSR'].dropna().astype(str).str.strip().upper().unique()
                         for s in ssrs_in_file:
                             if s and s != 'nan' and s != '': 
-                                unique_ssrs.add(s) # Menambah ke set (menangani duplikat)
+                                unique_ssrs.add(s)
                         total_records_processed += (len(df_temp) - start_row)
                 except Exception as e:
-                    st.warning(f"Catatan: Terjadi masalah pada pembacaan file {file.name}: {e}")
+                    st.warning(f"Catatan: Masalah membaca file {file.name}: {e}")
                     
             list_ssr_unik = sorted(list(unique_ssrs))
 
-            # --- PROSES VALIDASI ---
             df_ref = None
             if file_referensi:
                 try: df_ref = pd.read_excel(file_referensi)
@@ -426,19 +435,17 @@ if tombol_proses:
 
             if semua_rekap_kesalahan:
                 df_tabel_1 = pd.concat(semua_rekap_kesalahan, ignore_index=True)
-                df_tabel_1['Lembaga SSR'] = df_tabel_1['Lembaga SSR'].str.strip().str.upper() # Pastikan konsisten
+                df_tabel_1['Lembaga SSR'] = df_tabel_1['Lembaga SSR'].str.strip().str.upper()
                 df_tabel_1 = df_tabel_1[kolom_log]
             else:
                 df_tabel_1 = pd.DataFrame(columns=kolom_log)
             
-            # --- TABEL 2 (MATRIK REKAP SSR) ---
             matrix_data = []
             for idx, ind in enumerate(DAFTAR_INDIKATOR, 1):
                 row_dict = {"No.": idx, "INDIKATOR KESALAHAN DATA": ind}
                 total_row_err = 0
                 for ssr in list_ssr_unik:
                     if not df_tabel_1.empty:
-                        # Menghitung error per SSR
                         count_err = len(df_tabel_1[(df_tabel_1['INDIKATOR KESALAHAN DATA'] == ind) & 
                                                   (df_tabel_1['Lembaga SSR'].str.upper() == ssr)])
                     else:
@@ -453,11 +460,10 @@ if tombol_proses:
                            
             df_tabel_2_matrik = pd.DataFrame(matrix_data)
             
-            # GENERATOR EXCEL FILE GABUNGAN
+            # --- OPENPYXL EXCEL GABUNGAN DESIGN ---
             output_stream = io.BytesIO()
             wb = openpyxl.Workbook()
             
-            # SHEET 1: REKAP MATRIK
             ws_dash = wb.active
             ws_dash.title = "Tabel 2 - Rekap Matrik SSR"
             ws_dash.views.sheetView[0].showGridLines = True
@@ -544,7 +550,6 @@ if tombol_proses:
             
             ws_dash.column_dimensions['B'].width = 65
 
-            # SHEET 2: DETAIL PER BARIS (Sudah disederhanakan)
             ws_detail = wb.create_sheet(title="Tabel 1 - Detail Per Baris")
             ws_detail.views.sheetView[0].showGridLines = True
             
@@ -566,35 +571,57 @@ if tombol_proses:
             
             wb.save(output_stream)
             
+            # Save data hasil proses ke session state
             st.session_state['data_unduhan'] = output_stream.getvalue()
             st.session_state['tabel_1_detail'] = df_tabel_1
             st.session_state['tabel_2_matrik'] = df_tabel_2_matrik
+            st.session_state['total_entri'] = total_records_processed
             st.session_state['proses_selesai'] = True
 
 # ==========================================================
-# 5. BLOCK OUTPUT INTERFACE UTAMA STREAMLIT
+# 5. BLOCK OUTPUT INTERFACE UTAMA STREAMLIT (UI MODERN)
 # ==========================================================
 if st.session_state['proses_selesai']:
-    st.success("🎉 Berhasil Memproses Data! Kedua tabel kini tersedia di bawah ini:")
+    st.markdown("### 📊 Dashboard Hasil Review Analisis")
     
+    # KARTU METRIK KINERJA (Modern Cards)
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.metric(label="Total Entri Data Diperiksa", value=f"{st.session_state['total_entri']} Baris")
+    with m2:
+        total_error = len(st.session_state['tabel_1_detail'])
+        st.metric(label="Total Temuan Log Kesalahan", value=f"{total_error} Kasus", delta=f"{'⚠️ Perlu Tindakan' if total_error > 0 else '✅ Data Bersih'}")
+    with m3:
+        st.download_button(
+            label="📥 Unduh File Excel Komplit (.xlsx)",
+            data=st.session_state['data_unduhan'],
+            file_name=f"Hasil_Review_Data_PKBI_Jabar_{datetime.now().strftime('%d%m%Y')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+        
+    st.markdown("---")
+    
+    # STRUKTUR TAB TAMPILAN DATA TABEL
     tab_matrik, tab_detail = st.tabs([
-        "📊 Rekap SSR", 
-        "🔍 Hasil Reeview Penjangkauan"
+        "📊 Matriks Rekapitulasi Per SSR", 
+        "🔍 Detail Kesalahan Per Baris Data"
     ])
     
     with tab_matrik:
-        st.subheader("📋 Pratinjau Rekapitulasi Matrik Jumlah Error per Lembaga SSR")
-        st.dataframe(st.session_state['tabel_2_matrik'], use_container_width=True, hide_index=True)
+        st.markdown("#### 📋 Matriks Distribusi Error Berdasarkan Lembaga SSR")
+        st.markdown("Gunakan tabel dinamis di bawah ini untuk melihat area indikator kesalahan kritis dari masing-masing sub-mitra.")
+        st.dataframe(
+            st.session_state['tabel_2_matrik'], 
+            use_container_width=True, 
+            hide_index=True
+        )
         
     with tab_detail:
-        st.subheader("🔍 Pratinjau Detail Log Kesalahan Teknis Baris per Baris")
-        st.dataframe(st.session_state['tabel_1_detail'], use_container_width=True, hide_index=True)
-        
-    st.divider()
-    st.subheader("📥 Download Hasil Gabungan (2 Tabel)")
-    st.download_button(
-        label="🟢 Download Excel Laporan Komparasi (Berisi 2 Tabel Lengkap) (.xlsx)",
-        data=st.session_state['data_unduhan'],
-        file_name=f"REVIEW_DATA_LENGKAP_2_TABEL_{datetime.now().strftime('%d%m%y')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        st.markdown("#### 🔍 Log Teknis Rincian Kesalahan Baris per Baris")
+        st.markdown("Daftar di bawah ini memuat koordinat baris Excel asli untuk mempermudah perbaikan langsung (*cleansing data*).")
+        st.dataframe(
+            st.session_state['tabel_1_detail'], 
+            use_container_width=True, 
+            hide_index=True
+        )
