@@ -12,7 +12,7 @@ from supabase import create_client, Client
 # ==========================================================
 # Ganti dengan URL dan Anon Key Supabase Anda sendiri
 SUPABASE_URL = "https://fughiktqrtrtxrwoerud.supabase.co" 
-SUPABASE_KEY = "MASUKKAN_ANON_KEY_SUPABASE_ANDA_DI_SINI"
+SUPABASE_KEY = "sb_publishable_0RXs2YvzFtj2b8K2zeCFvQ_XAMQW1aM"
 
 @st.cache_resource
 def init_supabase():
