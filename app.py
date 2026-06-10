@@ -1,4 +1,10 @@
 import streamlit as st
+
+# TAMBAHKAN KODE INI DI BARIS ATAS
+if 'total_entri' not in st.session_state:
+    st.session_state['total_entri'] = 0
+
+import streamlit as st
 import pandas as pd
 import io
 import re
