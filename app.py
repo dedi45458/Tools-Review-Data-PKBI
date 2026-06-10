@@ -441,7 +441,7 @@ if st.session_state['proses_selesai']:
         kolom_susunan = [
             "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", 
             "Kode Petugas", "Nama Kota", "NIK", "Tipe Sasaran", 
-            "IIndikator Kesalahan Data", "Validasi hasil review", "Justifikasi"
+            "Indikator Kesalahan Data", "Validasi hasil review", "Justifikasi"
         ]
         
         df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
