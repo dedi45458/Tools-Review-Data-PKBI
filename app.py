@@ -35,7 +35,7 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Modern 2026 Custom UI CSS & Mobile Responsiveness
+# Modern Custom UI CSS & Mobile Responsiveness
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -102,7 +102,7 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (konfirmasi)", "periksa": lambda c: c['id_clean'] != '' and len(c['id_clean']) == 10 and c['nik_clean'] != '' and len(c['nik_clean']) == 16 and c['id_clean'][4:6] != (str(c['row'].get('NIK', '')) if str(c['row'].get('NIK', '')).startswith("'") else "'" + c['nik_clean'])[11:13]},
     {"nama": "NIK kurang/lebih dari 16 digit (konfirmasi)", "periksa": lambda c: c['nik_clean'] != '' and len(c['nik_clean']) != 16},
     {"nama": "Kesalahan dalam penulisan NIK (00) (konfirmasi)", "periksa": lambda c: c['nik_clean'] != '' and c['nik_clean'].endswith('00')},
-    {"nama": "Secara NIK harusnya perempuan bukan laki-laki (konfirmasi)", "periksa": lambda c: len(c['nik_clean']) == 16 and c['jk'] == '1' and int(c['nik_clean'][6:8]) > 31 if c['nik_clean'].isdigit() and len(c['nik_clean'])>=8 else False},
+    {"nama": "Secara NIK harusnya perempuan bukan laki-laki (konfirmasi)", "periksa": lambda c: len(c['nik_clean']) == 16 and c['jk'] == '2' and int(c['nik_clean'][6:8]) <= 31 if c['nik_clean'].isdigit() and len(c['nik_clean'])>=8 else False},
     {"nama": "LSL/Waria tapi jenis kelamin perempuan", "periksa": lambda c: c['v_tipe_sasaran'] in ['1304', '1301'] and c['jk'] == '2'},
     {"nama": "Jenis kontak dengan Jenis Kegiatan tidak sesuai", "periksa": lambda c: (c['jns_kontak'] == '1' and c['jns_kegiatan'] not in ['1', '5']) or (c['jns_kontak'] == '2' and c['jns_kegiatan'] not in ['2', '3', '4', '6', '7']) or (c['jns_kontak'] == '3' and c['jns_kegiatan'] != '8')},
     {"nama": "Jenis kontak Individual/kelompok tapi kolom Virtual dan Tatap Muka (VC1) tidak diisi", "periksa": lambda c: c['jns_kontak'] in ['1', '2'] and (c['vc1'] == '' or c['vc1'] == 'nan')},
@@ -152,7 +152,8 @@ with st.sidebar:
     st.markdown("### 📁 Menu Unggah Berkas")
     file_referensi = st.file_uploader("1️⃣ Data HIV+ Semester / Tahun Lalu (.xlsx)", type=["xlsx"])
     st.markdown("---")
-    files_review = st.file_uploader("2️⃣ Raw Data Penjangkauan / Rujukan (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+    # Diperbarui agar mendukung upload file Excel (.xlsx) dan CSV (.csv) untuk data massal
+    files_review = st.file_uploader("2️⃣ Raw Data Penjangkauan / Rujukan", type=["xlsx", "csv"], accept_multiple_files=True)
     
     st.markdown("---")
     st.markdown("### 🛠️ Tambah Indikator Mandiri")
@@ -234,7 +235,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     id_counts = df.iloc[start_row_idx:]['ID Klien'].astype(str).str.strip().value_counts().to_dict()
 
-    # --- PRE-CALCULATION UNTUK MENCEGAH BOTTLENECK O(N^2) ---
+    # --- PRE-CALCULATION UNTUK MENCEGAH BOTTLENECK ---
     df['id_mapped'] = df['ID Klien'].astype(str).str.replace("'", "").str.strip()
     
     def periksa_hiv(x):
@@ -286,7 +287,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         tgl_raw = row.get('Tanggal', None)
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce') if pd.notna(tgl_raw) else None
 
-        # Memanfaatkan Dictionary Hashmap O(1) untuk Kecepatan Super
         pernah_dapat_info_hiv = dict_pernah_hiv.get(id_clean, False) if (id_clean and id_counts.get(id_clean, 0) > 1) else False
         pernah_dapat_rujuk_tes = dict_pernah_rujuk.get(id_clean, False) if (id_clean and id_counts.get(id_clean, 0) > 1) else False
 
@@ -327,11 +327,11 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                         "Lembaga SSR": v_ssr,
                         "Tanggal": v_tanggal, 
                         "ID Klien": id_clean, 
-                        "INDIKATOR KESALAHAN DATA": nama_ind,
                         "Kode Petugas": v_petugas, 
                         "Nama Kota": v_kota, 
                         "NIK": nik_clean, 
                         "Tipe Sasaran": v_tipe_sasaran,
+                        "INDIKATOR KESALAHAN DATA": nama_ind,
                         "validasi hasil review": status_validasi,
                         "Justifikasi": justif_val
                     })
@@ -361,7 +361,12 @@ if tombol_proses:
 
             for f in files_review:
                 try:
-                    df_target = pd.read_excel(f)
+                    # Sistem otomatis mendeteksi ekstensi CSV atau Excel secara cerdas
+                    if f.name.endswith('.csv'):
+                        df_target = pd.read_csv(f, low_memory=False)
+                    else:
+                        df_target = pd.read_excel(f)
+                        
                     total_records += len(df_target)
                     df_res = jalankan_review_data(df_target, df_ref, nama_file=f.name)
                     if not df_res.empty:
@@ -379,6 +384,9 @@ if tombol_proses:
                 DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state['aturan_kustom'])]
                 
                 matrix_rows = []
+                list_untuk_db_tren = [] # Menampung log akumulasi tren
+                waktu_sekarang_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
                 for ind in DAFTAR_INDIKATOR_AKTIF:
                     r_dict = {"INDIKATOR KESALAHAN DATA": ind}
                     total_ind_err = 0
@@ -397,6 +405,25 @@ if tombol_proses:
                 
                 st.session_state['df_tabel_atas'] = df_atas
                 st.session_state['df_tabel_bawah'] = df_bawah
+                
+                # INTEGRASI TREN: Kirim ringkasan kesalahan per baris ke Supabase
+                if supabase and len(df_bawah) > 0:
+                    try:
+                        list_batch_tren = []
+                        for _, row_err in df_bawah.iterrows():
+                            list_batch_tren.append({
+                                "ssr": str(row_err['Lembaga SSR']),
+                                "tanggal": str(row_err['Tanggal']),
+                                "id_klien": str(row_err['ID Klien']),
+                                "indikator_kesalahan": str(row_err['INDIKATOR KESALAHAN DATA']),
+                                "is_revisi": False,
+                                "justifikasi": ""
+                            })
+                        # Menggunakan upsert agar tidak melanggar constraint unik jika di-review ulang
+                        supabase.table("log_validasi_review").upsert(list_batch_tren, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
+                        st.sidebar.success("📈 Riwayat tren review berhasil direkam ke database!")
+                    except Exception as e:
+                        st.sidebar.error(f"⚠️ Gagal mencatat tren: {e}")
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
@@ -437,7 +464,7 @@ if st.session_state['proses_selesai']:
     st.markdown("#### Hasil Review Penjangkauan")
     if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_tabel_bawah'].empty:
         
-        # Kolom sesuai permintaan: Indikator Kesalahan Data digeser setelah Tipe Sasaran
+        # POSISI BARU: INDIKATOR KESALAHAN DATA digeser tepat setelah Tipe Sasaran
         kolom_susunan = [
             "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", 
             "Kode Petugas", "Nama Kota", "NIK", "Tipe Sasaran", 
@@ -500,8 +527,46 @@ if st.session_state['proses_selesai']:
                             except Exception: pass
                         
                     if peringatan_justifikasi:
-                        st.warning("⚠️ Beberapa teks Justifikasi diabaikan karena ditaruh pada indikator mutlak (bukan tipe konfirmasi).")
+                        st.warning("⚠️ Beberapa teks Justifikasi otomatis diabaikan karena ditaruh pada indikator mutlak (bukan tipe konfirmasi).")
                     st.success(f"🎉 Sukses memproses {sukses_simpan} baris validasi ke database Supabase!")
                     st.rerun()
     else:
         st.info("✨ Data bersih! Tidak ada kasus validasi pada data ini.")
+
+    # ==========================================================
+    # 6. VISUALISASI GRAFIK TREN HISTORIS KESALAHAN PER INDIKATOR BY SSR
+    # ==========================================================
+    st.markdown("---")
+    st.markdown("### 📈 Ringkasan Tren Historis Kesalahan Data")
+    
+    if supabase:
+        try:
+            # Mengambil seluruh data riwayat gabungan dari database Anda
+            res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
+            if res_tren.data:
+                df_tren = pd.DataFrame(res_tren.data)
+                
+                # Mengubah timestamp created_at menjadi format tanggal yang mudah dibaca
+                df_tren['Tanggal Keluar Log'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
+                
+                col_sel1, col_sel2 = st.columns([1, 2])
+                with col_sel1:
+                    pilihan_ssr_tren = st.selectbox("Pilih SSR untuk Grafik Tren:", sorted(df_tren['ssr'].unique()))
+                
+                df_filtered_tren = df_tren[df_tren['ssr'] == pilihan_ssr_tren]
+                
+                # Membuat tabel pivot akumulasi hitungan frekuensi kesalahan per tanggal review
+                df_pivot_tren = df_filtered_tren.pivot_table(
+                    index='Tanggal Keluar Log', 
+                    columns='indikator_kesalahan', 
+                    aggfunc='size'
+                ).fillna(0)
+                
+                if not df_pivot_tren.empty:
+                    st.line_chart(df_pivot_tren)
+                else:
+                    st.caption("Belum cukup variasi tanggal untuk memetakan grafik garis.")
+            else:
+                st.info("Belum ada rekam jejak log review tersimpan di database.")
+        except Exception as e:
+            st.caption(f"Grafik tren tidak dapat dimuat sementara: {e}")
