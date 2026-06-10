@@ -367,7 +367,7 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
     return pd.DataFrame(list_kesalahan)
 
 # ==========================================================
-# 4. TOMBOL EKSEKUSI UTAMA
+# 4. TOMBOL EKSEKUSI UTAMA (DENGAN MASTER LIST SSR)
 # ==========================================================
 tombol_proses = st.button("🚀 Jalankan Penelaahan & Tampilkan 2 Tabel", type="primary")
 
@@ -376,9 +376,20 @@ if tombol_proses:
         st.error("⚠️ **Gagal Mengeksekusi:** Silakan unggah berkas Raw Data terlebih dahulu!")
     else:
         with st.spinner("Sedang memproses validasi data..."):
-            unique_ssrs = set()
+            
+            # --- PERBAIKAN: Gunakan Master List sebagai base ---
+            MASTER_LIST_SSR = [
+                "BINA MUDA GEMILANG", "YAYASAN PONTIANAK PLUS - OUTREACH", "YAYASAN PESONA BENGKULU", 
+                "YAYASAN SRIKANDI PASUNDAN", "GRAPIKS", "LENSA SUKABUMI", "PETIK", 
+                "PKBI CIREBON", "PKBI GARUT", "PKBI CABANG SUBANG", "YAYASAN SRIKANDI PERINTIS", 
+                "PESONA BUMI PASUNDAN", "LEMBAGA KASIH INDONESIA KITA", "YAYASAN PELANGI MALUKU", 
+                "YAYASAN VESTA INDONESIA", "WAHANA CITA INDONESIA"
+            ]
+            
+            unique_ssrs = set(MASTER_LIST_SSR) # Memulai dengan daftar master
             total_records_processed = 0
             
+            # Menambah SSR dari file jika ada yang belum terdaftar di Master List
             for file in files_review:
                 try:
                     df_temp = pd.read_excel(file)
@@ -387,14 +398,15 @@ if tombol_proses:
                         start_row = 1 if len(df_temp) > 0 and ('dd/mm/yyyy' in str(df_temp.iloc[0].values) or 'Laki-laki' in str(df_temp.iloc[0].values)) else 0
                         ssrs_in_file = df_temp.iloc[start_row:]['Lembaga SSR'].dropna().astype(str).str.strip().upper().unique()
                         for s in ssrs_in_file:
-                            if s and s != 'nan' and s != '': unique_ssrs.add(s)
+                            if s and s != 'nan' and s != '': 
+                                unique_ssrs.add(s) # Menambah ke set (menangani duplikat)
                         total_records_processed += (len(df_temp) - start_row)
-                except: pass
+                except Exception as e:
+                    st.warning(f"Catatan: Terjadi masalah pada pembacaan file {file.name}: {e}")
                     
             list_ssr_unik = sorted(list(unique_ssrs))
-            if not list_ssr_unik:
-                list_ssr_unik = ["BINA MUDA GEMILANG", "YAYASAN SRIKANDI PASUNDAN", "LENSA SUKABUMI"]
 
+            # --- PROSES VALIDASI ---
             df_ref = None
             if file_referensi:
                 try: df_ref = pd.read_excel(file_referensi)
@@ -410,25 +422,25 @@ if tombol_proses:
                 except Exception as e:
                     st.error(f"Gagal memproses file {file.name}: {e}")
             
-            # Kolom log baru tanpa Nama File, Nama Layanan, dan Keterangan Review
             kolom_log = ['Baris Excel', 'Lembaga SSR', 'Kode Petugas', 'Nama Kota', 'Tanggal', 'ID Klien', 'NIK', 'Tipe Sasaran', 'INDIKATOR KESALAHAN DATA']
 
-            # TABEL 1 (Detail Per Baris)
             if semua_rekap_kesalahan:
                 df_tabel_1 = pd.concat(semua_rekap_kesalahan, ignore_index=True)
+                df_tabel_1['Lembaga SSR'] = df_tabel_1['Lembaga SSR'].str.strip().str.upper() # Pastikan konsisten
                 df_tabel_1 = df_tabel_1[kolom_log]
             else:
                 df_tabel_1 = pd.DataFrame(columns=kolom_log)
             
-            # TABEL 2 (Matrik Rekap SSR)
+            # --- TABEL 2 (MATRIK REKAP SSR) ---
             matrix_data = []
             for idx, ind in enumerate(DAFTAR_INDIKATOR, 1):
                 row_dict = {"No.": idx, "INDIKATOR KESALAHAN DATA": ind}
                 total_row_err = 0
                 for ssr in list_ssr_unik:
                     if not df_tabel_1.empty:
-                        # FILTER FIXED: Mencocokkan string indikator dan nama SSR secara tepat
-                        count_err = len(df_tabel_1[(df_tabel_1['INDIKATOR KESALAHAN DATA'] == ind) & (df_tabel_1['Lembaga SSR'] == ssr)])
+                        # Menghitung error per SSR
+                        count_err = len(df_tabel_1[(df_tabel_1['INDIKATOR KESALAHAN DATA'] == ind) & 
+                                                  (df_tabel_1['Lembaga SSR'].str.upper() == ssr)])
                     else:
                         count_err = 0
                     row_dict[ssr] = count_err
@@ -438,7 +450,7 @@ if tombol_proses:
                 pct = (total_row_err / total_records_processed * 100) if total_records_processed > 0 else 0
                 row_dict["% Kesalahan"] = f"{pct:.2f}%"
                 matrix_data.append(row_dict)
-                
+                           
             df_tabel_2_matrik = pd.DataFrame(matrix_data)
             
             # GENERATOR EXCEL FILE GABUNGAN
