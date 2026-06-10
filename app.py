@@ -42,8 +42,6 @@ if 'total_entri' not in st.session_state:
     st.session_state['total_entri'] = 0
 if 'proses_selesai' not in st.session_state:
     st.session_state['proses_selesai'] = False
-if 'data_unduhan' not in st.session_state:
-    st.session_state['data_unduhan'] = None
 if 'df_tabel_bawah' not in st.session_state:
     st.session_state['df_tabel_bawah'] = None
 if 'df_tabel_atas' not in st.session_state:
@@ -73,7 +71,7 @@ DAFTAR_INDIKATOR = [
     "Placeholder Indeks 0",                                                     # 0
     "Kode Petugas Kosong",                                                      # 1
     "Tanggal lebih besar dari tanggal hari ini",                                # 2
-    "IDKD kurang/lebih dari 10 digit karakter",                                 # 3
+    "IDKD kurang/lebih dari 10 digit karakter",                                  # 3
     "Digit nama kurang/lebih dari 4 digit karakter",                            # 4
     "Digit tanggal lahir lebih/kurang dari 6 digit angka",                      # 5
     "ID sama tapi NIK berbeda dengan data Semester/Tahun lalu (Konfirmasi)",    # 6
@@ -159,15 +157,18 @@ def jalankan_review_data(df_asli, df_ref=None):
         elif "KONTAK" in c_upper: mapping_kolom['Jenis Kontak'] = c
         elif "KEGIATAN" in c_upper: mapping_kolom['Jenis Kegiatan'] = c
 
+    # Cek baris instruksi/contoh pengisian template (bukan data real)
     start_row_idx = 0
-    if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values) or 'Laki-laki' in str(df.iloc[0].values)):
-        start_row_idx = 1
+    if len(df) > 0:
+        first_row_str = str(df.iloc[0].values).lower()
+        if 'dd/mm/yyyy' in first_row_str or 'laki-laki' in first_row_str or 'contoh' in first_row_str:
+            start_row_idx = 1
 
     hari_ini = pd.Timestamp(datetime.now().date())
     df_clean = df.iloc[start_row_idx:].copy()
     dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
 
-    # Mapping Data Referensi Penjangkauan Sebelumnya (Semester Lalu)
+    # Mapping Data Referensi Penjangkauan Sebelumnya
     ref_ssr_id_to_nik = {}
     ref_nik_ssr_to_id = {}
     if df_ref is not None and not df_ref.empty:
@@ -200,6 +201,8 @@ def jalankan_review_data(df_asli, df_ref=None):
             return default
 
         v_ssr = str(dapatkan_val('Lembaga SSR')).strip().upper() if dapatkan_val('Lembaga SSR') != '' else 'PKBI JABAR'
+        if v_ssr == 'NAN' or v_ssr == '': v_ssr = 'PKBI JABAR'
+        
         v_tanggal_raw = dapatkan_val('Tanggal')
         v_tanggal = standarisasi_tanggal(v_tanggal_raw)
         
@@ -207,7 +210,9 @@ def jalankan_review_data(df_asli, df_ref=None):
         id_clean = id_raw.replace("'", "").strip() if id_raw != 'nan' else ''
         
         nik_raw = str(dapatkan_val('NIK')).strip()
-        nik_clean = nik_raw.replace("'", "").replace('.0', '').strip() if nik_raw != 'nan' else ''
+        # Bersihkan pembacaan tipe data float dari Excel (misal ada akhiran .0)
+        if nik_raw.endswith('.0'): nik_raw = nik_raw[:-2]
+        nik_clean = nik_raw.replace("'", "").strip() if nik_raw != 'nan' else ''
         
         v_petugas = str(dapatkan_val('Kode Petugas')).replace("'", "").strip() if dapatkan_val('Kode Petugas') != 'nan' else ''
         v_kota = str(dapatkan_val('Nama Kota')).strip()
@@ -223,7 +228,7 @@ def jalankan_review_data(df_asli, df_ref=None):
             key_db = f"{v_ssr}_{v_tanggal}_{id_clean}_{ind_text}"
             is_butuh_konfirmasi = "konfirmasi" in ind_text.lower()
             
-            if is_butuh_konfirmasi and key_db in dict_justifikasi and not dict_revisi.get(key_db, False):
+            if is_butuh_konfirmasi and key_db in dict_justification and not dict_revisi.get(key_db, False):
                 return
                 
             status_validasi = "-"
@@ -287,7 +292,7 @@ def jalankan_review_data(df_asli, df_ref=None):
                     tambah_log(DAFTAR_INDIKATOR[6])
 
         # 7. NIK sama tapi ID berbeda dengan data Semester/Tahun lalu (Konfirmasi)
-        if df_ref is not None and v_ssr and nik_clean and nik_clean != 'nan' and nik_clean != '':
+        if df_ref is not None and v_ssr and nik_clean and nik_clean != '':
             key_nik_ssr = f"{nik_clean}_{v_ssr}"
             if key_nik_ssr in ref_nik_ssr_to_id and ref_nik_ssr_to_id[key_nik_ssr] != id_clean:
                 tambah_log(DAFTAR_INDIKATOR[7])
@@ -304,17 +309,15 @@ def jalankan_review_data(df_asli, df_ref=None):
                     tambah_log(DAFTAR_INDIKATOR[9])
             except: pass
 
-        # 10. Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (Konfirmasi)
+        # FIX SLICING: 10. Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (Konfirmasi)
         if id_clean and len(id_clean) == 10 and nik_clean and len(nik_clean) == 16:
-            thn_id = id_clean[4:6]
-            nik_for_idx = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
-            if len(nik_for_idx) >= 14:
-                thn_nik = nik_for_idx[11:13] 
-                if thn_id != thn_nik:
-                    tambah_log(DAFTAR_INDIKATOR[10])
+            thn_id = id_clean[4:6]  # Ambil posisi tahun dari IDKD murni
+            thn_nik = nik_clean[10:12] # Slicing posisi murni NIK 16 digit index ke-10 & 11
+            if thn_id != thn_nik:
+                tambah_log(DAFTAR_INDIKATOR[10])
 
         # Validasi NIK Teknis
-        if nik_clean and nik_clean != '' and nik_clean != 'nan':
+        if nik_clean and nik_clean != '':
             # 11. NIK kurang/lebih dari 16 digit
             if len(nik_clean) != 16:
                 tambah_log(DAFTAR_INDIKATOR[11])
@@ -323,15 +326,13 @@ def jalankan_review_data(df_asli, df_ref=None):
             if nik_clean.endswith('00'):
                 tambah_log(DAFTAR_INDIKATOR[12])
 
-            # 13. Secara NIK harusnya perempuan bukan laki-laki
+            # FIX SLICING: 13. Secara NIK harusnya perempuan bukan laki-laki
             if len(nik_clean) == 16 and jk == '1':
-                nik_for_jk = nik_raw if nik_raw.startswith("'") else "'" + nik_clean
-                if len(nik_for_jk) >= 10:
-                    try:
-                        dd_nik = int(nik_for_jk[13:15])
-                        if dd_nik > 31: 
-                            tambah_log(DAFTAR_INDIKATOR[13])
-                    except: pass
+                try:
+                    dd_nik = int(nik_clean[6:8]) # Slicing posisi murni hari lahir dari NIK (index 6 dan 7)
+                    if dd_nik > 31: 
+                        tambah_log(DAFTAR_INDIKATOR[13])
+                except: pass
 
         # 14. LSL/Waria tapi jenis kelamin perempuan
         if (v_tipe_sasaran in ['1304', '1301']) and jk == '2': 
@@ -353,7 +354,7 @@ def jalankan_review_data(df_asli, df_ref=None):
 # ==========================================================
 # 4. EKSEKUSI REVIEW LAKUKAN ANALISIS
 # ==========================================================
-if st.button("🚀 Jalankan Penelaahan Laporan", type="primary"):
+if st.sidebar.button("🚀 Jalankan Penelaahan Laporan", type="primary"):
     if not files_review:
         st.sidebar.error("⚠️ Unggah berkas Raw Data terlebih dahulu!")
     else:
@@ -416,7 +417,7 @@ if st.session_state['proses_selesai']:
     
     # TABEL ATAS: REKAP MATRIKS DATA PER SSR
     st.markdown("#### Rekap Hasil Review Data per SSR")
-    df_atas_view = st.session_state['df_tabel_atas'].copy()
+    df_atas_view = st.session_state['df_tabel_atas'].copy() if st.session_state['df_tabel_atas'] is not None else pd.DataFrame()
     
     if not df_atas_view.empty:
         styled_atas = df_atas_view.style.format(
