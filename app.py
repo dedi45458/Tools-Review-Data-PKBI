@@ -29,28 +29,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS untuk tampilan UI yang lebih bersih dan profesional
 st.markdown("""
     <style>
-    .main-title {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #1E3A8A;
-        margin-bottom: 0.2rem;
-    }
-    .sub-title {
-        font-size: 1.1rem;
-        color: #4B5563;
-        margin-bottom: 1.5rem;
-    }
-    .stButton>button {
-        border-radius: 8px;
-        font-weight: 600;
-    }
-    div[data-testid="stExpander"] {
-        border-radius: 8px;
-        border: 1px solid #E5E7EB;
-    }
+    .main-title { font-size: 2.2rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.2rem; }
+    .sub-title { font-size: 1.1rem; color: #4B5563; margin-bottom: 1.5rem; }
+    .stButton>button { border-radius: 8px; font-weight: 600; }
+    div[data-testid="stExpander"] { border-radius: 8px; border: 1px solid #E5E7EB; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -112,31 +96,28 @@ DAFTAR_INDIKATOR = [
 ]
 
 # ==========================================================
-# 2. PANEL SIDEBAR UNTUK UNGGAH BERKAS (UI ENHANCED)
+# 2. PANEL SIDEBAR UNTUK UNGGAH BERKAS
 # ==========================================================
 with st.sidebar:
     st.markdown("### 📁 Menu Unggah Berkas")
-    st.markdown("Pastikan format berkas sesuai standar laporan SSR.")
     
     file_referensi = st.file_uploader(
-        "1️⃣ Data Semester / Tahun Lalu (.xlsx)", 
+        "1️⃣ Data HIV+ Semester / Tahun Lalu (.xlsx)", 
         type=["xlsx"],
-        help="Digunakan untuk validasi silang kecocokan IDK Klien & NIK"
+        help="HANYA digunakan untuk validasi silang pada file Raw Data Rujukan"
     )
     
     st.markdown("---")
     
     files_review = st.file_uploader(
-        "2️⃣ Raw Data Penjangkauan (.xlsx)", 
+        "2️⃣ Raw Data Penjangkauan / Rujukan (.xlsx)", 
         type=["xlsx"], 
         accept_multiple_files=True,
         help="Bisa memilih lebih dari 1 file sekaligus"
     )
     
     if files_review:
-        st.success(f"📂 Terbaca {len(files_review)} file Penjangkauan.")
-    else:
-        st.info("💡 Silakan unggah file Penjangkauan untuk memulai analisis.")
+        st.success(f"📂 Terbaca {len(files_review)} file.")
 
 def cek_kode(teks_kolom, kode_target):
     if pd.isna(teks_kolom): return False
@@ -145,14 +126,17 @@ def cek_kode(teks_kolom, kode_target):
     return str(kode_target) in list_kode
 
 # ==========================================================
-# 3. ENGINE VALIDASI PENJANGKAUAN
+# 3. ENGINE VALIDASI UTAMA (Alur Baru Dipisahkan di Sini)
 # ==========================================================
-def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
+def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
     
     df = df_asli.copy()
     df.columns = [str(c).strip() for c in df.columns]
+    
+    # Deteksi jenis file berdasarkan ketersediaan kolom spesifik rujukan
+    is_file_rujukan = any('RUJUKAN' in str(c).upper() for c in df.columns) or any('FASYANKES' in str(c).upper() for c in df.columns)
     
     start_row_idx = 0
     if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values) or 'Laki-laki' in str(df.iloc[0].values)):
@@ -169,10 +153,11 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
         'wechat', 'threads'
     ]
 
+    # Mapping Data Referensi HIV+ (Hanya diproses jika file yang doreview adalah File Rujukan)
     ref_ssr_id_to_nik = {}
     ref_nik_ssr_to_id = {}
     
-    if df_ref is not None and not df_ref.empty:
+    if is_file_rujukan and df_ref is not None and not df_ref.empty:
         df_ref_cp = df_ref.copy()
         df_ref_cp.columns = [str(c).strip() for c in df_ref_cp.columns]
         col_id_ref = [c for c in df_ref_cp.columns if 'ID' in c or 'Klien' in c]
@@ -245,7 +230,7 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
                 "INDIKATOR KESALAHAN DATA": nama_indikator
             })
 
-        # --- LOGIKA VALIDASI INDIKATOR ---
+        # --- LOGIKA VALIDASI UTAMA ---
         if pd.isna(row.get('Kode Petugas')) or str(row.get('Kode Petugas')).strip() == '':
             tambah_log(DAFTAR_INDIKATOR[1], "Kode petugas kosong")
 
@@ -260,25 +245,22 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
             if len(id_clean) == 10 and not id_clean[4:].isdigit():
                 tambah_log(DAFTAR_INDIKATOR[5], f"6 digit akhir IDKD wajib angka")
             
-            # Pola Validasi No 9 Hanya jika Data Referensi diunggah
-            if df_ref is not None and v_ssr:
+            # ALUR BARU: Validasi silang No 9 & 10 HANYA berjalan jika terdeteksi sebagai File Rujukan
+            if is_file_rujukan and df_ref is not None and v_ssr:
                 key_ssr_id = f"{v_ssr}_{id_clean}"
                 if key_ssr_id in ref_ssr_id_to_nik and ref_ssr_id_to_nik[key_ssr_id] != nik_clean:
-                    tambah_log(DAFTAR_INDIKATOR[8], f"ID terikat NIK berbeda dengan semester lalu")
+                    tambah_log(DAFTAR_INDIKATOR[8], f"ID terikat NIK berbeda dengan data HIV+ semester lalu")
 
-        # Pola Validasi No 10 Hanya jika Data Referensi diunggah
-        if df_ref is not None and v_ssr and nik_clean and nik_clean != 'nan' and nik_clean != '':
+        if is_file_rujukan and df_ref is not None and v_ssr and nik_clean and nik_clean != 'nan' and nik_clean != '':
             key_nik_ssr = f"{nik_clean}_{v_ssr}"
             if key_nik_ssr in ref_nik_ssr_to_id and ref_nik_ssr_to_id[key_nik_ssr] != id_clean:
-                tambah_log(DAFTAR_INDIKATOR[9], f"NIK terikat ID berbeda dengan semester lalu")
+                tambah_log(DAFTAR_INDIKATOR[9], f"NIK terikat ID berbeda dengan data HIV+ semester lalu")
 
         if pd.notna(umur) and str(umur).strip() != '':
             try:
                 val_umur = float(umur)
-                if val_umur < 17: 
-                    tambah_log(DAFTAR_INDIKATOR[11], f"Usia di bawah 17 tahun")
-                if val_umur > 70: 
-                    tambah_log(DAFTAR_INDIKATOR[12], f"Usia di atas 70 tahun")
+                if val_umur < 17: tambah_log(DAFTAR_INDIKATOR[11], f"Usia di bawah 17 tahun")
+                if val_umur > 70: tambah_log(DAFTAR_INDIKATOR[12], f"Usia di atas 70 tahun")
             except: pass
 
         if id_clean and len(id_clean) == 10 and nik_clean and len(nik_clean) == 16:
@@ -319,8 +301,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
             try:
                 val_umur = float(umur)
                 tahun_lahir = tahun_sekarang - val_umur
-                if hasattr(tahun_lahir, 'year'):
-                    tahun_lahir = tahun_lahir.year
                 if 2014 <= tahun_lahir <= tahun_sekarang: 
                     tambah_log(DAFTAR_INDIKATOR[10], "Tahun lahir terlalu muda")
             except: pass
@@ -413,7 +393,8 @@ if tombol_proses:
                     df_temp.columns = [str(c).strip() for c in df_temp.columns]
                     if 'Lembaga SSR' in df_temp.columns:
                         start_row = 1 if len(df_temp) > 0 and ('dd/mm/yyyy' in str(df_temp.iloc[0].values) or 'Laki-laki' in str(df_temp.iloc[0].values)) else 0
-                        ssrs_in_file = df_temp.iloc[start_row:]['Lembaga SSR'].dropna().astype(str).str.strip().upper().unique()
+                        # PERBAIKAN BUG: menggunakan .str.upper() untuk format Series secara aman
+                        ssrs_in_file = df_temp.iloc[start_row:]['Lembaga SSR'].dropna().astype(str).str.strip().str.upper().unique()
                         for s in ssrs_in_file:
                             if s and s != 'nan' and s != '': 
                                 unique_ssrs.add(s)
@@ -428,13 +409,13 @@ if tombol_proses:
                 try: 
                     df_ref = pd.read_excel(file_referensi)
                 except Exception as e: 
-                    st.warning(f"Gagal memuat Berkas Referensi Semester Lalu: {e}")
+                    st.warning(f"Gagal memuat Berkas Referensi HIV+: {e}")
             
             semua_rekap_kesalahan = []
             for file in files_review:
                 try:
                     df_target = pd.read_excel(file)
-                    df_rekap_file = jalankan_review_penjangkauan(df_target, df_ref, nama_file=file.name)
+                    df_rekap_file = jalankan_review_data(df_target, df_ref, nama_file=file.name)
                     if not df_rekap_file.empty:
                         semua_rekap_kesalahan.append(df_rekap_file)
                 except Exception as e:
@@ -469,7 +450,7 @@ if tombol_proses:
                            
             df_tabel_2_matrik = pd.DataFrame(matrix_data)
             
-            # --- OPENPYXL EXCEL GABUNGAN DESIGN ---
+            # --- GENERATE EXCEL DOWNLOADABLE ---
             output_stream = io.BytesIO()
             wb = openpyxl.Workbook()
             
@@ -519,7 +500,7 @@ if tombol_proses:
                     cell.fill = fill_orange_summary if c in [col_jml, col_pct] else fill_blue_header
                     cell.border = thin_border
 
-            ws_dash.cell(row=3, column=1, value="Penjangkauan")
+            ws_dash.cell(row=3, column=1, value="Penjangkauan / Rujukan")
             ws_dash.merge_cells(start_row=3, start_column=1, end_row=3, end_column=col_pct)
             ws_dash.cell(row=3, column=1).fill = fill_section_bar
             ws_dash.cell(row=3, column=1).font = font_sec
@@ -580,7 +561,6 @@ if tombol_proses:
             
             wb.save(output_stream)
             
-            # Simpan hasil proses akhir ke session state
             st.session_state['data_unduhan'] = output_stream.getvalue()
             st.session_state['tabel_1_detail'] = df_tabel_1
             st.session_state['tabel_2_matrik'] = df_tabel_2_matrik
@@ -588,12 +568,11 @@ if tombol_proses:
             st.session_state['proses_selesai'] = True
 
 # ==========================================================
-# 5. BLOCK OUTPUT INTERFACE UTAMA STREAMLIT (UI MODERN)
+# 5. BLOCK OUTPUT INTERFACE UTAMA STREAMLIT
 # ==========================================================
 if st.session_state['proses_selesai']:
     st.markdown("### 📊 Dashboard Hasil Review Analisis")
     
-    # KARTU METRIK KINERJA (Modern Cards)
     m1, m2, m3 = st.columns(3)
     with m1:
         st.metric(label="Total Entri Data Diperiksa", value=f"{st.session_state['total_entri']} Baris")
@@ -608,3 +587,11 @@ if st.session_state['proses_selesai']:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
+
+    # --- MEMUNCULKAN KEMBALI 2 TABEL DI UI STREAMLIT ---
+    st.markdown("---")
+    st.markdown("#### 📋 Tabel 2: Matriks Ringkasan Indikator per Lembaga SSR")
+    st.dataframe(st.session_state['tabel_2_matrik'], use_container_width=True, hide_index=True)
+    
+    st.markdown("#### 🔍 Tabel 1: Detail Temuan per Baris Data")
+    st.dataframe(st.session_state['tabel_1_detail'], use_container_width=True, hide_index=True)
