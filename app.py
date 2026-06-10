@@ -43,7 +43,7 @@ st.markdown("""
 st.markdown('<div class="main-title">📊 Tools Review Data Massal — PKBI Jabar</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem otomatisasi penelaahan kualitas data Penjangkauan dan Rujukan PKBI Jawa Barat berbasis matriks validasi terbaru.</div>', unsafe_allow_html=True)
 
-# Inisialisasi State agar data tidak hilang saat interaksi UI
+# Inisialisasi State di bagian atas agar tidak memicu KeyError saat rerun otomatis
 if 'proses_selesai' not in st.session_state:
     st.session_state['proses_selesai'] = False
 if 'data_unduhan' not in st.session_state:
@@ -52,6 +52,8 @@ if 'tabel_1_detail' not in st.session_state:
     st.session_state['tabel_1_detail'] = None
 if 'tabel_2_matrik' not in st.session_state:
     st.session_state['tabel_2_matrik'] = None
+if 'total_entri' not in st.session_state:
+    st.session_state['total_entri'] = 0
 
 # MASTER LIST 50 INDIKATOR KESALAHAN
 DAFTAR_INDIKATOR = [
@@ -168,14 +170,15 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
     ref_ssr_id_to_nik = {}
     ref_nik_ssr_to_id = {}
     
-    if df_ref is not None:
-        df_ref.columns = [str(c).strip() for c in df_ref.columns]
-        col_id_ref = [c for c in df_ref.columns if 'ID' in c or 'Klien' in c]
-        col_nik_ref = [c for c in df_ref.columns if 'NIK' in c]
-        col_ssr_ref = [c for c in df_ref.columns if 'SSR' in c or 'Lembaga' in c]
+    if df_ref is not None and not df_ref.empty:
+        df_ref_cp = df_ref.copy()
+        df_ref_cp.columns = [str(c).strip() for c in df_ref_cp.columns]
+        col_id_ref = [c for c in df_ref_cp.columns if 'ID' in c or 'Klien' in c]
+        col_nik_ref = [c for c in df_ref_cp.columns if 'NIK' in c]
+        col_ssr_ref = [c for c in df_ref_cp.columns if 'SSR' in c or 'Lembaga' in c]
         
         if col_id_ref and col_nik_ref and col_ssr_ref:
-            for _, r in df_ref.iterrows():
+            for _, r in df_ref_cp.iterrows():
                 ssr_r = str(r[col_ssr_ref[0]]).strip().upper()
                 id_r = str(r[col_id_ref[0]]).replace("'", "").strip()
                 nik_r = str(r[col_nik_ref[0]]).replace("'", "").replace('.0', '').strip()
@@ -254,11 +257,14 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
                 tambah_log(DAFTAR_INDIKATOR[4], f"4 digit awal IDKD wajib huruf")
             if len(id_clean) == 10 and not id_clean[4:].isdigit():
                 tambah_log(DAFTAR_INDIKATOR[5], f"6 digit akhir IDKD wajib angka")
+            
+            # Pola Validasi No 9 Hanya jika Data Referensi diunggah
             if df_ref is not None and v_ssr:
                 key_ssr_id = f"{v_ssr}_{id_clean}"
                 if key_ssr_id in ref_ssr_id_to_nik and ref_ssr_id_to_nik[key_ssr_id] != nik_clean:
                     tambah_log(DAFTAR_INDIKATOR[8], f"ID terikat NIK berbeda dengan semester lalu")
 
+        # Pola Validasi No 10 Hanya jika Data Referensi diunggah
         if df_ref is not None and v_ssr and nik_clean and nik_clean != 'nan' and nik_clean != '':
             key_nik_ssr = f"{nik_clean}_{v_ssr}"
             if key_nik_ssr in ref_nik_ssr_to_id and ref_nik_ssr_to_id[key_nik_ssr] != id_clean:
@@ -378,7 +384,6 @@ def jalankan_review_penjangkauan(df_asli, df_ref=None, nama_file=""):
 # ==========================================================
 # 4. TOMBOL EKSEKUSI UTAMA
 # ==========================================================
-# Desain layout tombol proses agar terfokus di bagian atas tengah halaman
 col_btn, _ = st.columns([1, 2])
 with col_btn:
     tombol_proses = st.button("🚀 Jalankan Penelaahan Laporan", type="primary", use_container_width=True)
@@ -418,8 +423,10 @@ if tombol_proses:
 
             df_ref = None
             if file_referensi:
-                try: df_ref = pd.read_excel(file_referensi)
-                except: pass
+                try: 
+                    df_ref = pd.read_excel(file_referensi)
+                except Exception as e: 
+                    st.warning(f"Gagal memuat Berkas Referensi Semester Lalu: {e}")
             
             semua_rekap_kesalahan = []
             for file in files_review:
@@ -571,7 +578,7 @@ if tombol_proses:
             
             wb.save(output_stream)
             
-            # Save data hasil proses ke session state
+            # Simpan hasil proses akhir ke session state
             st.session_state['data_unduhan'] = output_stream.getvalue()
             st.session_state['tabel_1_detail'] = df_tabel_1
             st.session_state['tabel_2_matrik'] = df_tabel_2_matrik
@@ -602,26 +609,18 @@ if st.session_state['proses_selesai']:
         
     st.markdown("---")
     
-    # STRUKTUR TAB TAMPILAN DATA TABEL
-    tab_matrik, tab_detail = st.tabs([
-        "📊 Matriks Rekapitulasi Per SSR", 
-        "🔍 Detail Kesalahan Per Baris Data"
-    ])
+    # STRUKTUR TAB PREVIEW INTERACTIVE
+    tab1, tab2 = st.tabs(["📋 Tabel 2 - Matrik Ringkasan SSR", "🔍 Tabel 1 - Detail Log Kesalahan Per Baris"])
     
-    with tab_matrik:
-        st.markdown("#### 📋 Matriks Distribusi Error Berdasarkan Lembaga SSR")
-        st.markdown("Gunakan tabel dinamis di bawah ini untuk melihat area indikator kesalahan kritis dari masing-masing sub-mitra.")
-        st.dataframe(
-            st.session_state['tabel_2_matrik'], 
-            use_container_width=True, 
-            hide_index=True
-        )
-        
-    with tab_detail:
-        st.markdown("#### 🔍 Log Teknis Rincian Kesalahan Baris per Baris")
-        st.markdown("Daftar di bawah ini memuat koordinat baris Excel asli untuk mempermudah perbaikan langsung (*cleansing data*).")
-        st.dataframe(
-            st.session_state['tabel_1_detail'], 
-            use_container_width=True, 
-            hide_index=True
-        )
+    with tab1:
+        st.markdown("##### Ringkasan Distribusi Temuan Masalah per Lembaga SSR")
+        if st.session_state['tabel_2_matrik'] is not None:
+            # Hilangkan index bawaan pandas agar tampilan tabel bersih
+            st.dataframe(st.session_state['tabel_2_matrik'].reset_index(drop=True), use_container_width=True)
+            
+    with tab2:
+        st.markdown("##### Log Temuan Data Tidak Sinkron (Detail Per Baris)")
+        if st.session_state['tabel_1_detail'] is not None and not st.session_state['tabel_1_detail'].empty:
+            st.dataframe(st.session_state['tabel_1_detail'].reset_index(drop=True), use_container_width=True)
+        else:
+            st.success("✨ Luar biasa! Tidak ditemukan anomali atau kesalahan data dari berkas laporan yang diperiksa.")
