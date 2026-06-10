@@ -437,11 +437,11 @@ if st.session_state['proses_selesai']:
     st.markdown("#### Hasil Review Penjangkauan")
     if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_tabel_bawah'].empty:
         
-        # Kolom sesuai permintaan: Tanpa Baris Excel, Tipe Sasaran -> Validasi -> Justifikasi
+        # Kolom sesuai permintaan: Indikator Kesalahan Data digeser setelah Tipe Sasaran
         kolom_susunan = [
             "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", 
             "Kode Petugas", "Nama Kota", "NIK", "Tipe Sasaran", 
-            "Indikator Kesalahan Data", "Validasi hasil review", "Justifikasi"
+            "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
         ]
         
         df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
@@ -455,8 +455,11 @@ if st.session_state['proses_selesai']:
                 "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
                 "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
                 "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
-                "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
+                "Kode Petugas": st.column_config.TextColumn("Kode Petugas", width=110),
+                "Nama Kota": st.column_config.TextColumn("Nama Kota", width=130),
+                "NIK": st.column_config.TextColumn("NIK", width=140),
                 "Tipe Sasaran": st.column_config.TextColumn("Tipe Sasaran", width=110),
+                "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
                 "validasi hasil review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
                 "Justifikasi": st.column_config.TextColumn("Justifikasi (Khusus Baris Konfirmasi)", width=280),
             },
