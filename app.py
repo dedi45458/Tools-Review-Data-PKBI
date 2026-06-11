@@ -198,7 +198,7 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "KD ada rujukan PrEp di penjangkauan tapi tidak ada informasi PrEp", "periksa": lambda c: cek_kode(c['rujukan'], '5') and not cek_kode(c['info_diberikan'], '10')},
     {"nama": "KD telah menerima layanan PrEp tapi tidak ada rujukan PrEp di penjangkauan", "periksa": lambda c: c['pernah_prep_di_rujukan'] and not cek_kode(c['rujukan'], '5')},
     
-    {"nama": "Logistik kosong (Konfirmasi)", "periksa": lambda c: c['total_logistik_per_id'].get(c['id_clean'], 0) == 0},
+    {"nama": "Logistik kosong (Konfirmasi)", "periksa": lambda c: c['log_kie'] == 0 and c['log_kon'] == 0 and c['log_pel'] == 0 and c['log_jar'] == 0 and c['log_swab'] == 0},
     {"nama": "Tipe klien PWID tapi tidak menerima jarum (konfirmasi)", "periksa": lambda c: c['is_pwid'] and c['log_jar'] == 0 and not c['is_vo']},
     {"nama": "Tipe klien PWID tapi tidak menerima alkohol SWAB (konfirmasi)", "periksa": lambda c: c['is_pwid'] and c['log_swab'] == 0 and not c['is_vo']},
     {"nama": "Popkun selain PWID menerima jarum suntik", "periksa": lambda c: not c['is_pwid'] and c['log_jar'] > 0},
