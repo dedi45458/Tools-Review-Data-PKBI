@@ -491,104 +491,82 @@ if st.session_state['proses_selesai']:
     tab1, tab2 = st.tabs(["📋 Rekap Kesalahan (Matriks)", "📈 Analisis Tren Semester"])
 
     with tab1:
-    st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
-    
-    # 1. Ambil data dan pastikan format angka
-    df_atas_view = st.session_state['df_tabel_atas'].copy() if st.session_state['df_tabel_atas'] is not None else pd.DataFrame()
-    
-    if not df_atas_view.empty:
-        # Identifikasi kolom SSR (semua kolom kecuali indikator, total, dan %)
-        kolom_ssr = [c for c in df_atas_view.columns if c not in ['INDIKATOR KESALAHAN DATA', 'Jumlah per indikator', '%']]
+        st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
         
-        # Konversi ke numerik secara aman
-        for col in kolom_ssr:
-            df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
+        # 1. Ambil data dan pastikan format angka
+        df_atas_view = st.session_state['df_tabel_atas'].copy() if st.session_state['df_tabel_atas'] is not None else pd.DataFrame()
         
-        # 2. Filter: Hanya tampilkan SSR yang memiliki total temuan > 0
-        ssr_aktif = [col for col in kolom_ssr if df_atas_view[col].sum() > 0]
-        
-        # Gabungkan kembali dengan kolom wajib
-        kolom_final = ['INDIKATOR KESALAHAN DATA'] + ssr_aktif + ['Jumlah per indikator', '%']
-        df_atas_view = df_atas_view[kolom_final]
-        
-        # 3. Ubah 0 menjadi '-' untuk tampilan estetis (konversi ke string)
-        df_display = df_atas_view.astype(str)
-        for col in ssr_aktif:
-            df_display[col] = df_display[col].replace('0', '-')
-            df_display[col] = df_display[col].replace('0.0', '-')
-        
-        # 4. Pengaturan Tampilan & Lebar Kolom
-        column_config = {
-            "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan", width=300),
-            "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
-            "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
-        }
-        # Tambahkan kolom SSR ke config
-        for col in ssr_aktif:
-            column_config[col] = st.column_config.TextColumn(col, width="small")
+        if not df_atas_view.empty:
+            # Identifikasi kolom SSR (semua kolom kecuali indikator, total, dan %)
+            kolom_ssr = [c for c in df_atas_view.columns if c not in ['INDIKATOR KESALAHAN DATA', 'Jumlah per indikator', '%']]
+            
+            # Konversi ke numerik
+            for col in kolom_ssr:
+                df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
+            
+            # 2. Filter: Hanya tampilkan SSR yang memiliki total temuan > 0
+            # Kita cek SSR mana saja yang punya minimal 1 temuan di salah satu baris
+            ssr_aktif = [col for col in kolom_ssr if df_atas_view[col].sum() > 0]
+            
+            # Gabungkan kembali dengan kolom wajib
+            kolom_final = ['INDIKATOR KESALAHAN DATA'] + ssr_aktif + ['Jumlah per indikator', '%']
+            df_atas_view = df_atas_view[kolom_final]
+            
+            # 3. Ubah 0 menjadi '-' untuk tampilan (konversi ke string)
+            df_display = df_atas_view.astype(str)
+            for col in ssr_aktif:
+                df_display[col] = df_display[col].replace('0', '-')
+            
+            # 4. Pengaturan Tampilan & Lebar Kolom
+            # Mengatur kolom agar seragam (width="small")
+            column_config = {
+                "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan", width=300),
+                "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
+                "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
+            }
+            # Tambahkan kolom SSR ke config
+            for col in ssr_aktif:
+                column_config[col] = st.column_config.TextColumn(col, width="small")
 
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            column_config=column_config,
-            hide_index=True
-        )
-    else:
-        st.info("✨ Tidak ada rekapan karena data bersih.")
+            st.dataframe(
+                df_display,
+                use_container_width=True,
+                column_config=column_config,
+                hide_index=True
+            )
+        else:
+            st.info("✨ Tidak ada rekapan karena data bersih.")
 
 
     with tab2:
-    st.markdown("#### 📈 Ringkasan Tren Historis Kesalahan Data")
-    if supabase:
-        try:
-            # Mengambil data dari log_validasi_review (menggunakan kolom 'tanggal' dari berkas asli)
-            res_tren = supabase.table("log_validasi_review").select("tanggal, ssr, indikator_kesalahan").execute()
-            
-            if res_tren.data and len(res_tren.data) > 0:
-                df_tren = pd.DataFrame(res_tren.data)
-                
-                # Menyelaraskan format tanggal dari file (DD/MM/YYYY) agar diurutkan dengan benar di grafik (YYYY-MM-DD)
-                try:
-                    df_tren['Tanggal_Parsed'] = pd.to_datetime(df_tren['tanggal'], format='%d/%m/%Y', errors='coerce')
-                    # Jika ada format campuran, tangani sisanya secara otomatis
-                    df_tren['Tanggal_Parsed'] = df_tren['Tanggal_Parsed'].fillna(pd.to_datetime(df_tren['tanggal'], errors='coerce'))
-                    df_tren['Tanggal'] = df_tren['Tanggal_Parsed'].dt.strftime('%Y-%m-%d')
-                    # Buang data jika tanggal benar-benar rusak/kosong
-                    df_tren = df_tren.dropna(subset=['Tanggal']).sort_values('Tanggal')
-                except Exception:
-                    # Fallback jika terjadi kegagalan parsing, gunakan string apa adanya
-                    df_tren['Tanggal'] = df_tren['tanggal']
-                
-                # Pembatasan lebar komponen dropdown agar rapi
-                col_kiri, col_kanan = st.columns([1, 2])
-                with col_kiri:
-                    daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
-                    pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr)
-                
-                # Pembuatan struktur pivot data untuk grafik
-                if pilihan_ssr == "SEMUA":
-                    # Mengelompokkan total frekuensi temuan per tanggal laporan harian
-                    df_pivot = df_tren.groupby('Tanggal').size().to_frame(name="Total Kesalahan Seluruh SSR")
-                    st.markdown("<p>📈 <strong>Tren total kesalahan seluruh SSR per tanggal laporan:</strong></p>", unsafe_allow_html=True)
-                else:
-                    df_filtered = df_tren[df_tren['ssr'] == pilihan_ssr]
-                    if not df_filtered.empty:
-                        df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size').fillna(0).astype(int)
+        if supabase:
+            try:
+                res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
+                if res_tren.data:
+                    df_tren = pd.DataFrame(res_tren.data)
+                    df_tren['Tanggal'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
+                    
+                    col_kiri, col_kanan = st.columns([1, 2])
+                    with col_kiri:
+                        daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
+                        pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr)
+                    
+                    if pilihan_ssr == "SEMUA":
+                        df_pivot = df_tren.pivot_table(index='Tanggal', aggfunc='size')
+                        st.markdown("<br><p>📈 Tren total kesalahan seluruh SSR per tanggal:</p>", unsafe_allow_html=True)
                     else:
-                        df_pivot = pd.DataFrame()
-                    st.markdown(f"<p>📈 <strong>Tren spesifikasi kesalahan untuk: {pilihan_ssr}</strong></p>", unsafe_allow_html=True)
-                
-                # Tampilkan grafik ke dashboard
-                if not df_pivot.empty:
-                    st.area_chart(df_pivot, use_container_width=True)
+                        df_filtered = df_tren[df_tren['ssr'] == pilihan_ssr]
+                        df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size').fillna(0)
+                        st.markdown(f"<br><p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
+                    
+                    if not df_pivot.empty:
+                        if isinstance(df_pivot, pd.Series): df_pivot = df_pivot.to_frame(name="Total Kesalahan")
+                        st.area_chart(df_pivot)
+                    else:
+                        st.info("Data belum tersedia untuk filter ini.")
                 else:
-                    st.info("Data grafik tidak tersedia untuk filter lembaga ini.")
-            else:
-                st.info("ℹ️ Belum ada rekam jejak log review aktif di database harian. Selesaikan proses penelaahan terlebih dahulu.")
-        except Exception as e:
-            st.error(f"❌ Sistem gagal memuat komponen grafik: {e}")
-    else:
-        st.error("Koneksi database Supabase terputus.")
+                    st.info("Belum ada rekam jejak log review tersimpan di database.")
+            except Exception: pass
 
     # <<< TUTUP KONTANER GLASSMORPHISM >>>
     st.markdown('</div>', unsafe_allow_html=True)
