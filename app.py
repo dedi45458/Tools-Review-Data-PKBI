@@ -493,30 +493,14 @@ if st.session_state['proses_selesai']:
     with tab1:
         st.markdown("#### Rekap Hasil Review Data per SSR")
         df_atas_view = st.session_state['df_tabel_atas'].copy() if st.session_state['df_tabel_atas'] is not None else pd.DataFrame()
-        
         if not df_atas_view.empty:
-            # 1. Bersihkan kolom agar hanya SSR yang memiliki temuan (jumlah > 0)
-            # Kita ambil kolom yang bukan 'Jumlah per indikator' dan '%', lalu cek jika sum > 0
-            cols_to_keep = [c for c in df_atas_view.columns if c not in ['Jumlah per indikator', '%']]
-            df_atas_view = df_atas_view.loc[:, (df_atas_view[cols_to_keep] != 0).any(axis=0)]
-            
-            # 2. Ubah angka 0 menjadi '-'
-            # Kita buat salinan untuk tampilan agar tetap rapi
-            df_display = df_atas_view.astype(str)
-            df_display = df_display.replace('0', '-')
-            
-            # 3. Konfigurasi lebar kolom agar seragam (Fixed Width)
-            column_config_dict = {col: st.column_config.NumberColumn(col, width="small") for col in cols_to_keep}
-            column_config_dict["Jumlah per indikator"] = st.column_config.NumberColumn("Total", width="small")
-            column_config_dict["%"] = st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
-
-            st.dataframe(
-                df_display,
-                use_container_width=True,
-                column_config=column_config_dict
-            )
+            for col in df_atas_view.columns:
+                if col != 'INDIKATOR KESALAHAN DATA': 
+                    df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
+            st.dataframe(df_atas_view, use_container_width=True)
         else:
             st.info("✨ Tidak ada rekapan karena data bersih.")
+
 
     with tab2:
         if supabase:
