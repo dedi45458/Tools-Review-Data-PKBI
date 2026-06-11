@@ -21,45 +21,49 @@ def set_modern_theme():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    /* Mengubah font & background utama aplikasi */
-    html, body, [class*="st-"], .stApp {
-        font-family: 'Inter', sans-serif;
+    /* 1. Menerapkan font hanya pada elemen teks teks umum, bukan elemen ikon native Streamlit */
+    .stApp, p, span, label, h1, h2, h3, h4 {
+        font-family: 'Inter', sans-serif !important;
     }
+    
+    /* 2. Mengubah background utama aplikasi */
     .stApp {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
     }
 
-    /* Efek Glassmorphism pada kontainer/kartu utama */
-    [data-testid="stVerticalBlockOuter"] {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 16px;
-        padding: 1.5rem;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    /* 3. ISOLASI: Efek Glassmorphism hanya diaplikasikan pada CONTAINER UTAMA DASHBOARD, */
+    /* tidak akan membocori elemen sidebar, uploader, atau expander lagi */
+    .main-dashboard-content {
+        background: rgba(255, 255, 255, 0.03) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        border-radius: 16px !important;
+        padding: 2rem !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2) !important;
+        margin-bottom: 20px;
     }
     
-    /* Mempercantik Tabs */
+    /* 4. Mempercantik struktur Tabs agar kontras */
     .stTabs [data-baseweb="tab-list"] {
-        background-color: transparent;
+        background-color: transparent !important;
     }
     .stTabs [data-baseweb="tab"] {
-        color: #94a3b8;
+        color: #94a3b8 !important;
     }
     .stTabs [aria-selected="true"] {
         color: #38bdf8 !important;
         border-bottom-color: #38bdf8 !important;
     }
 
-    /* Warna Teks Elegan */
+    /* 5. Pewarnaan Teks Tipografi Eksekutif */
     h1, h2, h3, h4, .main-title { color: #f8fafc !important; }
     p, span, label, .sub-title { color: #cbd5e1 !important; }
     
     .main-title { font-size: 2.2rem; font-weight: 800; margin-bottom: 0.2rem; letter-spacing: -0.5px;}
     .sub-title { font-size: 1.1rem; color: #94a3b8 !important; margin-bottom: 2rem; font-weight: 400;}
     
-    /* Penyesuaian Angka Metrik */
+    /* 6. Penyesuaian Angka Metrik */
     [data-testid="stMetricValue"] { color: #38bdf8 !important; font-weight: 700; }
     [data-testid="stMetricDelta"] { font-weight: 500; }
     </style>
