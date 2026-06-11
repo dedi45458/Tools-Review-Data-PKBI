@@ -538,116 +538,112 @@ if st.session_state['proses_selesai']:
 
 
     with tab2:
-    if supabase:
-        try:
-            import plotly.express as px
+        if supabase:
+            try:
+                import plotly.express as px
             
-            # Ambil data dari Supabase menggunakan 'created_at' (waktu upload asli)
-            res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
+                # Ambil data dari Supabase menggunakan 'created_at' (waktu upload asli)
+                res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
             
-            if res_tren.data:
-                df_tren = pd.DataFrame(res_tren.data)
+                if res_tren.data:
+                    df_tren = pd.DataFrame(res_tren.data)
                 
-                # Konversi kolom tanggal upload (created_at) ke format YYYY-MM-DD
-                df_tren['Tanggal_dt'] = pd.to_datetime(df_tren['created_at'], errors='coerce')
-                df_tren['Tanggal'] = df_tren['Tanggal_dt'].dt.strftime('%Y-%m-%d')
-                df_tren = df_tren.dropna(subset=['Tanggal']) # Bersihkan data jika ada tanggal eror
+                    # Konversi kolom tanggal upload (created_at) ke format YYYY-MM-DD
+                    df_tren['Tanggal_dt'] = pd.to_datetime(df_tren['created_at'], errors='coerce')
+                    df_tren['Tanggal'] = df_tren['Tanggal_dt'].dt.strftime('%Y-%m-%d')
+                    df_tren = df_tren.dropna(subset=['Tanggal']) # Bersihkan data jika ada tanggal eror
                 
-                # 1. Layout Dropdown Filter SSR
-                col_kiri, col_kanan = st.columns([1, 2])
-                with col_kiri:
-                    daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
-                    pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="filter_ssr_tren")
+                    # 1. Layout Dropdown Filter SSR
+                    col_kiri, col_kanan = st.columns([1, 2])
+                    with col_kiri:
+                        daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
+                        pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="filter_ssr_tren")
                 
-                # Filter data berdasarkan pilihan SSR
-                df_sumber = df_tren.copy()
-                if pilihan_ssr != "SEMUA":
-                    df_sumber = df_sumber[df_sumber['ssr'] == pilihan_ssr]
+                    # Filter data berdasarkan pilihan SSR
+                    df_sumber = df_tren.copy()
+                    if pilihan_ssr != "SEMUA":
+                        df_sumber = df_sumber[df_sumber['ssr'] == pilihan_ssr]
                 
-                # 2. LOGIKA GRAFIK UTAMA
-                if not df_sumber.empty:
-                    if pilihan_ssr == "SEMUA":
-                        # Jika SEMUA: Tampilkan total tren agregat kesalahan seluruh SSR per tanggal
-                        df_pivot = df_sumber.groupby('Tanggal').size().reset_index(name='Total Kesalahan')
+                    # 2. LOGIKA GRAFIK UTAMA
+                    if not df_sumber.empty:
+                        if pilihan_ssr == "SEMUA":
+                            # Jika SEMUA: Tampilkan total tren agregat kesalahan seluruh SSR per tanggal
+                            df_pivot = df_sumber.groupby('Tanggal').size().reset_index(name='Total Kesalahan')
                         
-                        # POIN 1: Membuat grafik garis dengan MEMUNCULKAN ANGKA LABEL DATA (text='Total Kesalahan')
-                        fig = px.line(df_pivot, x='Tanggal', y='Total Kesalahan', text='Total Kesalahan', markers=True)
-                        fig.update_traces(textposition="top center", line=dict(width=3, color='#00ffcc'))
-                        st.markdown("<br>📊 <strong>Tren Total Kesalahan Seluruh SSR (Berdasarkan Tanggal Upload):</strong>", unsafe_allow_html=True)
+                            # Membuat grafik garis dengan MEMUNCULKAN ANGKA LABEL DATA
+                            fig = px.line(df_pivot, x='Tanggal', y='Total Kesalahan', text='Total Kesalahan', markers=True)
+                            fig.update_traces(textposition="top center", line=dict(width=3, color='#00ffcc'))
+                            st.markdown("<br>📊 <strong>Tren Total Kesalahan Seluruh SSR (Berdasarkan Tanggal Upload):</strong>", unsafe_allow_html=True)
                     
+                        else:
+                            # Jika Per SSR: Kita cari dahulu 5 Indikator dengan temuan PALING BANYAK pada SSR ini
+                            top_5_indikator = df_sumber['indikator_kesalahan'].value_counts().head(5).index.tolist()
+                        
+                            # Filter grafik hanya untuk top 5 indikator tersebut
+                            df_chart_filtered = df_sumber[df_sumber['indikator_kesalahan'].isin(top_5_indikator)]
+                            df_pivot = df_chart_filtered.groupby(['Tanggal', 'indikator_kesalahan']).size().reset_index(name='Jumlah')
+                        
+                            # Membuat grafik garis multi-line dengan ANGKA LABEL DATA
+                            fig = px.line(df_pivot, x='Tanggal', y='Jumlah', color='indikator_kesalahan', text='Jumlah', markers=True)
+                            fig.update_traces(textposition="top center")
+                            st.markdown(f"<br>📊 <strong>Tren Top 5 Indikator Kesalahan Terbanyak untuk: {pilihan_ssr}</strong>", unsafe_allow_html=True)
+                    
+                        # Pengaturan tampilan Chart agar serasi dengan tema modern/dark
+                        fig.update_layout(
+                            template="plotly_dark", 
+                            height=420, 
+                            margin=dict(l=20, r=20, t=30, b=20),
+                            legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="left", x=0)
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                        # ==========================================================
+                        # RESUME KOTAK A & B SEJAJAR (DI BAWAH GRAFIK)
+                        # ==========================================================
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.divider()
+                    
+                        # Hitung total kemunculan setiap indikator berdasarkan data aktif
+                        df_counts = df_sumber['indikator_kesalahan'].value_counts().reset_index()
+                        df_counts.columns = ['indikator', 'total']
+                    
+                        # Pemisahan logika kata "konfirmasi"
+                        mask_konfirmasi = df_counts['indikator'].str.contains('konfirmasi', case=False, na=False)
+                    
+                        # Kotak A: 10 Indikator Mutlak (Kecuali yang ada kata 'konfirmasi')
+                        df_mutlak = df_counts[~mask_konfirmasi].head(10)
+                    
+                        # Kotak B: Indikator Konfirmasi Terbanyak
+                        df_konfirmasi = df_counts[mask_konfirmasi]
+                    
+                        # Membuat 2 Kolom Sejajar untuk Kotak A dan Kotak B
+                        kotak_a, kotak_b = st.columns(2)
+                    
+                        with kotak_a:
+                            st.markdown("### 🟥 Kotak A: Top 10 Indikator Mutlak")
+                            st.markdown("<small style='color:gray;'>Menampilkan kesalahan terbanyak (tanpa indikator konfirmasi)</small>", unsafe_allow_html=True)
+                            if not df_mutlak.empty:
+                                for idx, row in enumerate(df_mutlak.itertuples(), 1):
+                                    st.markdown(f"**{idx}.** {row.indikator} <span style='color:#ff4b4b;'>({row.total} temuan)</span>", unsafe_allow_html=True)
+                            else:
+                                st.info("Tidak ada temuan indikator mutlak.")
+                            
+                        with kotak_b:
+                            st.markdown("### 🟨 Kotak B: Indikator Konfirmasi Terbanyak")
+                            st.markdown("<small style='color:gray;'>Menampilkan list indikator khusus tipe konfirmasi</small>", unsafe_allow_html=True)
+                            if not df_konfirmasi.empty:
+                                for idx, row in enumerate(df_konfirmasi.itertuples(), 1):
+                                    st.markdown(f"**{idx}.** {row.indikator} <span style='color:#ffa500;'>({row.total} temuan)</span>", unsafe_allow_html=True)
+                            else:
+                                st.info("Tidak ada temuan indikator konfirmasi.")
+                            
                     else:
-                        # Jika Per SSR: POIN 2 (Mencegah kerumitan 50+ indikator)
-                        # Kita cari dahulu 5 Indikator dengan temuan PALING BANYAK pada SSR ini
-                        top_5_indikator = df_sumber['indikator_kesalahan'].value_counts().head(5).index.tolist()
-                        
-                        # Filter grafik hanya untuk top 5 indikator tersebut
-                        df_chart_filtered = df_sumber[df_sumber['indikator_kesalahan'].isin(top_5_indikator)]
-                        
-                        df_pivot = df_chart_filtered.groupby(['Tanggal', 'indikator_kesalahan']).size().reset_index(name='Jumlah')
-                        
-                        # POIN 1 & 2: Membuat grafik garis multi-line dengan ANGKA LABEL DATA (text='Jumlah')
-                        fig = px.line(df_pivot, x='Tanggal', y='Jumlah', color='indikator_kesalahan', text='Jumlah', markers=True)
-                        fig.update_traces(textposition="top center")
-                        st.markdown(f"<br>📊 <strong>Tren Top 5 Indikator Kesalahan Terbanyak untuk: {pilihan_ssr}</strong>", unsafe_allow_html=True)
-                    
-                    # Pengaturan tampilan Chart agar serasi dengan tema modern/dark
-                    fig.update_layout(
-                        template="plotly_dark", 
-                        height=420, 
-                        margin=dict(l=20, r=20, t=30, b=20),
-                        legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="left", x=0)
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # ==========================================================
-                    # POIN 3 & 4: RESUME KOTAK A & B SEJAJAR (DI BAWAH GRAFIK)
-                    # ==========================================================
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.divider()
-                    
-                    # Hitung total kemunculan setiap indikator berdasarkan data aktif
-                    df_counts = df_sumber['indikator_kesalahan'].value_counts().reset_index()
-                    df_counts.columns = ['indikator', 'total']
-                    
-                    # Pemisahan logika kata "konfirmasi"
-                    mask_konfirmasi = df_counts['indikator'].str.contains('konfirmasi', case=False, na=False)
-                    
-                    # Kotak A: 10 Indikator Mutlak (Kecuali yang ada kata 'konfirmasi')
-                    df_mutlak = df_counts[~mask_konfirmasi].head(10)
-                    
-                    # Kotak B: Indikator Konfirmasi Terbanyak
-                    df_konfirmasi = df_counts[mask_konfirmasi]
-                    
-                    # Membuat 2 Kolom Sejajar untuk Kotak A dan Kotak B
-                    kotak_a, kotak_b = st.columns(2)
-                    
-                    with kotak_a:
-                        st.markdown("### 🟥 Kotak A: Top 10 Indikator Mutlak")
-                        st.markdown("<small style='color:gray;'>Menampilkan kesalahan terbanyak (tanpa indikator konfirmasi)</small>", unsafe_allow_html=True)
-                        if not df_mutlak.empty:
-                            # Ditampilkan berupa teks list bersih sesuai permintaan
-                            for idx, row in enumerate(df_mutlak.itertuples(), 1):
-                                st.markdown(f"**{idx}.** {row.indikator} <span style='color:#ff4b4b;'>({row.total} temuan)</span>", unsafe_allow_html=True)
-                        else:
-                            st.info("Tidak ada temuan indikator mutlak.")
-                            
-                    with kotak_b:
-                        st.markdown("### 🟨 Kotak B: Indikator Konfirmasi Terbanyak")
-                        st.markdown("<small style='color:gray;'>Menampilkan list indikator khusus tipe konfirmasi</small>", unsafe_allow_html=True)
-                        if not df_konfirmasi.empty:
-                            # Ditampilkan berupa teks list bersih sesuai permintaan
-                            for idx, row in enumerate(df_konfirmasi.itertuples(), 1):
-                                st.markdown(f"**{idx}.** {row.indikator} <span style='color:#ffa500;'>({row.total} temuan)</span>", unsafe_allow_html=True)
-                        else:
-                            st.info("Tidak ada temuan indikator konfirmasi.")
-                            
+                        st.warning("Tidak ada data log yang sesuai dengan filter ini.")
                 else:
-                    st.warning("Tidak ada data log yang sesuai dengan filter ini.")
-            else:
-                st.info("Belum ada rekam jejak log review tersimpan di database.")
+                    st.info("Belum ada rekam jejak log review tersimpan di database.")
                 
-        except Exception as e:
-            st.error(f"Terjadi kesalahan saat memproses visualisasi grafik tren: {e}")
+            except Exception as e:
+                st.error(f"Terjadi kesalahan saat memproses visualisasi grafik tren: {e}")
                 
     # <<< TUTUP KONTANER GLASSMORPHISM >>>
     st.markdown('</div>', unsafe_allow_html=True)
