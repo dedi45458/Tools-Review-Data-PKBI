@@ -544,17 +544,19 @@ if st.session_state['proses_selesai']:
                 import plotly.express as px
                 import datetime
                 
-                # 🔥 PERBAIKAN FATAL: Memanggil kolom 'tanggal' (data asli Excel), bukan 'created_at'
-                res_tren = supabase.table("log_validasi_review").select("tanggal, ssr, indikator_kesalahan").execute()
+                # 🔥 PERBAIKAN FATAL: Memanggil 'created_at' karena itulah kolom timestamp Anda
+                res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
+                
                 if res_tren.data:
                     df_tren = pd.DataFrame(res_tren.data).copy()
                     
-                    # 🔥 PERBAIKAN FORMAT TANGGAL: Membaca format DD/MM/YYYY secara spesifik
-                    if 'tanggal' in df_tren.columns:
-                        # Membersihkan spasi jika ada
-                        df_tren['tanggal_clean'] = df_tren['tanggal'].astype(str).str.strip()
-                        # Memaksa konversi tanggal dengan membaca format Hari/Bulan/Tahun (DD/MM/YYYY)
-                        df_tren['Tanggal_dt'] = pd.to_datetime(df_tren['tanggal_clean'], format="%d/%m/%Y", errors='coerce').dt.date
+                    # 🔥 PERBAIKAN FORMAT: Menggunakan format untuk timestamp Supabase
+                    if 'created_at' in df_tren.columns:
+                        # 1. Ambil bagian tanggal dan jam saja (buang milidetik dan zona waktu)
+                        df_tren['created_at_clean'] = df_tren['created_at'].astype(str).str.split('.').str[0]
+                        
+                        # 2. Konversi ke datetime (Format: YYYY-MM-DD HH:MM:SS)
+                        df_tren['Tanggal_dt'] = pd.to_datetime(df_tren['created_at_clean'], format="%Y-%m-%d %H:%M:%S", errors='coerce').dt.date
                     else:
                         df_tren['Tanggal_dt'] = pd.NaT
                     
