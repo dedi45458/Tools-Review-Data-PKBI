@@ -100,7 +100,7 @@ def init_supabase():
 
 supabase = init_supabase()
 
-st.markdown('<div class="main-title">📊 Executive Review Dashboard</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu.</div>', unsafe_allow_html=True)
 
 # ==========================================================
@@ -594,3 +594,21 @@ if st.session_state['proses_selesai']:
                             st.warning("⚠️ Beberapa teks Justifikasi otomatis diabaikan karena ditaruh pada indikator mutlak (bukan tipe konfirmasi).")
                         st.success(f"🎉 Sukses memproses {sukses_simpan} baris validasi ke database Supabase!")
                         st.rerun()
+                        
+        # --- TAMBAHKAN DI BAWAHNYA ---
+        st.markdown("<br>", unsafe_allow_html=True) # Memberi sedikit jarak
+        st.markdown("---") # Memberi garis pemisah agar terlihat sebagai aksi berbeda
+        
+        st.markdown("### ⚙️ Manajemen Akhir Periode")
+        st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
+        
+        if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
+            with st.spinner("Sedang memproses pengarsipan data..."):
+                try:
+                    # Memanggil fungsi SQL yang sudah kita buat di Supabase
+                    supabase.rpc("proses_sari_data_bulanan").execute()
+                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap dan log detail dibersihkan!")
+                    st.balloons() # Efek animasi sukses
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Gagal memproses arsip: {e}")
