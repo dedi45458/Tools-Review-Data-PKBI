@@ -538,149 +538,104 @@ if st.session_state['proses_selesai']:
 
 
     with tab2:
-        if supabase:
-            try:
-                # Import library visualisasi utama secara aman
-                import plotly.express as px
-                import datetime
+    if supabase:
+        try:
+            import plotly.express as px
+            import datetime
+            
+            # FIX 1: Ubah 'tanggal' menjadi 'created_at' agar mengambil stempel waktu upload asli Supabase
+            res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
+            
+            if res_tren.data:
+                df_tren = pd.DataFrame(res_tren.data)
                 
-                # 🔥 PERBAIKAN FATAL: Memanggil 'created_at' karena itulah kolom timestamp Anda
-                res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
-                
-                if res_tren.data:
-                    df_tren = pd.DataFrame(res_tren.data).copy()
-                    
-                    # 🔥 PERBAIKAN FORMAT: Menggunakan format untuk timestamp Supabase
-                    if 'created_at' in df_tren.columns:
-                        # 1. Ambil bagian tanggal dan jam saja (buang milidetik dan zona waktu)
-                        df_tren['created_at_clean'] = df_tren['created_at'].astype(str).str.split('.').str[0]
-                        
-                        # 2. Konversi ke datetime (Format: YYYY-MM-DD HH:MM:SS)
-                        df_tren['Tanggal_dt'] = pd.to_datetime(df_tren['created_at_clean'], format="%Y-%m-%d %H:%M:%S", errors='coerce').dt.date
-                    else:
-                        df_tren['Tanggal_dt'] = pd.NaT
-                    
-                    # Buang baris jika ada tanggal yang benar-benar tidak valid / kosong
-                    df_tren = df_tren.dropna(subset=['Tanggal_dt']).copy()
-                    
-                    if not df_tren.empty:
-                        # Siapkan format string YYYY-MM-DD untuk kebutuhan plot grafik
-                        df_tren['Tanggal'] = df_tren['Tanggal_dt'].apply(lambda x: x.strftime('%Y-%m-%d'))
-                        
-                        # Ambil batas kalender riil dari data
-                        min_date_db = df_tren['Tanggal_dt'].min()
-                        max_date_db = df_tren['Tanggal_dt'].max()
-                        
-                        # Bug Fix Streamlit: Jika data baru 1 hari yang sama
-                        if min_date_db == max_date_db:
-                            default_date_value = min_date_db 
-                        else:
-                            default_date_value = (min_date_db, max_date_db)
-                            
-                        # 1. LAYOUT FILTER DI ATAS GRAFIK (Sejajar)
-                        col_filter_ssr, col_filter_tgl = st.columns(2)
-                        
-                        with col_filter_ssr:
-                            daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
-                            pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_final_fix_v8")
-                            
-                        with col_filter_tgl:
-                            rentang_tanggal = st.date_input(
-                                "📅 Pilih Rentang Tanggal Analisis:",
-                                value=default_date_value,
-                                key="input_rentang_tanggal_tren_v8"
-                            )
-                        
-                        # ======================================================================
-                        # PROSES INTEGRASI FILTER DATA
-                        # ======================================================================
-                        if pilihan_ssr == "SEMUA":
-                            df_sumber = df_tren.copy()
-                        else:
-                            df_sumber = df_tren[df_tren['ssr'] == pilihan_ssr].copy()
-                        
-                        # Filter Berdasarkan Rentang Tanggal
-                        if isinstance(rentang_tanggal, (tuple, list)):
-                            if len(rentang_tanggal) == 2:
-                                start_date, end_date = rentang_tanggal
-                                df_sumber = df_sumber[(df_sumber['Tanggal_dt'] >= start_date) & (df_sumber['Tanggal_dt'] <= end_date)]
-                            elif len(rentang_tanggal) == 1:
-                                start_date = rentang_tanggal[0]
-                                df_sumber = df_sumber[df_sumber['Tanggal_dt'] == start_date]
-                        elif isinstance(rentang_tanggal, datetime.date):
-                            df_sumber = df_sumber[df_sumber['Tanggal_dt'] == rentang_tanggal]
-                        
-                        # Jalankan visualisasi jika data tersedia
-                        if not df_sumber.empty:
-                            # ----------------------------------------------------------------------
-                            # GRAFIK UTAMA
-                            # ----------------------------------------------------------------------
-                            if pilihan_ssr == "SEMUA":
-                                df_pivot = df_sumber.groupby('Tanggal').size().reset_index(name='Total Kesalahan')
-                                st.markdown("<br><p>📈 <b>Tren Total Kesalahan Seluruh SSR per Tanggal:</b></p>", unsafe_allow_html=True)
-                                
-                                fig = px.line(df_pivot, x='Tanggal', y='Total Kesalahan', text='Total Kesalahan')
-                                fig.update_traces(mode="lines+markers+text", textposition="top center", line=dict(color='#38bdf8', width=3), marker=dict(size=8))
-                            else:
-                                top_5_ind = df_sumber.groupby('indikator_kesalahan').size().nlargest(5).index.tolist()
-                                df_sumber_top = df_sumber[df_sumber['indikator_kesalahan'].isin(top_5_ind)]
-                                
-                                df_pivot = df_sumber_top.groupby(['Tanggal', 'indikator_kesalahan']).size().reset_index(name='Jumlah Kesalahan')
-                                st.markdown(f"<br><p>📈 <b>Tren 5 Indikator Teratas untuk {pilihan_ssr}:</b></p>", unsafe_allow_html=True)
-                                
-                                fig = px.line(df_pivot, x='Tanggal', y='Jumlah Kesalahan', color='indikator_kesalahan', text='Jumlah Kesalahan')
-                                fig.update_traces(mode="lines+markers+text", textposition="top center", marker=dict(size=6))
-                            
-                            fig.update_layout(
-                                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                font=dict(color='#f8fafc', size=11),
-                                xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', title="Tanggal"),
-                                yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', title="Jumlah Temuan"),
-                                margin=dict(l=20, r=20, t=20, b=20), height=380,
-                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
-                            )
-                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-                            
-                            # ----------------------------------------------------------------------
-                            # KOTAK A & B
-                            # ----------------------------------------------------------------------
-                            st.markdown("<br><hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
-                            df_counts = df_sumber.groupby('indikator_kesalahan').size().reset_index(name='Total')
-                            
-                            df_mutlak = df_counts[~df_counts['indikator_kesalahan'].str.lower().str.contains('konfirmasi', na=False)].sort_values(by='Total', ascending=False).head(10)
-                            df_konfirm = df_counts[df_counts['indikator_kesalahan'].str.lower().str.contains('konfirmasi', na=False)].sort_values(by='Total', ascending=False)
-                            
-                            col_kotak_a, col_kotak_b = st.columns(2)
-                            
-                            with col_kotak_a:
-                                st.markdown("#### 🟥 KOTAK A: Indikator Mutlak Teratas")
-                                if not df_mutlak.empty:
-                                    html_a = "<div style='background-color: rgba(239, 68, 68, 0.08); padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; min-height: 250px;'>"
-                                    for idx, row in enumerate(df_mutlak.itertuples(), 1):
-                                        html_a += f"<p style='margin: 6px 0; color: #f8fafc; font-size: 0.92rem;'><b>{idx}.</b> {row.indikator_kesalahan} <span style='color: #ef4444; font-weight: bold;'>({row.Total})</span></p>"
-                                    html_a += "</div>"
-                                    st.markdown(html_a, unsafe_allow_html=True)
-                                else:
-                                    st.info("✨ Bersih.")
-                                    
-                            with col_kotak_b:
-                                st.markdown("#### 🟨 KOTAK B: Indikator Konfirmasi Teratas")
-                                if not df_konfirm.empty:
-                                    html_b = "<div style='background-color: rgba(245, 158, 11, 0.08); padding: 15px; border-radius: 10px; border-left: 5px solid #f59e0b; min-height: 250px;'>"
-                                    for idx, row in enumerate(df_konfirm.itertuples(), 1):
-                                        html_b += f"<p style='margin: 6px 0; color: #f8fafc; font-size: 0.92rem;'><b>{idx}.</b> {row.indikator_kesalahan} <span style='color: #f59e0b; font-weight: bold;'>({row.Total})</span></p>"
-                                    html_b += "</div>"
-                                    st.markdown(html_b, unsafe_allow_html=True)
-                                else:
-                                    st.info("✨ Bersih.")
-                        else:
-                            st.info("ℹ️ Tidak ada data pada rentang tanggal tersebut.")
-                    else:
-                        st.info("ℹ️ Data validasi belum memiliki format tanggal yang dikenali (DD/MM/YYYY).")
+                # FIX 2: Sesuaikan pembacaan dengan nama kolom 'created_at'
+                if 'created_at' in df_tren.columns:
+                    # Konversi otomatis ISO Timestamp Supabase (aman dari error format string)
+                    df_tren['Tanggal_dt'] = pd.to_datetime(df_tren['created_at'], errors='coerce').dt.tz_localize(None)
+                    # Hapus baris yang kosong/rusak jika ada
+                    df_tren = df_tren.dropna(subset=['Tanggal_dt'])
+                    # Format teks untuk sumbu X grafik
+                    df_tren['Tanggal'] = df_tren['Tanggal_dt'].dt.strftime('%Y-%m-%d')
                 else:
-                    st.info("Belum ada rekam jejak log tersimpan di database.")
-            except Exception as e:
-                st.error(f"Gagal memproses visualisasi tren: {e}")
+                    df_tren = pd.DataFrame()
+
+                if not df_tren.empty:
+                    min_date = df_tren['Tanggal_dt'].min().date()
+                    max_date = df_tren['Tanggal_dt'].max().date()
+                    
+                    # Layout filter di atas grafik
+                    col_filter_ssr, col_filter_tgl = st.columns(2)
+                    
+                    with col_filter_ssr:
+                        daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
+                        pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_v9")
+                        
+                    with col_filter_tgl:
+                        rentang_tanggal = st.date_input(
+                            "📅 Pilih Rentang Tanggal Upload:",
+                            value=(min_date, max_date) if min_date != max_date else min_date,
+                            min_value=min_date,
+                            max_value=max_date,
+                            key="input_tgl_v9"
+                        )
+                    
+                    # Salin data untuk proses filter
+                    df_sumber = df_tren.copy()
+                    if pilihan_ssr != "SEMUA":
+                        df_sumber = df_sumber[df_sumber['ssr'] == pilihan_ssr]
+                    
+                    # FIX 3: Antisipasi error 'Unpacking' saat user baru meng-klik salah satu tanggal
+                    if isinstance(rentang_tanggal, (tuple, list)):
+                        if len(rentang_tanggal) == 2:
+                            start_date, end_date = rentang_tanggal
+                            df_sumber = df_sumber[(df_sumber['Tanggal_dt'].dt.date >= start_date) & 
+                                                  (df_sumber['Tanggal_dt'].dt.date <= end_date)]
+                        elif len(rentang_tanggal) == 1:
+                            # Jika baru ngeklik tanggal mulai, kunci ke tanggal itu dulu agar tidak crash
+                            start_date = rentang_tanggal[0]
+                            df_sumber = df_sumber[df_sumber['Tanggal_dt'].dt.date == start_date]
+                    else:
+                        df_sumber = df_sumber[df_sumber['Tanggal_dt'].dt.date == rentang_tanggal]
+
+                    # Tampilkan Grafik jika data hasil filter tidak kosong
+                    if not df_sumber.empty:
+                        if pilihan_ssr == "SEMUA":
+                            df_pivot = df_sumber.groupby('Tanggal').size().reset_index(name='Total Kesalahan')
+                            fig = px.line(df_pivot, x='Tanggal', y='Total Kesalahan', markers=True)
+                            st.write(f"📈 **Tren Total Kesalahan Seluruh SSR (Berdasarkan Waktu Upload)**")
+                        else:
+                            df_pivot = df_sumber.groupby(['Tanggal', 'indikator_kesalahan']).size().reset_index(name='Jumlah')
+                            fig = px.line(df_pivot, x='Tanggal', y='Jumlah', color='indikator_kesalahan', markers=True)
+                            st.write(f"📈 **Tren Indikator untuk {pilihan_ssr} (Berdasarkan Waktu Upload)**")
+                        
+                        fig.update_layout(template="plotly_dark", height=400, margin=dict(l=20, r=20, t=30, b=20))
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # --- Resume (Kotak Tabel A & B di bagian bawah) ---
+                        st.divider()
+                        df_counts = df_sumber.groupby('indikator_kesalahan').size().reset_index(name='Total')
+                        
+                        is_konfirmasi = df_counts['indikator_kesalahan'].str.contains('konfirmasi', case=False, na=False)
+                        df_mutlak = df_counts[~is_konfirmasi].sort_values('Total', ascending=False).head(10)
+                        df_konfirm = df_counts[is_konfirmasi].sort_values('Total', ascending=False)
+                        
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            st.subheader("🟥 Indikator Mutlak")
+                            st.dataframe(df_mutlak if not df_mutlak.empty else pd.DataFrame(columns=['indikator_kesalahan', 'Total']), use_container_width=True, hide_index=True)
+                        with c2:
+                            st.subheader("🟨 Indikator Konfirmasi")
+                            st.dataframe(df_konfirm if not df_konfirm.empty else pd.DataFrame(columns=['indikator_kesalahan', 'Total']), use_container_width=True, hide_index=True)
+                    else:
+                        st.warning("⚠️ Tidak ada data ditemukan pada rentang tanggal upload tersebut.")
+                else:
+                    st.info("ℹ️ Data tidak tersedia atau format tanggal tidak sesuai.")
+            else:
+                st.info("ℹ️ Database log review kosong. Silakan jalankan penelaahan data terlebih dahulu.")
+                
+        except Exception as e:
+            st.error(f"❌ Terjadi kesalahan saat memproses data grafik: {e}")
                 
     # <<< TUTUP KONTANER GLASSMORPHISM >>>
     st.markdown('</div>', unsafe_allow_html=True)
