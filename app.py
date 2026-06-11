@@ -574,19 +574,25 @@ if st.session_state['proses_selesai']:
                             min_date_db = datetime.date.today()
                             max_date_db = datetime.date.today()
                             
+                        # 🔥 BUG FIX STREAMLIT: Cegah ValueError jika min dan max jatuh di tanggal yang sama persis
+                        if min_date_db == max_date_db:
+                            default_date_value = min_date_db # Berikan single value (1 tanggal)
+                        else:
+                            default_date_value = (min_date_db, max_date_db) # Berikan tuple value (rentang tanggal)
+                            
                         # 2. LAYOUT FILTER DI ATAS GRAFIK (Sejajar)
                         col_filter_ssr, col_filter_tgl = st.columns(2)
                         
                         with col_filter_ssr:
                             daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
-                            pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_final_perfect_v6")
+                            pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_final_perfect_v7")
                             
                         with col_filter_tgl:
-                            # Gunakan tuple value secara aman, hilangkan min_value/max_value agar Streamlit fleksibel
+                            # Terapkan nilai default_date_value yang sudah aman
                             rentang_tanggal = st.date_input(
                                 "📅 Pilih Rentang Tanggal Analisis:",
-                                value=(min_date_db, max_date_db),
-                                key="input_rentang_tanggal_tren_perfect_v6"
+                                value=default_date_value,
+                                key="input_rentang_tanggal_tren_perfect_v7"
                             )
                         
                         # ======================================================================
@@ -658,7 +664,7 @@ if st.session_state['proses_selesai']:
                             col_kotak_a, col_kotak_b = st.columns(2)
                             
                             with col_kotak_a:
-                                st.markdown("#### 🟥 Resume Indikator Mutlak (Non-Konfirmasi)")
+                                st.markdown("#### 🟥 KOTAK A: Resume Indikator Mutlak (Non-Konfirmasi)")
                                 st.caption("Daftar 10 indikator dengan temuan review paling banyak pada rentang waktu terpilih")
                                 if not df_mutlak.empty:
                                     html_a = "<div style='background-color: rgba(239, 68, 68, 0.08); padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; min-height: 250px;'>"
@@ -670,7 +676,7 @@ if st.session_state['proses_selesai']:
                                     st.info("✨ Bersih. Tidak ada temuan indikator mutlak pada rentang waktu ini.")
                                     
                             with col_kotak_b:
-                                st.markdown("#### 🟨 Resume Indikator Tipe Konfirmasi")
+                                st.markdown("#### 🟨 KOTAK B: Resume Indikator Tipe Konfirmasi")
                                 st.caption("Daftar indikator verifikasi/konfirmasi dengan temuan terbanyak pada rentang waktu terpilih")
                                 if not df_konfirm.empty:
                                     html_b = "<div style='background-color: rgba(245, 158, 11, 0.08); padding: 15px; border-radius: 10px; border-left: 5px solid #f59e0b; min-height: 250px;'>"
