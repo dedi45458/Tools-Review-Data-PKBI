@@ -493,45 +493,44 @@ if st.session_state['proses_selesai']:
     with tab1:
         st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
         
-        # 1. Ambil data dan pastikan format angka
         df_atas_view = st.session_state['df_tabel_atas'].copy() if st.session_state['df_tabel_atas'] is not None else pd.DataFrame()
         
         if not df_atas_view.empty:
-            # Identifikasi kolom SSR (semua kolom kecuali indikator, total, dan %)
-            kolom_ssr = [c for c in df_atas_view.columns if c not in ['INDIKATOR KESALAHAN DATA', 'Jumlah per indikator', '%']]
+            kolom_indikator = 'INDIKATOR KESALAHAN DATA'
+            kolom_ssr = [c for c in df_atas_view.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
             
             # Konversi ke numerik
             for col in kolom_ssr:
                 df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
             
-            # 2. Filter: Hanya tampilkan SSR yang memiliki total temuan > 0
-            # Kita cek SSR mana saja yang punya minimal 1 temuan di salah satu baris
+            # Filter SSR yang memiliki temuan
             ssr_aktif = [col for col in kolom_ssr if df_atas_view[col].sum() > 0]
+            kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
+            df_final = df_atas_view[[c for c in kolom_final if c in df_atas_view.columns]]
             
-            # Gabungkan kembali dengan kolom wajib
-            kolom_final = ['INDIKATOR KESALAHAN DATA'] + ssr_aktif + ['Jumlah per indikator', '%']
-            df_atas_view = df_atas_view[kolom_final]
-            
-            # 3. Ubah 0 menjadi '-' untuk tampilan (konversi ke string)
-            df_display = df_atas_view.astype(str)
+            # ==========================================
+            # PERBAIKAN ERROR PANDAS DI SINI
+            # ==========================================
+            df_display = df_final.astype(str)
             for col in ssr_aktif:
-                df_display[col] = df_display[col].replace('0', '-')
+                if col in df_display.columns:
+                    # Menggunakan '.loc' alih-alih '.replace()' untuk menghindari TypeError
+                    df_display.loc[df_display[col] == '0', col] = '-'
+            # ==========================================
             
-            # 4. Pengaturan Tampilan & Lebar Kolom
-            # Mengatur kolom agar seragam (width="small")
+            # Tampilkan ke dataframe Streamlit
             column_config = {
-                "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan", width=300),
+                kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=300),
                 "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
                 "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
             }
-            # Tambahkan kolom SSR ke config
             for col in ssr_aktif:
                 column_config[col] = st.column_config.TextColumn(col, width="small")
 
             st.dataframe(
-                df_display,
-                use_container_width=True,
-                column_config=column_config,
+                df_display, 
+                use_container_width=True, 
+                column_config=column_config, 
                 hide_index=True
             )
         else:
