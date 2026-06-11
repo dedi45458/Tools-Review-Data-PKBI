@@ -548,36 +548,31 @@ if st.session_state['proses_selesai']:
                 if res_tren.data:
                     df_tren = pd.DataFrame(res_tren.data)
                     
-                    # Konversi aman ke datetime dan dapatkan objek murni date
-                    df_tren['Tanggal_dt'] = pd.to_datetime(df_tren['created_at']).dt.date
-                    df_tren['Tanggal'] = df_tren['Tanggal_dt'].apply(lambda x: x.strftime('%Y-%m-%d') if not pd.isnull(x) else '')
+                    # Pastikan konversi datetime aman dari data null atau korup
+                    df_tren['created_at_dt'] = pd.to_datetime(df_tren['created_at'], errors='coerce')
+                    df_tren = df_tren.dropna(subset=['created_at_dt'])
                     
-                    # Bersihkan baris jika seandainya ada data tanggal yang kosong/null
-                    df_tren = df_tren.dropna(subset=['Tanggal_dt'])
+                    df_tren['Tanggal_dt'] = df_tren['created_at_dt'].dt.date
+                    df_tren['Tanggal'] = df_tren['Tanggal_dt'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notnull(x) else '')
                     
                     if not df_tren.empty:
-                        # Ambil batas tanggal minimal dan maksimal dari database
+                        # Ambil batas tanggal terkecil dan terbesar riil dari database
                         min_date_db = df_tren['Tanggal_dt'].min()
                         max_date_db = df_tren['Tanggal_dt'].max()
                         
-                        # Antisipasi pengaman tambahan jika tanggal null
-                        if pd.isnull(min_date_db) or pd.isnull(max_date_db):
-                            min_date_db = datetime.date.today()
-                            max_date_db = datetime.date.today()
-                        
-                        # 1. LAYOUT FILTER DI ATAS GRAFIK
+                        # 1. LAYOUT FILTER DI ATAS GRAFIK (Sejajar)
                         col_filter_ssr, col_filter_tgl = st.columns(2)
                         
                         with col_filter_ssr:
-                            daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
-                            pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_final_perfect_v3")
+                            daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
+                            pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_final_perfect_v4")
                             
                         with col_filter_tgl:
-                            # SOLUSI UTAMA: Menghapus min_value & max_value agar terbebas dari ValueError Streamlit
+                            # SOLUSI UTAMA: Menghapus min_value & max_value untuk menghindari bug internal Streamlit
                             rentang_tanggal = st.date_input(
                                 "📅 Pilih Rentang Tanggal Analisis:",
-                                value=(min_date_db, max_date_db), 
-                                key="input_rentang_tanggal_tren_perfect_v3"
+                                value=(min_date_db, max_date_db),
+                                key="input_rentang_tanggal_tren_perfect_v4"
                             )
                         
                         # ======================================================================
@@ -585,18 +580,21 @@ if st.session_state['proses_selesai']:
                         # ======================================================================
                         df_sumber = df_tren if pilihan_ssr == "SEMUA" else df_tren[df_tren['ssr'] == pilihan_ssr]
                         
-                        # Jalankan filter jika rentang tanggal dipilih lengkap (Mulai & Selesai)
-                        if isinstance(rentang_tanggal, (tuple, list)) and len(rentang_tanggal) == 2:
-                            start_date, end_date = rentang_tanggal
-                            df_sumber = df_sumber[(df_sumber['Tanggal_dt'] >= start_date) & (df_sumber['Tanggal_dt'] <= end_date)]
+                        # Filter Berdasarkan Rentang Tanggal (Mendukung rentang penuh maupun klik tanggal tunggal)
+                        if isinstance(rentang_tanggal, (tuple, list)):
+                            if len(rentang_tanggal) == 2:
+                                start_date, end_date = rentang_tanggal
+                                df_sumber = df_sumber[(df_sumber['Tanggal_dt'] >= start_date) & (df_sumber['Tanggal_dt'] <= end_date)]
+                            elif len(rentang_tanggal) == 1:
+                                start_date = rentang_tanggal[0]
+                                df_sumber = df_sumber[df_sumber['Tanggal_dt'] == start_date]
                         elif isinstance(rentang_tanggal, datetime.date):
-                            # Jalankan filter jika user baru mengklik satu tanggal saja di kalender
                             df_sumber = df_sumber[df_sumber['Tanggal_dt'] == rentang_tanggal]
                         
-                        # Tampilkan visualisasi jika hasil filter menghasilkan data
+                        # Jalankan visualisasi jika hasil filter menghasilkan data
                         if not df_sumber.empty:
                             # ----------------------------------------------------------------------
-                            # MEMBUAT GRAFIK UTAMA DENGAN LABEL DATA
+                            # MEMBUAT GRAFIK UTAMA DENGAN LABEL DATA & PEMBATASAN TOP LINE
                             # ----------------------------------------------------------------------
                             if pilihan_ssr == "SEMUA":
                                 df_pivot = df_sumber.groupby('Tanggal').size().reset_index(name='Total Kesalahan')
@@ -605,6 +603,7 @@ if st.session_state['proses_selesai']:
                                 fig = px.line(df_pivot, x='Tanggal', y='Total Kesalahan', text='Total Kesalahan')
                                 fig.update_traces(mode="lines+markers+text", textposition="top center", line=dict(color='#38bdf8', width=3), marker=dict(size=8))
                             else:
+                                # Pembatasan otomatis TOP 5 indikator terbanyak pada SSR terpilih agar rapi
                                 top_5_ind = df_sumber.groupby('indikator_kesalahan').size().nlargest(5).index.tolist()
                                 df_sumber_top = df_sumber[df_sumber['indikator_kesalahan'].isin(top_5_ind)]
                                 
@@ -625,7 +624,7 @@ if st.session_state['proses_selesai']:
                             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                             
                             # ----------------------------------------------------------------------
-                            # RESUME TEKS KOTAK A & KOTAK B SEJAJAR DI BAWAH GRAFIK
+                            # RESUME TEKS KOTAK A & KOTAK B SEJAJAR DI BAWAH GRAFIK (IKUT TERFILTER)
                             # ----------------------------------------------------------------------
                             st.markdown("<br><hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
                             
@@ -672,6 +671,7 @@ if st.session_state['proses_selesai']:
                     st.info("Belum ada rekam jejak log review tersimpan di database.")
             except Exception as e:
                 st.error(f"Gagal memproses visualisasi tren: {e}")
+                
     # <<< TUTUP KONTANER GLASSMORPHISM >>>
     st.markdown('</div>', unsafe_allow_html=True)
 
