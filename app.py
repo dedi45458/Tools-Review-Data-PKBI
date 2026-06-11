@@ -281,7 +281,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
-    medsoc_keywords = ['whatsapp', 'wa', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 'sms', 'grindr', 'growlr', 'instagram', 'ig', 'tantan', 'telegram', 'telepon', 'tinder', 'twitter', 'line', 'facebook', 'fb', 'messenger', 'romeo', 'tiktok', 'tagged', 'litmatch', 'scruff', 'wechat', 'threads']
+    medsoc_keywords = ['whatsapp','badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 'sms', 'grindr', 'growlr', 'instagram', 'tantan', 'telegram', 'tinder', 'twitter', 'line', 'facebook', 'messenger', 'romeo', 'tiktok', 'tagged', 'litmatch', 'scruff', 'wechat', 'threads']
 
     # Asumsi fungsi pengambilan data Supabase Anda
     try:
