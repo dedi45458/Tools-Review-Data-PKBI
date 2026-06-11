@@ -549,45 +549,53 @@ if st.session_state['proses_selesai']:
                     # Menggunakan .copy() di awal agar alokasi memori dataframe bersih dan independen
                     df_tren = pd.DataFrame(res_tren.data).copy()
                     
-                    # Pastikan konversi datetime aman dari data null atau korup
-                    df_tren['created_at_dt'] = pd.to_datetime(df_tren['created_at'], errors='coerce')
+                    # 🔥 1. PENANGANAN UTAMA FORMAT YYYY/MM/DD 🔥
+                    # Mengubah tanda slash (/) menjadi dash (-) secara paksa sebelum dikonversi ke datetime
+                    if 'created_at' in df_tren.columns:
+                        df_tren['created_at_clean'] = df_tren['created_at'].astype(str).str.strip().str.replace('/', '-', regex=False)
+                        df_tren['created_at_dt'] = pd.to_datetime(df_tren['created_at_clean'], errors='coerce')
+                    else:
+                        df_tren['created_at_dt'] = pd.NaT
+                    
+                    # Buat filter baris yang HANYA memiliki tanggal valid (bukan NaT)
                     df_tren = df_tren.dropna(subset=['created_at_dt']).copy()
                     
-                    # Membuat kolom tanggal utama
-                    df_tren['Tanggal_dt'] = df_tren['created_at_dt'].dt.date
-                    df_tren['Tanggal'] = df_tren['Tanggal_dt'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notnull(x) else '')
-                    
                     if not df_tren.empty:
-                        # Ambil batas tanggal terkecil dan terbesar riil dari database
+                        # Ekstrak objek date murni untuk komparasi widget Streamlit
+                        df_tren['Tanggal_dt'] = df_tren['created_at_dt'].dt.date
+                        df_tren['Tanggal'] = df_tren['Tanggal_dt'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notnull(x) else '')
+                        
+                        # Ambil batas tanggal terkecil dan terbesar riil dari database secara aman
                         min_date_db = df_tren['Tanggal_dt'].min()
                         max_date_db = df_tren['Tanggal_dt'].max()
                         
-                        # 1. LAYOUT FILTER DI ATAS GRAFIK (Sejajar)
+                        # Jaring Pengaman Akhir: Jika hasil ekstrasi di atas bernilai null/None, paksa ke tanggal hari ini
+                        if pd.isnull(min_date_db) or pd.isnull(max_date_db):
+                            min_date_db = datetime.date.today()
+                            max_date_db = datetime.date.today()
+                            
+                        # 2. LAYOUT FILTER DI ATAS GRAFIK (Sejajar)
                         col_filter_ssr, col_filter_tgl = st.columns(2)
                         
                         with col_filter_ssr:
                             daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
-                            pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_final_perfect_v5")
+                            pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_final_perfect_v6")
                             
                         with col_filter_tgl:
-                            # Menghapus min_value & max_value untuk menghindari bug internal Streamlit
+                            # Gunakan tuple value secara aman, hilangkan min_value/max_value agar Streamlit fleksibel
                             rentang_tanggal = st.date_input(
                                 "📅 Pilih Rentang Tanggal Analisis:",
                                 value=(min_date_db, max_date_db),
-                                key="input_rentang_tanggal_tren_perfect_v5"
+                                key="input_rentang_tanggal_tren_perfect_v6"
                             )
                         
                         # ======================================================================
-                        # PROSES INTEGRASI FILTER DATA (DENGAN PROTEKSI COPIED DATAFRAME)
+                        # PROSES INTEGRASI FILTER DATA
                         # ======================================================================
                         if pilihan_ssr == "SEMUA":
                             df_sumber = df_tren.copy()
                         else:
                             df_sumber = df_tren[df_tren['ssr'] == pilihan_ssr].copy()
-                        
-                        # 🔥 PROTEKSI EXTRA GAGALKAN KEYERROR: Jika kolom Tanggal_dt hilang saat slicing, buat ulang instan!
-                        if 'Tanggal_dt' not in df_sumber.columns and not df_sumber.empty:
-                            df_sumber['Tanggal_dt'] = pd.to_datetime(df_sumber['created_at']).dt.date
                         
                         # Filter Berdasarkan Rentang Tanggal (Mendukung rentang penuh maupun klik tanggal tunggal)
                         if isinstance(rentang_tanggal, (tuple, list)):
@@ -663,8 +671,7 @@ if st.session_state['proses_selesai']:
                                     
                             with col_kotak_b:
                                 st.markdown("#### 🟨 Resume Indikator Tipe Konfirmasi")
-                                text_cap = "Daftar indikator verifikasi/konfirmasi dengan temuan terbanyak pada rentang waktu terpilih"
-                                st.caption(text_cap)
+                                st.caption("Daftar indikator verifikasi/konfirmasi dengan temuan terbanyak pada rentang waktu terpilih")
                                 if not df_konfirm.empty:
                                     html_b = "<div style='background-color: rgba(245, 158, 11, 0.08); padding: 15px; border-radius: 10px; border-left: 5px solid #f59e0b; min-height: 250px;'>"
                                     for idx, row in enumerate(df_konfirm.itertuples(), 1):
