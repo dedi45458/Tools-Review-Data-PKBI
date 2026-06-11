@@ -540,33 +540,96 @@ if st.session_state['proses_selesai']:
     with tab2:
         if supabase:
             try:
+                # 1. Tarik data dari database
                 res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
-                if res_tren.data:
+                
+                if res_tren.data and len(res_tren.data) > 0:
                     df_tren = pd.DataFrame(res_tren.data)
-                    df_tren['Tanggal'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
                     
-                    col_kiri, col_kanan = st.columns([1, 2])
-                    with col_kiri:
-                        daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
-                        pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr)
+                    # Filter Seleksi SSR 
+                    daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
+                    pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR untuk Resume:", daftar_ssr, key="sb_tren_ssr_fixed")
                     
-                    if pilihan_ssr == "SEMUA":
-                        df_pivot = df_tren.pivot_table(index='Tanggal', aggfunc='size')
-                        st.markdown("<br><p>📈 Tren total kesalahan seluruh SSR per tanggal:</p>", unsafe_allow_html=True)
+                    # Filter data berdasarkan SSR yang dipilih
+                    df_sumber = df_tren if pilihan_ssr == "SEMUA" else df_tren[df_tren['ssr'] == pilihan_ssr]
+                    
+                    if not df_sumber.empty:
+                        # Hitung distribusi total temuan per indikator kesalahan
+                        df_counts = df_sumber.groupby('indikator_kesalahan').size().reset_index(name='Jumlah Temuan')
+                        
+                        # 2. PROSES PEMISAHAN DATA (KOTAK A & KOTAK B)
+                        # Kotak B: Hanya indikator yang mengandung kata 'konfirmasi'
+                        df_box_b = df_counts[df_counts['indikator_kesalahan'].str.lower().str.contains('konfirmasi', na=False)]
+                        df_box_b = df_box_b.sort_values(by='Jumlah Temuan', ascending=True)
+                        
+                        # Kotak A: Kecuali yang mengandung kata 'konfirmasi' (Ambil TOP 10 Terbanyak)
+                        df_box_a = df_counts[~df_counts['indikator_kesalahan'].str.lower().str.contains('konfirmasi', na=False)]
+                        df_box_a = df_box_a.sort_values(by='Jumlah Temuan', ascending=True).tail(10)
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        
+                        # 3. LAYOUT 2 KOTAK SEJAJAR
+                        col_kotak_a, col_kotak_b = st.columns(2)
+                        
+                        # --- KOTAK A: INDIKATOR MUTLAK ---
+                        with col_kotak_a:
+                            st.markdown(f"##### 🟥 KOTAK A: Top {len(df_box_a)} Indikator Mutlak Terbanyak")
+                            if not df_box_a.empty:
+                                try:
+                                    import plotly.express as px
+                                    fig_a = px.bar(
+                                        df_box_a, x='Jumlah Temuan', y='indikator_kesalahan',
+                                        orientation='h', text_auto=True,
+                                        color_discrete_sequence=['#ef4444']
+                                    )
+                                    fig_a.update_layout(
+                                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                        font=dict(color='#f8fafc', size=10),
+                                        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', title=""),
+                                        yaxis=dict(title="", automargin=True),
+                                        margin=dict(l=10, r=10, t=10, b=10), height=400
+                                    )
+                                    st.plotly_chart(fig_a, use_container_width=True, config={'displayModeBar': False})
+                                except ModuleNotFoundError:
+                                    # Fallback jika Plotly belum terinstal di environment Anda
+                                    st.warning("⚠️ Pustaka 'plotly' tidak ditemukan. Menampilkan grafik standar:")
+                                    df_chart_a = df_box_a.set_index('indikator_kesalahan')['Jumlah Temuan']
+                                    st.bar_chart(df_chart_a, horizontal=True)
+                            else:
+                                st.info("✨ Bersih. Tidak ada temuan indikator mutlak.")
+                                
+                        # --- KOTAK B: INDIKATOR KONFIRMASI ---
+                        with col_kotak_b:
+                            st.markdown(f"##### 🟨 KOTAK B: Indikator Tipe Konfirmasi")
+                            if not df_box_b.empty:
+                                try:
+                                    import plotly.express as px
+                                    fig_b = px.bar(
+                                        df_box_b, x='Jumlah Temuan', y='indikator_kesalahan',
+                                        orientation='h', text_auto=True,
+                                        color_discrete_sequence=['#f59e0b']
+                                    )
+                                    fig_b.update_layout(
+                                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                        font=dict(color='#f8fafc', size=10),
+                                        xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', title=""),
+                                        yaxis=dict(title="", automargin=True),
+                                        margin=dict(l=10, r=10, t=10, b=10), height=400
+                                    )
+                                    st.plotly_chart(fig_b, use_container_width=True, config={'displayModeBar': False})
+                                except ModuleNotFoundError:
+                                    # Fallback jika Plotly belum terinstal di environment Anda
+                                    df_chart_b = df_box_b.set_index('indikator_kesalahan')['Jumlah Temuan']
+                                    st.bar_chart(df_chart_b, horizontal=True)
+                            else:
+                                st.info("✨ Bersih. Tidak ada temuan data tipe konfirmasi.")
                     else:
-                        df_filtered = df_tren[df_tren['ssr'] == pilihan_ssr]
-                        df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size').fillna(0)
-                        st.markdown(f"<br><p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
-                    
-                    if not df_pivot.empty:
-                        if isinstance(df_pivot, pd.Series): df_pivot = df_pivot.to_frame(name="Total Kesalahan")
-                        st.area_chart(df_pivot)
-                    else:
-                        st.info("Data belum tersedia untuk filter ini.")
+                        st.info("ℹ️ Data tidak ditemukan untuk filter ini.")
                 else:
-                    st.info("Belum ada rekam jejak log review tersimpan di database.")
-            except Exception: pass
-
+                    st.info("📭 **Log aktif bulan ini kosong.** Data kemungkinan besar sudah Anda arsipkan ke Tren Bulanan melalui manajemen akhir periode, atau Anda belum mengunggah berkas review baru.")
+            except Exception as e: 
+                st.error(f"❌ Terjadi kesalahan teknis saat memuat grafik: {e}")
+                
     # <<< TUTUP KONTANER GLASSMORPHISM >>>
     st.markdown('</div>', unsafe_allow_html=True)
 
