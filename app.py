@@ -198,7 +198,7 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "KD ada rujukan PrEp di penjangkauan tapi tidak ada informasi PrEp", "periksa": lambda c: cek_kode(c['rujukan'], '5') and not cek_kode(c['info_diberikan'], '10')},
     {"nama": "KD telah menerima layanan PrEp tapi tidak ada rujukan PrEp di penjangkauan", "periksa": lambda c: c['pernah_prep_di_rujukan'] and not cek_kode(c['rujukan'], '5')},
     
-    {"nama": "Logistik kosong (Konfirmasi)", "periksa": lambda c: c['log_kie'] == 0 and c['log_kon'] == 0 and c['log_pel'] == 0 and c['log_jar'] == 0 and c['log_swab'] == 0},
+    {"nama": "Logistik kosong (Konfirmasi)", "periksa": lambda c: c['total_log_keseluruhan_klien'] == 0},
     {"nama": "Tipe klien PWID tapi tidak menerima jarum (konfirmasi)", "periksa": lambda c: c['is_pwid'] and c['log_jar'] == 0 and not c['is_vo']},
     {"nama": "Tipe klien PWID tapi tidak menerima alkohol SWAB (konfirmasi)", "periksa": lambda c: c['is_pwid'] and c['log_swab'] == 0 and not c['is_vo']},
     {"nama": "Popkun selain PWID menerima jarum suntik", "periksa": lambda c: not c['is_pwid'] and c['log_jar'] > 0},
@@ -349,6 +349,30 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     dict_pernah_hiv = df.groupby('id_mapped')['is_info_hiv'].any().to_dict()
     dict_pernah_rujuk = df.groupby('id_mapped')['is_rujuk_tes'].any().to_dict()
 
+    # === TAMBAHAN BARU: Menghitung Total Logistik per Klien (SSR + ID Klien) ===
+    def _safe_float(val):
+        try:
+            return float(val) if pd.notna(val) and str(val).strip().lower() not in ['', 'nan'] else 0.0
+        except:
+            return 0.0
+
+    # Menggunakan index kolom yang sama dengan logika try-except Anda di bawah (17-21)
+    if len(df.columns) > 21: 
+        df['tmp_log'] = (
+            df.iloc[:, 17].apply(_safe_float) + 
+            df.iloc[:, 18].apply(_safe_float) + 
+            df.iloc[:, 19].apply(_safe_float) + 
+            df.iloc[:, 20].apply(_safe_float) + 
+            df.iloc[:, 21].apply(_safe_float)
+        )
+    else:
+        df['tmp_log'] = 0.0
+
+    # Buat kunci unik Lembaga SSR + ID Klien
+    df['kunci_klien_ref_log'] = df.get('Lembaga SSR', '').astype(str).str.strip().str.upper() + "_" + df['id_mapped']
+    dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
+    # ===========================================================================
+
     # Menggabungkan aturan bawaan dan kustom
     aturan_kustom = st.session_state.get('aturan_kustom', [])
     SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_BAWAAN + aturan_kustom
@@ -411,7 +435,10 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'id_counts': id_counts, 'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
             'is_file_rujukan': is_file_rujukan, 'df_ref': df_ref, 'ref_ssr_id_to_nik': ref_ssr_id_to_nik, 'ref_nik_ssr_to_id': ref_nik_ssr_to_id,
             'pernah_cbs_di_rujukan': dict_pernah_cbs.get(kunci_klien_ref, False),
-            'pernah_prep_di_rujukan': dict_pernah_prep_rujukan.get(kunci_klien_ref, False)
+            'pernah_prep_di_rujukan': dict_pernah_prep_rujukan.get(kunci_klien_ref, False),
+            
+            # === TAMBAHAN BARU: Parameter yang dipanggil di aturan validasi logistik ===
+            'total_log_keseluruhan_klien': dict_total_log_per_klien.get(kunci_klien_ref, 0.0)
         }
 
         for rule in SEMUA_ATURAN_AKTIF:
