@@ -173,96 +173,43 @@ def hitung_dan_ambil_log_db():
     return dict_revisi, dict_justifikasi
 
 # ==========================================================
-# 2. PANEL SIDEBAR (UPLOAD & RULE BUILDER - OPTIMIZED UI)
+# 2. PANEL SIDEBAR (UPLOAD & RULE BUILDER)
 # ==========================================================
 with st.sidebar:
-    # Header Sidebar Eksekutif
-    st.markdown("""
-        <div style="padding: 10px 0px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;">
-            <h3 style='margin: 0; color: #f8fafc; font-size: 1.35rem;'>🛠️ Control Panel</h3>
-            <p style='margin: 5px 0 0 0; color: #94a3b8; font-size: 0.85rem;'>Manajemen data & indikator review</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### 📁 Menu Unggah Berkas")
+    file_referensi = st.file_uploader("1️⃣ Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"])
+    files_review = st.file_uploader("2️⃣ Raw Data Penjangkauan", type=["xlsx", "csv"], accept_multiple_files=True)
     
-    # KELOMPOK 1: UNGGAH BERKAS (Menggunakan Container Terpisah)
-    with st.container():
-        st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>📁 MANAJEMEN BERKAS</b>", unsafe_allow_html=True)
-        
-        file_referensi = st.file_uploader(
-            "Data HIV+ Semester Lalu (.xlsx)", 
-            type=["xlsx"],
-            help="Opsional: Digunakan sebagai basis data rujukan konfirmasi"
-        )
-        
-        files_review = st.file_uploader(
-            "Raw Data Penjangkauan (Multi-File)", 
-            type=["xlsx", "csv"], 
-            accept_multiple_files=True,
-            help="Wajib: Anda bisa memilih lebih dari satu file sekaligus"
-        )
-    
-    st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True) # Jeda ruang kosong (Whitespace)
-    
-    # KELOMPOK 2: INDIKATOR KUSTOM (Dibuat minimalis di dalam Expander khusus)
-    with st.container():
-        st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>⚙️ PARAMETER VALIDASI</b>", unsafe_allow_html=True)
-        
-        with st.expander("✨ Buat Aturan Kustom Baru", expanded=False):
-            with st.form("form_tambah_aturan", clear_on_submit=True):
-                input_nama_ind = st.text_input("Nama Indikator", placeholder="Misal: Digit NIK wajib 16")
-                
-                pilihan_kolom = st.selectbox(
-                    "Kolom Target", 
-                    ["NIK", "ID Klien", "Umur", "Lembaga SSR", "Kode Petugas", "Lokasi Outreach / Jenis Sosial Media", "Informasi Yang diberikan", "Rujukan"]
-                )
-                
-                pilihan_kondisi = st.selectbox(
-                    "Kondisi Error Jika:", 
-                    ["Panjang karakter tidak sama dengan (!=)", "Panjang karakter kurang dari ( < )", "Kosong / Blank", "Mengandung teks tertentu", "Sama dengan teks/angka tertentu"]
-                )
-                
-                input_pembanding = st.text_input("Nilai Pembanding", placeholder="Contoh: 16 atau Teks tertentu")
-                
-                # Tombol submit form dibuat selaras dengan tema kustom
-                submit_rule = st.form_submit_button("➕ Daftarkan Aturan", use_container_width=True)
-                
-                if submit_rule:
-                    if not input_nama_ind: 
-                        st.error("Nama wajib diisi!")
-                    elif "Kosong" not in pilihan_kondisi and not input_pembanding: 
-                        st.error("Nilai pembanding wajib diisi!")
-                    else:
-                        mapping_kunci = {
-                            "NIK": "nik_clean", "ID Klien": "id_clean", "Umur": "umur", 
-                            "Lembaga SSR": "v_ssr", "Kode Petugas": "v_petugas", 
-                            "Lokasi Outreach / Jenis Sosial Media": "lokasi", 
-                            "Informasi Yang diberikan": "info_diberikan", "Rujukan": "rujukan"
-                        }
-                        kunci_target = mapping_kunci[pilihan_kolom]
-                        fungsi_validasi = buat_fungsi_validasi_kustom(kunci_target, pilihan_kondisi, input_pembanding)
-                        st.session_state['aturan_kustom'].append({"nama": input_nama_ind, "periksa": fungsi_validasi})
-                        st.success(f"Berhasil didaftarkan!")
-                        st.rerun()
-        
-        # Tampilkan daftar aturan kustom aktif jika ada dengan visual yang rapi
+    st.markdown("---")
+    st.markdown("### 🛠️ Indikator Kustom")
+    with st.expander("✨ Tambah Aturan Baru", expanded=False):
+        with st.form("form_tambah_aturan"):
+            input_nama_ind = st.text_input("Nama Indikator", placeholder="Digit NIK wajib 16")
+            pilihan_kolom = st.selectbox("Kolom", ["NIK", "ID Klien", "Umur", "Lembaga SSR", "Kode Petugas", "Lokasi Outreach / Jenis Sosial Media", "Informasi Yang diberikan", "Rujukan"])
+            pilihan_kondisi = st.selectbox("Error Jika:", ["Panjang karakter tidak sama dengan (!=)", "Panjang karakter kurang dari ( < )", "Kosong / Blank", "Mengandung teks tertentu", "Sama dengan teks/angka tertentu"])
+            input_pembanding = st.text_input("Pembanding", placeholder="Contoh: 16")
+            submit_rule = st.form_submit_button("➕ Daftarkan")
+            
+            if submit_rule:
+                if not input_nama_ind: st.error("Nama wajib diisi!")
+                elif "Kosong" not in pilihan_kondisi and not input_pembanding: st.error("Nilai wajib diisi!")
+                else:
+                    mapping_kunci = {"NIK": "nik_clean", "ID Klien": "id_clean", "Umur": "umur", "Lembaga SSR": "v_ssr", "Kode Petugas": "v_petugas", "Lokasi Outreach / Jenis Sosial Media": "lokasi", "Informasi Yang diberikan": "info_diberikan", "Rujukan": "rujukan"}
+                    kunci_target = mapping_kunci[pilihan_kolom]
+                    fungsi_validasi = buat_fungsi_validasi_kustom(kunci_target, pilihan_kondisi, input_pembanding)
+                    st.session_state['aturan_kustom'].append({"nama": input_nama_ind, "periksa": fungsi_validasi})
+                    st.success(f"Ditambahkan: '{input_nama_ind}'")
+                    
         if st.session_state['aturan_kustom']:
-            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-            with st.expander(f"📋 Aturan Aktif ({len(st.session_state['aturan_kustom'])} Terdaftar)", expanded=True):
-                for idx, r_kustom in enumerate(st.session_state['aturan_kustom']):
-                    st.markdown(f"<div style='font-size: 0.85rem; color: #cbd5e1; padding: 4px 0;'>📌 {r_kustom['nama']}</div>", unsafe_allow_html=True)
+            for idx, r_kustom in enumerate(st.session_state['aturan_kustom']):
+                st.caption(f"{idx+1}. {r_kustom['nama']}")
+            if st.button("🗑️ Reset Aturan"):
+                st.session_state['aturan_kustom'] = []
+                st.rerun()
                 
-                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                if st.button("🗑️ Bersihkan Semua Aturan", use_container_width=True, type="secondary"):
-                    st.session_state['aturan_kustom'] = []
-                    st.rerun()
-
-    # KELOMPOK 3: ACTION BUTTON (Ditempatkan di paling bawah dengan garis pemisah yang jelas)
-    st.markdown("""
-        <div style="margin-top: 35px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-        </div>
-    """, unsafe_allow_html=True)
-    
+    st.markdown("<br>", unsafe_allow_html=True)
     tombol_proses = st.button("🚀 Jalankan Penelaahan", type="primary", use_container_width=True)
+
 # ==========================================================
 # 3. ENGINE VALIDASI UTAMA
 # ==========================================================
