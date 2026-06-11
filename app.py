@@ -330,10 +330,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     id_counts = df.iloc[start_row_idx:]['ID Klien'].astype(str).str.strip().value_counts().to_dict()
     df['id_mapped'] = df['ID Klien'].astype(str).str.replace("'", "").str.strip()
     
-    # Hitung total logistik untuk setiap ID Klien
-    df['total_logistik'] = df['log_kie'] + df['log_kon'] + df['log_pel'] + df['log_jar'] + df['log_swab']
-    dict_total_logistik_per_id = df.groupby('id_mapped')['total_logistik'].sum().to_dict()
-    
     def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
     def periksa_rujukan(x): return '2' in str(x).replace("'", "").replace(" ", "").split(',')
 
