@@ -12,7 +12,7 @@ except ModuleNotFoundError:
     HAS_SUPABASE = False
 
 # ==========================================================
-# 0. KONFIGURASI UTAMA & TEMA GLASSMORPHISM
+# 0. KONFIGURASI UTAMA & TEMA GLASSMORPHISM (DIPERBAIKI)
 # ==========================================================
 st.set_page_config(page_title="Executive Review - PKBI Jabar", page_icon="📊", layout="wide")
 
@@ -21,30 +21,39 @@ def set_modern_theme():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    /* 1. Menerapkan font hanya pada elemen teks teks umum, bukan elemen ikon native Streamlit */
-    .stApp, p, span, label, h1, h2, h3, h4 {
-        font-family: 'Inter', sans-serif !important;
+    /* 1. Menerapkan font HANYA pada elemen aplikasi secara aman */
+    html, body, .stApp {
+        font-family: 'Inter', sans-serif;
     }
     
+    /* PENTING: Mengembalikan aturan font khusus untuk Material Icons agar panah sidebar tidak menjadi teks */
+    i, .material-icons, .material-symbols-rounded, [class^="stIcon"], [class*="icon"] {
+        font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
+    }
+
     /* 2. Mengubah background utama aplikasi */
     .stApp {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
     }
+    
+    /* 3. Menormalkan Sidebar agar tidak berbayang */
+    [data-testid="stSidebar"] {
+        background-color: #0f172a !important;
+    }
 
-    /* 3. ISOLASI: Efek Glassmorphism hanya diaplikasikan pada CONTAINER UTAMA DASHBOARD, */
-    /* tidak akan membocori elemen sidebar, uploader, atau expander lagi */
-    .main-dashboard-content {
-        background: rgba(255, 255, 255, 0.03) !important;
-        backdrop-filter: blur(12px) !important;
-        -webkit-backdrop-filter: blur(12px) !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        border-radius: 16px !important;
-        padding: 2rem !important;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2) !important;
+    /* 4. ISOLASI KETAT: Efek Glassmorphism khusus untuk container utama buatan kita */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
         margin-bottom: 20px;
     }
     
-    /* 4. Mempercantik struktur Tabs agar kontras */
+    /* 5. Mempercantik struktur Tabs agar kontras dengan tema gelap */
     .stTabs [data-baseweb="tab-list"] {
         background-color: transparent !important;
     }
@@ -56,20 +65,20 @@ def set_modern_theme():
         border-bottom-color: #38bdf8 !important;
     }
 
-    /* 5. Pewarnaan Teks Tipografi Eksekutif */
+    /* 6. Pewarnaan Teks Tipografi Eksekutif */
     h1, h2, h3, h4, .main-title { color: #f8fafc !important; }
     p, span, label, .sub-title { color: #cbd5e1 !important; }
     
     .main-title { font-size: 2.2rem; font-weight: 800; margin-bottom: 0.2rem; letter-spacing: -0.5px;}
     .sub-title { font-size: 1.1rem; color: #94a3b8 !important; margin-bottom: 2rem; font-weight: 400;}
     
-    /* 6. Penyesuaian Angka Metrik */
+    /* 7. Penyesuaian Angka Metrik */
     [data-testid="stMetricValue"] { color: #38bdf8 !important; font-weight: 700; }
     [data-testid="stMetricDelta"] { font-weight: 500; }
     </style>
     """, unsafe_allow_html=True)
 
-# Panggil fungsi tema
+# Panggil fungsi tema yang sudah diperbaiki
 set_modern_theme()
 
 # Manajemen Default State
@@ -94,7 +103,9 @@ supabase = init_supabase()
 st.markdown('<div class="main-title">📊 Executive Review Dashboard</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu.</div>', unsafe_allow_html=True)
 
-# Helper Function
+# ==========================================================
+# FUNGSI HELPER
+# ==========================================================
 def cek_kode(teks_kolom, kode_target):
     if pd.isna(teks_kolom): return False
     clean_str = str(teks_kolom).replace("'", "").replace(" ", "")
@@ -113,6 +124,18 @@ def buat_fungsi_validasi_kustom(target, kondisi, pembanding):
     elif kondisi == "Sama dengan teks/angka tertentu":
         return lambda c: str(c.get(target, '')).strip().lower() == pembanding.strip().lower()
     return lambda c: False
+
+def hitung_dan_ambil_log_db():
+    dict_revisi, dict_justifikasi = {}, {}
+    if supabase:
+        try:
+            res = supabase.table("log_validasi_review").select("ssr, tanggal, id_klien, indikator_kesalahan, is_revisi, justifikasi").execute()
+            for r in res.data:
+                key = f"{str(r['ssr']).upper()}_{str(r['tanggal'])}_{str(r['id_klien'])}_{str(r['indikator_kesalahan'])}"
+                dict_revisi[key] = r['is_revisi']
+                if r['justifikasi']: dict_justifikasi[key] = r['justifikasi']
+        except Exception: pass
+    return dict_revisi, dict_justifikasi
 
 # ==========================================================
 # 1. ATURAN VALIDASI BAWAAN (ENGINE FLEKSIBEL)
@@ -164,54 +187,59 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Bukan penasun rujukan 3,4", "periksa": lambda c: not c['is_pwid'] and (cek_kode(c['rujukan'], '3') or cek_kode(c['rujukan'], '4'))}
 ]
 
-def hitung_dan_ambil_log_db():
-    dict_revisi, dict_justifikasi = {}, {}
-    if supabase:
-        try:
-            res = supabase.table("log_validasi_review").select("ssr, tanggal, id_klien, indikator_kesalahan, is_revisi, justifikasi").execute()
-            for r in res.data:
-                key = f"{str(r['ssr']).upper()}_{str(r['tanggal'])}_{str(r['id_klien'])}_{str(r['indikator_kesalahan'])}"
-                dict_revisi[key] = r['is_revisi']
-                if r['justifikasi']: dict_justifikasi[key] = r['justifikasi']
-        except Exception: pass
-    return dict_revisi, dict_justifikasi
-
 # ==========================================================
-# 2. PANEL SIDEBAR (UPLOAD & RULE BUILDER)
+# 2. PANEL SIDEBAR (UPLOAD & RULE BUILDER - OPTIMIZED UI)
 # ==========================================================
 with st.sidebar:
-    st.markdown("### 📁 Menu Unggah Berkas")
-    file_referensi = st.file_uploader("1️⃣ Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"])
-    files_review = st.file_uploader("2️⃣ Raw Data Penjangkauan", type=["xlsx", "csv"], accept_multiple_files=True)
+    st.markdown("""
+        <div style="padding: 10px 0px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;">
+            <h3 style='margin: 0; color: #f8fafc; font-size: 1.35rem;'>🛠️ Control Panel</h3>
+            <p style='margin: 5px 0 0 0; color: #94a3b8; font-size: 0.85rem;'>Manajemen data & indikator review</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    st.markdown("---")
-    st.markdown("### 🛠️ Indikator Kustom")
-    with st.expander("✨ Tambah Aturan Baru", expanded=False):
-        with st.form("form_tambah_aturan"):
-            input_nama_ind = st.text_input("Nama Indikator", placeholder="Digit NIK wajib 16")
-            pilihan_kolom = st.selectbox("Kolom", ["NIK", "ID Klien", "Umur", "Lembaga SSR", "Kode Petugas", "Lokasi Outreach / Jenis Sosial Media", "Informasi Yang diberikan", "Rujukan"])
-            pilihan_kondisi = st.selectbox("Error Jika:", ["Panjang karakter tidak sama dengan (!=)", "Panjang karakter kurang dari ( < )", "Kosong / Blank", "Mengandung teks tertentu", "Sama dengan teks/angka tertentu"])
-            input_pembanding = st.text_input("Pembanding", placeholder="Contoh: 16")
-            submit_rule = st.form_submit_button("➕ Daftarkan")
-            
-            if submit_rule:
-                if not input_nama_ind: st.error("Nama wajib diisi!")
-                elif "Kosong" not in pilihan_kondisi and not input_pembanding: st.error("Nilai wajib diisi!")
-                else:
-                    mapping_kunci = {"NIK": "nik_clean", "ID Klien": "id_clean", "Umur": "umur", "Lembaga SSR": "v_ssr", "Kode Petugas": "v_petugas", "Lokasi Outreach / Jenis Sosial Media": "lokasi", "Informasi Yang diberikan": "info_diberikan", "Rujukan": "rujukan"}
-                    kunci_target = mapping_kunci[pilihan_kolom]
-                    fungsi_validasi = buat_fungsi_validasi_kustom(kunci_target, pilihan_kondisi, input_pembanding)
-                    st.session_state['aturan_kustom'].append({"nama": input_nama_ind, "periksa": fungsi_validasi})
-                    st.success(f"Ditambahkan: '{input_nama_ind}'")
-                    
-        if st.session_state['aturan_kustom']:
-            for idx, r_kustom in enumerate(st.session_state['aturan_kustom']):
-                st.caption(f"{idx+1}. {r_kustom['nama']}")
-            if st.button("🗑️ Reset Aturan"):
-                st.session_state['aturan_kustom'] = []
-                st.rerun()
+    with st.container():
+        st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>📁 MANAJEMEN BERKAS</b>", unsafe_allow_html=True)
+        file_referensi = st.file_uploader("Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"], help="Opsional: Digunakan sebagai basis data rujukan konfirmasi")
+        files_review = st.file_uploader("Raw Data Penjangkauan (Multi-File)", type=["xlsx", "csv"], accept_multiple_files=True, help="Wajib: Anda bisa memilih lebih dari satu file sekaligus")
+    
+    st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
+    
+    with st.container():
+        st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>⚙️ PARAMETER VALIDASI</b>", unsafe_allow_html=True)
+        
+        with st.expander("✨ Buat Aturan Kustom Baru", expanded=False):
+            with st.form("form_tambah_aturan", clear_on_submit=True):
+                input_nama_ind = st.text_input("Nama Indikator", placeholder="Misal: Digit NIK wajib 16")
+                pilihan_kolom = st.selectbox("Kolom Target", ["NIK", "ID Klien", "Umur", "Lembaga SSR", "Kode Petugas", "Lokasi Outreach / Jenis Sosial Media", "Informasi Yang diberikan", "Rujukan"])
+                pilihan_kondisi = st.selectbox("Kondisi Error Jika:", ["Panjang karakter tidak sama dengan (!=)", "Panjang karakter kurang dari ( < )", "Kosong / Blank", "Mengandung teks tertentu", "Sama dengan teks/angka tertentu"])
+                input_pembanding = st.text_input("Nilai Pembanding", placeholder="Contoh: 16 atau Teks tertentu")
                 
-    st.markdown("<br>", unsafe_allow_html=True)
+                submit_rule = st.form_submit_button("➕ Daftarkan Aturan", use_container_width=True)
+                
+                if submit_rule:
+                    if not input_nama_ind: st.error("Nama wajib diisi!")
+                    elif "Kosong" not in pilihan_kondisi and not input_pembanding: st.error("Nilai pembanding wajib diisi!")
+                    else:
+                        mapping_kunci = {"NIK": "nik_clean", "ID Klien": "id_clean", "Umur": "umur", "Lembaga SSR": "v_ssr", "Kode Petugas": "v_petugas", "Lokasi Outreach / Jenis Sosial Media": "lokasi", "Informasi Yang diberikan": "info_diberikan", "Rujukan": "rujukan"}
+                        kunci_target = mapping_kunci[pilihan_kolom]
+                        fungsi_validasi = buat_fungsi_validasi_kustom(kunci_target, pilihan_kondisi, input_pembanding)
+                        st.session_state['aturan_kustom'].append({"nama": input_nama_ind, "periksa": fungsi_validasi})
+                        st.success(f"Berhasil didaftarkan!")
+                        st.rerun()
+        
+        if st.session_state['aturan_kustom']:
+            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+            with st.expander(f"📋 Aturan Aktif ({len(st.session_state['aturan_kustom'])} Terdaftar)", expanded=True):
+                for idx, r_kustom in enumerate(st.session_state['aturan_kustom']):
+                    st.markdown(f"<div style='font-size: 0.85rem; color: #cbd5e1; padding: 4px 0;'>📌 {r_kustom['nama']}</div>", unsafe_allow_html=True)
+                
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                if st.button("🗑️ Bersihkan Semua Aturan", use_container_width=True, type="secondary"):
+                    st.session_state['aturan_kustom'] = []
+                    st.rerun()
+
+    st.markdown("""<div style="margin-top: 35px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>""", unsafe_allow_html=True)
     tombol_proses = st.button("🚀 Jalankan Penelaahan", type="primary", use_container_width=True)
 
 # ==========================================================
@@ -251,7 +279,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 if nik_r and nik_r != 'nan' and nik_r != '' and ssr_r and ssr_r != 'nan': ref_nik_ssr_to_id[f"{nik_r}_{ssr_r}"] = id_r
 
     id_counts = df.iloc[start_row_idx:]['ID Klien'].astype(str).str.strip().value_counts().to_dict()
-
     df['id_mapped'] = df['ID Klien'].astype(str).str.replace("'", "").str.strip()
     
     def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
@@ -438,8 +465,8 @@ if st.session_state['proses_selesai']:
     tot_err = len(st.session_state['df_tabel_bawah']) if st.session_state['df_tabel_bawah'] is not None else 0
     akurasi = 100.0 if tot_data == 0 else max(0, 100 - (tot_err / tot_data * 100))
     
-    # <<< BUKA KONTANER GLASSMORPHISMNYA DI SINI >>>
-    st.markdown('<div class="main-dashboard-content">', unsafe_allow_html=True)
+    # <<< BUKA KONTANER GLASSMORPHISM >>>
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     
     # --- BARIS 1: METRIK UTAMA ---
     col1, col2, col3 = st.columns(3)
@@ -462,20 +489,53 @@ if st.session_state['proses_selesai']:
             for col in df_atas_view.columns:
                 if col != 'INDIKATOR KESALAHAN DATA': 
                     df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
-            st.dataframe(df_atas_view, use_container_width=True)
+            st.dataframe(
+                df_atas_view,
+                use_container_width=True,
+                column_config={
+                    "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
+                    "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100)
+                }
+            )
         else:
             st.info("✨ Tidak ada rekapan karena data bersih.")
 
     with tab2:
-        # ... (Biarkan kode grafik area chart/supabase Anda tetap seperti semula di sini) ...
-        st.write("Grafik tren analisis.")
+        if supabase:
+            try:
+                res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
+                if res_tren.data:
+                    df_tren = pd.DataFrame(res_tren.data)
+                    df_tren['Tanggal'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
+                    
+                    col_kiri, col_kanan = st.columns([1, 2])
+                    with col_kiri:
+                        daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
+                        pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr)
+                    
+                    if pilihan_ssr == "SEMUA":
+                        df_pivot = df_tren.pivot_table(index='Tanggal', aggfunc='size')
+                        st.markdown("<br><p>📈 Tren total kesalahan seluruh SSR per tanggal:</p>", unsafe_allow_html=True)
+                    else:
+                        df_filtered = df_tren[df_tren['ssr'] == pilihan_ssr]
+                        df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size').fillna(0)
+                        st.markdown(f"<br><p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
+                    
+                    if not df_pivot.empty:
+                        if isinstance(df_pivot, pd.Series): df_pivot = df_pivot.to_frame(name="Total Kesalahan")
+                        st.area_chart(df_pivot)
+                    else:
+                        st.info("Data belum tersedia untuk filter ini.")
+                else:
+                    st.info("Belum ada rekam jejak log review tersimpan di database.")
+            except Exception: pass
 
-    # <<< TUTUP KONTAINER GLASSMORPHISMNYA DI SINI >>>
+    # <<< TUTUP KONTANER GLASSMORPHISM >>>
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # --- BARIS 3: DETAIL DATA (EDITOR HASIL) ---
+    # --- BARIS 3: DETAIL DATA (Berada di luar kontainer kaca agar tabel besar leluasa) ---
     st.markdown("### 🔍 Hasil Review Penjangkauan (Detail Manual)")
     if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_tabel_bawah'].empty:
         kolom_susunan = [
