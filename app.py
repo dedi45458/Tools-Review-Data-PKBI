@@ -467,6 +467,14 @@ if st.session_state['proses_selesai']:
     
     # <<< BUKA KONTANER GLASSMORPHISM >>>
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+
+    # --- TAMBAHKAN BARIS INI ---
+    tanggal_hari_ini = datetime.now().strftime('%d %B %Y')
+    st.markdown(f"""
+        <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
+            📅 <b>Executive Review</b> | Tanggal: {tanggal_hari_ini}
+        </p>
+    """, unsafe_allow_html=True)
     
     # --- BARIS 1: METRIK UTAMA ---
     col1, col2, col3 = st.columns(3)
