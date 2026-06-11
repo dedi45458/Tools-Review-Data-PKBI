@@ -12,9 +12,61 @@ except ModuleNotFoundError:
     HAS_SUPABASE = False
 
 # ==========================================================
-# 0. KONFIGURASI UTAMA & INISIALISASI SESSION STATE
+# 0. KONFIGURASI UTAMA & TEMA GLASSMORPHISM
 # ==========================================================
-st.set_page_config(page_title="Data Quality Review - PKBI Jabar", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Executive Review - PKBI Jabar", page_icon="📊", layout="wide")
+
+def set_modern_theme():
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    /* Mengubah font & background utama aplikasi */
+    html, body, [class*="st-"], .stApp {
+        font-family: 'Inter', sans-serif;
+    }
+    .stApp {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+    }
+
+    /* Efek Glassmorphism pada kontainer/kartu utama */
+    [data-testid="stVerticalBlockOuter"] {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Mempercantik Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        color: #94a3b8;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #38bdf8 !important;
+        border-bottom-color: #38bdf8 !important;
+    }
+
+    /* Warna Teks Elegan */
+    h1, h2, h3, h4, .main-title { color: #f8fafc !important; }
+    p, span, label, .sub-title { color: #cbd5e1 !important; }
+    
+    .main-title { font-size: 2.2rem; font-weight: 800; margin-bottom: 0.2rem; letter-spacing: -0.5px;}
+    .sub-title { font-size: 1.1rem; color: #94a3b8 !important; margin-bottom: 2rem; font-weight: 400;}
+    
+    /* Penyesuaian Angka Metrik */
+    [data-testid="stMetricValue"] { color: #38bdf8 !important; font-weight: 700; }
+    [data-testid="stMetricDelta"] { font-weight: 500; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Panggil fungsi tema
+set_modern_theme()
 
 # Manajemen Default State
 if 'total_entri' not in st.session_state: st.session_state['total_entri'] = 0
@@ -35,33 +87,8 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Modern Custom UI CSS & Mobile Responsiveness
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    html, body, [data-testid="stSidebarNav"] { font-family: 'Inter', sans-serif; }
-    
-    .main-title { 
-        font-size: 2.4rem; font-weight: 800; 
-        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.3rem; 
-    }
-    .sub-title { font-size: 1.1rem; color: #6B7280; margin-bottom: 2rem; font-weight: 400; }
-    h4 { font-weight: 700; color: #111827; margin-top: 1.8rem; font-size: 1.3rem; }
-    .stButton>button { border-radius: 10px; font-weight: 600; padding: 0.6rem 1.5rem; transition: all 0.2s ease; }
-    .stButton>button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); }
-    
-    @media (max-width: 768px) {
-        .main-title { font-size: 1.7rem !important; }
-        .sub-title { font-size: 0.95rem !important; }
-        .stMetric { padding: 0.5rem !important; }
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.markdown('<div class="main-title">📊 Tools Review Data Massal</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Sistem otomatisasi penelaahan kualitas data Penjangkauan dan Rujukan PKBI Jawa Barat berbasis matriks validasi terbaru.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">📊 Executive Review Dashboard</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu.</div>', unsafe_allow_html=True)
 
 # Helper Function
 def cek_kode(teks_kolom, kode_target):
@@ -150,55 +177,41 @@ def hitung_dan_ambil_log_db():
 # ==========================================================
 with st.sidebar:
     st.markdown("### 📁 Menu Unggah Berkas")
-    file_referensi = st.file_uploader("1️⃣ Data HIV+ Semester / Tahun Lalu (.xlsx)", type=["xlsx"])
-    st.markdown("---")
-    # Diperbarui agar mendukung upload file Excel (.xlsx) dan CSV (.csv) untuk data massal
-    files_review = st.file_uploader("2️⃣ Raw Data Penjangkauan / Rujukan", type=["xlsx", "csv"], accept_multiple_files=True)
+    file_referensi = st.file_uploader("1️⃣ Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"])
+    files_review = st.file_uploader("2️⃣ Raw Data Penjangkauan", type=["xlsx", "csv"], accept_multiple_files=True)
     
     st.markdown("---")
-    st.markdown("### 🛠️ Tambah Indikator Mandiri")
-    with st.expander("✨ Form Tambah Aturan Baru", expanded=False):
+    st.markdown("### 🛠️ Indikator Kustom")
+    with st.expander("✨ Tambah Aturan Baru", expanded=False):
         with st.form("form_tambah_aturan"):
-            input_nama_ind = st.text_input("Nama Indikator Kesalahan", placeholder="Contoh: Digit NIK wajib 16 karakter")
-            pilihan_kolom = st.selectbox("Kolom yang Diperiksa", [
-                "NIK", "ID Klien", "Umur", "Lembaga SSR", "Kode Petugas", 
-                "Lokasi Outreach / Jenis Sosial Media", "Informasi Yang diberikan", "Rujukan"
-            ])
-            pilihan_kondisi = st.selectbox("Kondisi Error Jika:", [
-                "Panjang karakter tidak sama dengan (!=)",
-                "Panjang karakter kurang dari ( < )",
-                "Kosong / Blank",
-                "Mengandung teks tertentu",
-                "Sama dengan teks/angka tertentu"
-            ])
-            input_pembanding = st.text_input("Nilai Batas / Kata Kunci Pembanding", placeholder="Contoh: 16 atau nan")
-            submit_rule = st.form_submit_button("➕ Daftarkan Indikator")
+            input_nama_ind = st.text_input("Nama Indikator", placeholder="Digit NIK wajib 16")
+            pilihan_kolom = st.selectbox("Kolom", ["NIK", "ID Klien", "Umur", "Lembaga SSR", "Kode Petugas", "Lokasi Outreach / Jenis Sosial Media", "Informasi Yang diberikan", "Rujukan"])
+            pilihan_kondisi = st.selectbox("Error Jika:", ["Panjang karakter tidak sama dengan (!=)", "Panjang karakter kurang dari ( < )", "Kosong / Blank", "Mengandung teks tertentu", "Sama dengan teks/angka tertentu"])
+            input_pembanding = st.text_input("Pembanding", placeholder="Contoh: 16")
+            submit_rule = st.form_submit_button("➕ Daftarkan")
             
             if submit_rule:
-                if not input_nama_ind: st.error("Nama indikator kesalahan wajib diisi!")
-                elif "Kosong" not in pilihan_kondisi and not input_pembanding: st.error("Nilai batas pembanding wajib diisi!")
+                if not input_nama_ind: st.error("Nama wajib diisi!")
+                elif "Kosong" not in pilihan_kondisi and not input_pembanding: st.error("Nilai wajib diisi!")
                 else:
-                    mapping_kunci = {
-                        "NIK": "nik_clean", "ID Klien": "id_clean", "Umur": "umur", 
-                        "Lembaga SSR": "v_ssr", "Kode Petugas": "v_petugas", 
-                        "Lokasi Outreach / Jenis Sosial Media": "lokasi", 
-                        "Informasi Yang diberikan": "info_diberikan", "Rujukan": "rujukan"
-                    }
+                    mapping_kunci = {"NIK": "nik_clean", "ID Klien": "id_clean", "Umur": "umur", "Lembaga SSR": "v_ssr", "Kode Petugas": "v_petugas", "Lokasi Outreach / Jenis Sosial Media": "lokasi", "Informasi Yang diberikan": "info_diberikan", "Rujukan": "rujukan"}
                     kunci_target = mapping_kunci[pilihan_kolom]
                     fungsi_validasi = buat_fungsi_validasi_kustom(kunci_target, pilihan_kondisi, input_pembanding)
                     st.session_state['aturan_kustom'].append({"nama": input_nama_ind, "periksa": fungsi_validasi})
-                    st.success(f"Berhasil menambahkan indikator: '{input_nama_ind}'")
+                    st.success(f"Ditambahkan: '{input_nama_ind}'")
                     
         if st.session_state['aturan_kustom']:
-            st.markdown("**Aturan kustom yang aktif saat ini:**")
             for idx, r_kustom in enumerate(st.session_state['aturan_kustom']):
                 st.caption(f"{idx+1}. {r_kustom['nama']}")
-            if st.button("🗑️ Reset Semua Aturan Kustom"):
+            if st.button("🗑️ Reset Aturan"):
                 st.session_state['aturan_kustom'] = []
                 st.rerun()
+                
+    st.markdown("<br>", unsafe_allow_html=True)
+    tombol_proses = st.button("🚀 Jalankan Penelaahan", type="primary", use_container_width=True)
 
 # ==========================================================
-# 3. ENGINE VALIDASI UTAMA (OPTIMIZED O(1))
+# 3. ENGINE VALIDASI UTAMA
 # ==========================================================
 def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
@@ -235,13 +248,10 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     id_counts = df.iloc[start_row_idx:]['ID Klien'].astype(str).str.strip().value_counts().to_dict()
 
-    # --- PRE-CALCULATION UNTUK MENCEGAH BOTTLENECK ---
     df['id_mapped'] = df['ID Klien'].astype(str).str.replace("'", "").str.strip()
     
-    def periksa_hiv(x):
-        return '1' in str(x).replace("'", "").replace(" ", "").split(',')
-    def periksa_rujukan(x):
-        return '2' in str(x).replace("'", "").replace(" ", "").split(',')
+    def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
+    def periksa_rujukan(x): return '2' in str(x).replace("'", "").replace(" ", "").split(',')
 
     df['is_info_hiv'] = df['Informasi Yang diberikan'].apply(periksa_hiv) | df['Jenis Kegiatan'].apply(periksa_hiv)
     df['is_rujuk_tes'] = df['Rujukan'].apply(periksa_rujukan)
@@ -340,17 +350,13 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     return pd.DataFrame(list_kesalahan)
 
 # ==========================================================
-# 4. TOMBOL EKSEKUSI UTAMA
+# 4. LOGIKA TOMBOL EKSEKUSI
 # ==========================================================
-col_btn, _ = st.columns([1, 2])
-with col_btn:
-    tombol_proses = st.button("🚀 Jalankan Penelaahan Laporan", type="primary", use_container_width=True)
-
 if tombol_proses:
     if not files_review:
         st.error("⚠️ Silakan unggah berkas Raw Data terlebih dahulu di sidebar!")
     else:
-        with st.spinner("Sedang memproses validasi data, mohon tunggu... (Mode Cepat Aktif)"):
+        with st.spinner("Sedang memproses validasi data, mohon tunggu..."):
             df_ref = None
             if file_referensi:
                 try: df_ref = pd.read_excel(file_referensi)
@@ -361,12 +367,7 @@ if tombol_proses:
 
             for f in files_review:
                 try:
-                    # Sistem otomatis mendeteksi ekstensi CSV atau Excel secara cerdas
-                    if f.name.endswith('.csv'):
-                        df_target = pd.read_csv(f, low_memory=False)
-                    else:
-                        df_target = pd.read_excel(f)
-                        
+                    df_target = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     total_records += len(df_target)
                     df_res = jalankan_review_data(df_target, df_ref, nama_file=f.name)
                     if not df_res.empty:
@@ -380,12 +381,10 @@ if tombol_proses:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
                 active_ssrs = sorted(list(detected_ssrs))
                 total_seluruh_kesalahan = len(df_bawah)
-                
                 DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state['aturan_kustom'])]
                 
                 matrix_rows = []
-                list_untuk_db_tren = [] # Menampung log akumulasi tren
-                waktu_sekarang_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                list_batch_tren = []
                 
                 for ind in DAFTAR_INDIKATOR_AKTIF:
                     r_dict = {"INDIKATOR KESALAHAN DATA": ind}
@@ -406,10 +405,8 @@ if tombol_proses:
                 st.session_state['df_tabel_atas'] = df_atas
                 st.session_state['df_tabel_bawah'] = df_bawah
                 
-                # INTEGRASI TREN: Kirim ringkasan kesalahan per baris ke Supabase
                 if supabase and len(df_bawah) > 0:
                     try:
-                        list_batch_tren = []
                         for _, row_err in df_bawah.iterrows():
                             list_batch_tren.append({
                                 "ssr": str(row_err['Lembaga SSR']),
@@ -419,11 +416,8 @@ if tombol_proses:
                                 "is_revisi": False,
                                 "justifikasi": ""
                             })
-                        # Menggunakan upsert agar tidak melanggar constraint unik jika di-review ulang
                         supabase.table("log_validasi_review").upsert(list_batch_tren, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
-                        st.sidebar.success("📈 Riwayat tren review berhasil direkam ke database!")
-                    except Exception as e:
-                        st.sidebar.error(f"⚠️ Gagal mencatat tren: {e}")
+                    except Exception: pass
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
@@ -431,51 +425,89 @@ if tombol_proses:
             st.session_state['proses_selesai'] = True
 
 # ==========================================================
-# 5. BLOCK OUTPUT INTERFACE UTAMA STREAMLIT
+# 5. RENDER LAYOUT EXECUTIVE DASHBOARD (GLASSMORPHISM)
 # ==========================================================
 if st.session_state['proses_selesai']:
-    st.markdown("### 📊 Dashboard Hasil Review Analisis")
     
-    with st.container(border=True):
-        m1, m2 = st.columns([1, 1])
-        m1.metric("Total Entri Data Diperiksa", f"{st.session_state['total_entri']} Baris")
-        tot_err = len(st.session_state['df_tabel_bawah']) if st.session_state['df_tabel_bawah'] is not None else 0
-        m2.metric("Total Temuan Log Kesalahan", f"{tot_err} Kasus")
-
-    # --- TABEL ATAS: REKAP HASIL REVIEW DATA PER SSR ---
-    st.markdown("#### 📊 Rekap Hasil Review Data per SSR")
-    df_atas_view = st.session_state['df_tabel_atas'].copy() if st.session_state['df_tabel_atas'] is not None else pd.DataFrame()
+    # Kalkulasi Metrik Utama
+    tot_data = st.session_state['total_entri']
+    tot_err = len(st.session_state['df_tabel_bawah']) if st.session_state['df_tabel_bawah'] is not None else 0
+    akurasi = 100.0 if tot_data == 0 else max(0, 100 - (tot_err / tot_data * 100))
     
-    if not df_atas_view.empty:
-        # PENTING: Paksa konversi ke numerik agar angka muncul
-        for col in df_atas_view.columns:
-            if col != 'INDIKATOR KESALAHAN DATA': # Kecuali kolom teks
-                df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
-        
-        st.dataframe(
-            df_atas_view,
-            use_container_width=True,
-            column_config={
-                "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
-                "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100)
-            }
-        )
-    else:
-        st.info("✨ Tidak ada rekapan karena data bersih.")
+    # --- BARIS 1: METRIK UTAMA (KARTU KACA) ---
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="Total Data Diproses", value=f"{tot_data:,}")
+    with col2:
+        st.metric(label="Total Temuan Log", value=f"{tot_err:,}", delta="Data Perlu Perhatian", delta_color="inverse")
+    with col3:
+        st.metric(label="Tingkat Akurasi", value=f"{akurasi:.1f}%", delta="Berdasarkan Validasi")
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- TABEL BAWAH: HASIL REVIEW PENJANGKAUAN ---
-    st.markdown("#### Hasil Review Penjangkauan")
+    # --- BARIS 2: TABS MATRIKS DAN TREN ---
+    tab1, tab2 = st.tabs(["📋 Rekap Kesalahan (Matriks)", "📈 Analisis Tren Semester"])
+
+    with tab1:
+        st.markdown("#### Rekap Hasil Review Data per SSR")
+        df_atas_view = st.session_state['df_tabel_atas'].copy() if st.session_state['df_tabel_atas'] is not None else pd.DataFrame()
+        if not df_atas_view.empty:
+            for col in df_atas_view.columns:
+                if col != 'INDIKATOR KESALAHAN DATA': 
+                    df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
+            
+            # Matriks Dataframe Streamlit otomatis menyesuaikan tema gelap
+            st.dataframe(
+                df_atas_view,
+                use_container_width=True,
+                column_config={
+                    "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
+                    "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100)
+                }
+            )
+        else:
+            st.info("✨ Tidak ada rekapan karena data bersih.")
+
+    with tab2:
+        if supabase:
+            try:
+                res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
+                if res_tren.data:
+                    df_tren = pd.DataFrame(res_tren.data)
+                    df_tren['Tanggal'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
+                    
+                    col_kiri, col_kanan = st.columns([1, 2])
+                    with col_kiri:
+                        daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
+                        pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr)
+                    
+                    if pilihan_ssr == "SEMUA":
+                        df_pivot = df_tren.pivot_table(index='Tanggal', aggfunc='size')
+                        st.markdown("<br><p>📈 Tren total kesalahan seluruh SSR per tanggal:</p>", unsafe_allow_html=True)
+                    else:
+                        df_filtered = df_tren[df_tren['ssr'] == pilihan_ssr]
+                        df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size').fillna(0)
+                        st.markdown(f"<br><p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
+                    
+                    if not df_pivot.empty:
+                        if isinstance(df_pivot, pd.Series): df_pivot = df_pivot.to_frame(name="Total Kesalahan")
+                        # Area chart otomatis mendukung background transparan & warna senada dengan tema gelap
+                        st.area_chart(df_pivot)
+                    else:
+                        st.info("Data belum tersedia untuk filter ini.")
+                else:
+                    st.info("Belum ada rekam jejak log review tersimpan di database.")
+            except Exception: pass
+
+    st.markdown("<br><hr>", unsafe_allow_html=True)
+
+    # --- BARIS 3: DETAIL DATA (EDITOR HASIL) ---
+    st.markdown("### 🔍 Hasil Review Penjangkauan (Detail Manual)")
     if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_tabel_bawah'].empty:
-        
-        # POSISI BARU: INDIKATOR KESALAHAN DATA digeser tepat setelah Tipe Sasaran
         kolom_susunan = [
-            "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", 
-            "Kode Petugas", "Nama Kota", "NIK", "Tipe Sasaran", 
-            "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
+            "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
+            "NIK", "Tipe Sasaran", "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
         ]
-        
         df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
         
         df_hasil_edit = st.data_editor(
@@ -487,10 +519,6 @@ if st.session_state['proses_selesai']:
                 "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
                 "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
                 "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
-                "Kode Petugas": st.column_config.TextColumn("Kode Petugas", width=110),
-                "Nama Kota": st.column_config.TextColumn("Nama Kota", width=130),
-                "NIK": st.column_config.TextColumn("NIK", width=140),
-                "Tipe Sasaran": st.column_config.TextColumn("Tipe Sasaran", width=110),
                 "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
                 "validasi hasil review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
                 "Justifikasi": st.column_config.TextColumn("Justifikasi (Khusus Baris Konfirmasi)", width=280),
@@ -498,89 +526,37 @@ if st.session_state['proses_selesai']:
             disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
         )
         
-        # --- TOMBOL SIMPAN DATABASE ---
+        st.markdown("<br>", unsafe_allow_html=True)
         col_save, _ = st.columns([1, 2])
         with col_save:
-            tombol_simpan = st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True)
-            
-        if tombol_simpan:
-            if not supabase:
-                st.error("Koneksi database tidak tersedia. Periksa status Supabase Anda.")
-            else:
-                sukses_simpan, peringatan_justifikasi = 0, False
-                with st.spinner("Menyimpan data..."):
-                    for idx, row_edit in df_hasil_edit.iterrows():
-                        ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
-                        is_butuh_konfirmasi = "konfirmasi" in ind_text.lower()
-                        text_justifikasi = str(row_edit['Justifikasi']).strip()
-                        
-                        if not is_butuh_konfirmasi and text_justifikasi != "":
-                            peringatan_justifikasi = True
-                            text_justifikasi = "" 
-                        
-                        if row_edit['Pilih'] or text_justifikasi != "":
-                            try:
-                                supabase.table("log_validasi_review").upsert({
-                                    "ssr": str(row_edit['Lembaga SSR']),
-                                    "tanggal": str(row_edit['Tanggal']),
-                                    "id_klien": str(row_edit['ID Klien']),
-                                    "indikator_kesalahan": ind_text,
-                                    "is_revisi": bool(row_edit['Pilih']),
-                                    "justifikasi": text_justifikasi
-                                }, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
-                                sukses_simpan += 1
-                            except Exception: pass
-                        
-                    if peringatan_justifikasi:
-                        st.warning("⚠️ Beberapa teks Justifikasi otomatis diabaikan karena ditaruh pada indikator mutlak (bukan tipe konfirmasi).")
-                    st.success(f"🎉 Sukses memproses {sukses_simpan} baris validasi ke database Supabase!")
-                    st.rerun()
-    else:
-        st.info("✨ Data bersih! Tidak ada kasus validasi pada data ini.")
-
-    # ==========================================================
-    # 6. VISUALISASI GRAFIK TREN HISTORIS KESALAHAN PER INDIKATOR BY SSR
-    # ==========================================================
-    st.markdown("---")
-    st.markdown("### 📈 Ringkasan Tren Historis Kesalahan Data")
-    
-    if supabase:
-        try:
-            # Ambil data
-            res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
-            
-            if res_tren.data:
-                df_tren = pd.DataFrame(res_tren.data)
-                df_tren['Tanggal'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
-                
-                # MEMBATASI LEBAR DROPDOWN DENGAN COLUMNS (agar tidak memenuhi layar)
-                col_kiri, col_kanan = st.columns([1, 2])
-                with col_kiri:
-                    daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].unique().tolist())
-                    pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr)
-                
-                # Logika Filter & Pivot Data
-                if pilihan_ssr == "SEMUA":
-                    # Jika SEMUA, grouping total kesalahan harian (Aggregasi Makro)
-                    df_pivot = df_tren.pivot_table(index='Tanggal', aggfunc='size')
-                    st.write(f"📈 Tren total kesalahan seluruh SSR per tanggal:")
+            if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
+                if not supabase:
+                    st.error("Koneksi database tidak tersedia.")
                 else:
-                    # Jika per SSR, lihat tren berdasarkan detail indikator
-                    df_filtered = df_tren[df_tren['ssr'] == pilihan_ssr]
-                    df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size').fillna(0)
-                    st.write(f"📈 Tren kesalahan untuk: **{pilihan_ssr}**")
-                
-                # Tampilkan grafik dengan Area Chart agar lebih informatif
-                if not df_pivot.empty:
-                    # Memastikan format angka integer agar rapi
-                    if isinstance(df_pivot, pd.Series):
-                        df_pivot = df_pivot.to_frame(name="Total Kesalahan")
-                    
-                    st.area_chart(df_pivot)
-                else:
-                    st.info("Data belum tersedia untuk filter ini.")
-            else:
-                st.info("Belum ada rekam jejak log review tersimpan di database.")
-                
-        except Exception as e:
-            st.error(f"Terjadi kesalahan saat memuat grafik: {e}")
+                    sukses_simpan, peringatan_justifikasi = 0, False
+                    with st.spinner("Menyimpan data..."):
+                        for idx, row_edit in df_hasil_edit.iterrows():
+                            ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
+                            text_justifikasi = str(row_edit['Justifikasi']).strip()
+                            
+                            if "konfirmasi" not in ind_text.lower() and text_justifikasi != "":
+                                peringatan_justifikasi = True
+                                text_justifikasi = "" 
+                            
+                            if row_edit['Pilih'] or text_justifikasi != "":
+                                try:
+                                    supabase.table("log_validasi_review").upsert({
+                                        "ssr": str(row_edit['Lembaga SSR']),
+                                        "tanggal": str(row_edit['Tanggal']),
+                                        "id_klien": str(row_edit['ID Klien']),
+                                        "indikator_kesalahan": ind_text,
+                                        "is_revisi": bool(row_edit['Pilih']),
+                                        "justifikasi": text_justifikasi
+                                    }, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
+                                    sukses_simpan += 1
+                                except Exception: pass
+                            
+                        if peringatan_justifikasi:
+                            st.warning("⚠️ Beberapa teks Justifikasi otomatis diabaikan karena ditaruh pada indikator mutlak (bukan tipe konfirmasi).")
+                        st.success(f"🎉 Sukses memproses {sukses_simpan} baris validasi ke database Supabase!")
+                        st.rerun()
