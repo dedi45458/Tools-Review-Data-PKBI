@@ -546,12 +546,14 @@ if st.session_state['proses_selesai']:
                 
                 res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
                 if res_tren.data:
-                    df_tren = pd.DataFrame(res_tren.data)
+                    # Menggunakan .copy() di awal agar alokasi memori dataframe bersih dan independen
+                    df_tren = pd.DataFrame(res_tren.data).copy()
                     
                     # Pastikan konversi datetime aman dari data null atau korup
                     df_tren['created_at_dt'] = pd.to_datetime(df_tren['created_at'], errors='coerce')
-                    df_tren = df_tren.dropna(subset=['created_at_dt'])
+                    df_tren = df_tren.dropna(subset=['created_at_dt']).copy()
                     
+                    # Membuat kolom tanggal utama
                     df_tren['Tanggal_dt'] = df_tren['created_at_dt'].dt.date
                     df_tren['Tanggal'] = df_tren['Tanggal_dt'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notnull(x) else '')
                     
@@ -565,20 +567,27 @@ if st.session_state['proses_selesai']:
                         
                         with col_filter_ssr:
                             daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
-                            pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_final_perfect_v4")
+                            pilihan_ssr = st.selectbox("🎯 Pilih Lembaga SSR:", daftar_ssr, key="sb_tren_final_perfect_v5")
                             
                         with col_filter_tgl:
-                            # SOLUSI UTAMA: Menghapus min_value & max_value untuk menghindari bug internal Streamlit
+                            # Menghapus min_value & max_value untuk menghindari bug internal Streamlit
                             rentang_tanggal = st.date_input(
                                 "📅 Pilih Rentang Tanggal Analisis:",
                                 value=(min_date_db, max_date_db),
-                                key="input_rentang_tanggal_tren_perfect_v4"
+                                key="input_rentang_tanggal_tren_perfect_v5"
                             )
                         
                         # ======================================================================
-                        # PROSES INTEGRASI FILTER DATA
+                        # PROSES INTEGRASI FILTER DATA (DENGAN PROTEKSI COPIED DATAFRAME)
                         # ======================================================================
-                        df_sumber = df_tren if pilihan_ssr == "SEMUA" else df_tren[df_tren['ssr'] == pilihan_ssr]
+                        if pilihan_ssr == "SEMUA":
+                            df_sumber = df_tren.copy()
+                        else:
+                            df_sumber = df_tren[df_tren['ssr'] == pilihan_ssr].copy()
+                        
+                        # 🔥 PROTEKSI EXTRA GAGALKAN KEYERROR: Jika kolom Tanggal_dt hilang saat slicing, buat ulang instan!
+                        if 'Tanggal_dt' not in df_sumber.columns and not df_sumber.empty:
+                            df_sumber['Tanggal_dt'] = pd.to_datetime(df_sumber['created_at']).dt.date
                         
                         # Filter Berdasarkan Rentang Tanggal (Mendukung rentang penuh maupun klik tanggal tunggal)
                         if isinstance(rentang_tanggal, (tuple, list)):
@@ -654,7 +663,8 @@ if st.session_state['proses_selesai']:
                                     
                             with col_kotak_b:
                                 st.markdown("#### 🟨 Resume Indikator Tipe Konfirmasi")
-                                st.caption("Daftar indikator verifikasi/konfirmasi dengan temuan terbanyak pada rentang waktu terpilih")
+                                text_cap = "Daftar indikator verifikasi/konfirmasi dengan temuan terbanyak pada rentang waktu terpilih"
+                                st.caption(text_cap)
                                 if not df_konfirm.empty:
                                     html_b = "<div style='background-color: rgba(245, 158, 11, 0.08); padding: 15px; border-radius: 10px; border-left: 5px solid #f59e0b; min-height: 250px;'>"
                                     for idx, row in enumerate(df_konfirm.itertuples(), 1):
