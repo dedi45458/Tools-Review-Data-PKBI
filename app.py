@@ -174,7 +174,7 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Lokasi outreach diisi IDKD", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and len(c['lokasi']) == 10 and c['lokasi'][:4].isalpha() and c['lokasi'][4:].isdigit()},
     {"nama": "Lokasi outreach diindikasi kurang spesifik atau kurang detil (digit huruf <17 digit) (konfirmasi)", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and len(c['lokasi']) < 17 and not c['is_vo']},
     {"nama": "Lokasi outreach indikasi diisi nomer HP", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and re.search(r'(08\d{8,11})|(\+62\d{8,11})', c['lokasi'].replace('-', '').replace(' ', ''))},
-    {"nama": "Bukan PWID mendapatkan info 8 atau 9 (LASS, PTRM)", "periksa": lambda c: not c['is_pwid'] and (cek_kode(c['info_diberikan'], '8') or cek_kode(c['info_diberikan'], '9') or cek_kode(c['jns_kegiatan'], '8') or cek_kode(c['jns_kegiatan'], '9'))},
+    {"nama": "Bukan PWID mendapatkan info 8 atau 9 (LASS, PTRM)", "periksa": lambda c: not c['is_pwid'] and (cek_kode(c['info_diberikan'], '8') or cek_kode(c['info_diberikan'], '9'))},
     {"nama": "LSL/TG/PWID menerima informasi PMTC (konfirmasi)", "periksa": lambda c: c['v_tipe_sasaran'] in ['1304', '1301', '1401'] and (cek_kode(c['info_diberikan'], '6') or cek_kode(c['jns_kegiatan'], '6'))},
     
     # TAMBAHAN BARU: Validasi jumlah batas wajar Logistik
@@ -195,10 +195,10 @@ ATURAN_VALIDASI_BAWAAN = [
     
     # PERBAIKAN CBS & PrEP: Sekarang membaca silang dari file Rujukan (melalui context dictionary)
     {"nama": "KD telah menerima layanan CBS tapi tidak ada informasi CBS", "periksa": lambda c: c['pernah_cbs_di_rujukan'] and not cek_kode(c['info_diberikan'], '13')},
-    {"nama": "KD ada rujukan PrEp di penjangkauan tapi tidak ada informasi PrEp", "periksa": lambda c: (cek_kode(c['rujukan'], '5') or cek_kode(c['jns_kegiatan'], '10')) and not (cek_kode(c['info_diberikan'], '10') or cek_kode(c['jns_kegiatan'], '10'))},
+    {"nama": "KD ada rujukan PrEp di penjangkauan tapi tidak ada informasi PrEp", "periksa": lambda c: cek_kode(c['rujukan'], '5') and not cek_kode(c['info_diberikan'], '10')},
     {"nama": "KD telah menerima layanan PrEp tapi tidak ada rujukan PrEp di penjangkauan", "periksa": lambda c: c['pernah_prep_di_rujukan'] and not cek_kode(c['rujukan'], '5')},
     
-    {"nama": "Logistik kosong (Konfirmasi)", "periksa": lambda c: c['log_kie'] == 0 and c['log_kon'] == 0 and c['log_pel'] == 0 and c['log_jar'] == 0 and c['log_swab'] == 0},
+    {"nama": "Logistik kosong (Konfirmasi)", "periksa": lambda c: c['total_logistik_per_id'].get(c['id_clean'], 0) == 0},
     {"nama": "Tipe klien PWID tapi tidak menerima jarum (konfirmasi)", "periksa": lambda c: c['is_pwid'] and c['log_jar'] == 0 and not c['is_vo']},
     {"nama": "Tipe klien PWID tapi tidak menerima alkohol SWAB (konfirmasi)", "periksa": lambda c: c['is_pwid'] and c['log_swab'] == 0 and not c['is_vo']},
     {"nama": "Popkun selain PWID menerima jarum suntik", "periksa": lambda c: not c['is_pwid'] and c['log_jar'] > 0},
@@ -329,6 +329,10 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     id_counts = df.iloc[start_row_idx:]['ID Klien'].astype(str).str.strip().value_counts().to_dict()
     df['id_mapped'] = df['ID Klien'].astype(str).str.replace("'", "").str.strip()
+    
+    # Hitung total logistik untuk setiap ID Klien
+    df['total_logistik'] = df['log_kie'] + df['log_kon'] + df['log_pel'] + df['log_jar'] + df['log_swab']
+    dict_total_logistik_per_id = df.groupby('id_mapped')['total_logistik'].sum().to_dict()
     
     def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
     def periksa_rujukan(x): return '2' in str(x).replace("'", "").replace(" ", "").split(',')
