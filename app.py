@@ -987,45 +987,37 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
         st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
         
         if list_medsos:
-            # 1. Rangkai badge dengan CSS inline-flex yang super ketat
+            # 1. KUMPULKAN dulu semua badge HTML ke dalam satu variabel teks
             html_badges = ""
             for m in list_medsos:
                 html_badges += f"""
-                <div style="
-                    display: inline-flex !important; 
-                    align-items: center;
-                    background-color: rgba(56, 189, 248, 0.15) !important; 
-                    color: #38bdf8 !important; 
-                    border: 1px solid rgba(56, 189, 248, 0.3) !important;
-                    padding: 4px 12px !important; 
-                    margin: 5px !important; 
-                    border-radius: 6px !important; 
-                    font-family: monospace !important; 
-                    font-size: 0.85rem !important;
-                    white-space: nowrap !important;
-                    float: left !important;
+                <span style="
+                    display: inline-block; 
+                    background-color: rgba(56, 189, 248, 0.15); 
+                    color: #38bdf8; 
+                    border: 1px solid rgba(56, 189, 248, 0.3);
+                    padding: 4px 10px; 
+                    margin: 4px; 
+                    border-radius: 6px; 
+                    font-family: monospace; 
+                    font-size: 0.9rem;
+                    white-space: nowrap;
                 ">
                     🔹 {m}
-                </div>
+                </span>
                 """
             
-            # 2. Pembungkus utama menggunakan display: flex dengan flex-wrap: wrap
+            # 2. TAMPILKAN SEKALIGUS di luar perulangan agar mengalir ke samping
             st.markdown(f"""
                 <div style="
-                    display: flex !important;
-                    flex-wrap: wrap !important;
-                    flex-direction: row !important;
-                    justify-content: flex-start !important;
-                    align-items: center !important;
-                    padding: 15px !important; 
-                    border: 1px solid rgba(255, 255, 255, 0.1) !important; 
-                    border-radius: 8px !important; 
-                    background-color: rgba(0, 0, 0, 0.2) !important;
-                    width: 100% !important;
-                    clear: both !important;
+                    padding: 15px; 
+                    border: 1px solid rgba(255, 255, 255, 0.1); 
+                    border-radius: 8px; 
+                    background-color: rgba(0, 0, 0, 0.2);
+                    display: block;
+                    width: 100%;
                 ">
                     {html_badges}
-                    <div style="clear: both;"></div>
                 </div>
             """, unsafe_allow_html=True)
             
