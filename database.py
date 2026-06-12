@@ -76,3 +76,39 @@ def ambil_rekap_tren():
         return pd.DataFrame()
     finally:
         conn.close()
+
+from sqlalchemy import create_engine
+
+def import_data_rujukan(df_rujukan):
+    """
+    Mengimpor data Excel rujukan ke dalam tabel data_rujukan_hiv_positif.
+    """
+    conn = dapatkan_koneksi_neon()
+    if conn is None:
+        return False
+    
+    try:
+        # 1. Bersihkan tabel lama
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE TABLE public.data_rujukan_hiv_positif;")
+            conn.commit()
+        
+        # 2. Persiapkan koneksi SQLAlchemy
+        conn_str = st.secrets["neon_db"]["connection_string"]
+        engine = create_engine(conn_str)
+        
+        # 3. Masukkan data
+        df_rujukan.to_sql(
+            'data_rujukan_hiv_positif', 
+            engine, 
+            if_exists='append', 
+            index=False,
+            method='multi',
+            chunksize=1000
+        )
+        return True
+    except Exception as e:
+        st.error(f"Gagal mengimpor data rujukan: {e}")
+        return False
+    finally:
+        conn.close()
