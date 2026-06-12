@@ -597,7 +597,7 @@ if st.session_state.get('proses_selesai', False):
             try:
                 # 1. Mengambil data dari tabel 'rekap_tren_bulanan'
                 # Pastikan nama kolom di bawah ini sesuai dengan di Supabase Anda
-                res_tren = supabase.table("rekap_tren_bulanan").select("created_at, ssr, indikator_kesalahan").execute()
+                res_tren = supabase.table("rekap_tren_bulanan").select("created_at, nama_ssr, indikator_kesalahan").execute()
             
                 if res_tren.data:
                     df_tren = pd.DataFrame(res_tren.data)
