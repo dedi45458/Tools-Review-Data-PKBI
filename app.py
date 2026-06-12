@@ -181,9 +181,32 @@ with st.sidebar:
     
     with st.container():
         st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>📁 MANAJEMEN BERKAS</b>", unsafe_allow_html=True)
-        file_referensi = st.file_uploader("Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"], help="Opsional: Digunakan sebagai basis data rujukan konfirmasi")
+        
+        # 1. Uploader Data Referensi (HIV Positif)
+        file_referensi = st.file_uploader("Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"], help="Digunakan sebagai basis data rujukan konfirmasi")
+        
+        # Logika tombol update database yang muncul HANYA saat file diupload
+        if file_referensi is not None:
+            if st.button("🔄 Update Database Referensi", use_container_width=True):
+                with st.spinner("Sedang memproses data rujukan..."):
+                    try:
+                        from database import import_data_rujukan
+                        df_ref = pd.read_excel(file_referensi)
+                        if import_data_rujukan(df_ref):
+                            st.success("✅ Database referensi diperbarui!")
+                        else:
+                            st.error("❌ Gagal mengupdate database.")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+        
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        
+        # 2. Uploader Raw Data Penjangkauan
         files_review = st.file_uploader("Raw Data Penjangkauan (Multi-File)", type=["xlsx", "csv"], accept_multiple_files=True, help="Wajib: Anda bisa memilih lebih dari satu file sekaligus")
-    
+        
+        if files_review:
+            st.info(f"📁 {len(files_review)} file siap diproses.")
+
     st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
     
     with st.container():
