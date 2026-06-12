@@ -595,45 +595,40 @@ if st.session_state.get('proses_selesai', False):
     with tab2:
         if supabase:
             try:
-                # 1. Mengambil data dari tabel 'rekap_tren_bulanan'
-                # Pastikan nama kolom di bawah ini sesuai dengan di Supabase Anda
-                res_tren = supabase.table("rekap_tren_bulanan").select("created_at, nama_ssr, indikator_kesalahan").execute()
+                # Mengambil data sesuai dengan kolom tabel rekap_tren_bulanan
+                res_tren = supabase.table("rekap_tren_bulanan").select("periode, nama_ssr, indikator_kesalahan, jumlah_kesalahan").execute()
             
                 if res_tren.data:
                     df_tren = pd.DataFrame(res_tren.data)
                 
-                    # 2. Konversi 'created_at' (timestamp) menjadi format tanggal (YYYY-MM-DD)
-                    # errors='coerce' menjaga agar jika ada data rusak, tidak membuat error seluruh aplikasi
-                    df_tren['Tanggal'] = pd.to_datetime(df_tren['created_at'], errors='coerce').dt.strftime('%Y-%m-%d')
-                
-                    # Hapus baris yang gagal konversi tanggal (jika ada)
-                    df_tren = df_tren.dropna(subset=['Tanggal'])
+                    # Menggunakan kolom 'periode' sebagai acuan waktu
+                    # Jika 'periode' dalam format YYYY-MM-DD, kita bisa langsung pakai
+                    df_tren['Tanggal'] = df_tren['periode']
                 
                     col_kiri, col_kanan = st.columns([1, 2])
                     with col_kiri:
-                        # Ambil daftar SSR unik
-                        daftar_ssr = ["SEMUA"] + sorted(df_tren['ssr'].dropna().unique().tolist())
+                        daftar_ssr = ["SEMUA"] + sorted(df_tren['nama_ssr'].dropna().unique().tolist())
                         pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr, key="select_ssr_tren")
                 
-                    # 3. Logika Pivot Data
+                    # Logika Pivot Data
                     if pilihan_ssr == "SEMUA":
-                        # Menghitung total kesalahan per hari (seluruh SSR)
-                        df_pivot = df_tren.groupby('Tanggal').size().reset_index(name='Total Kesalahan')
+                        # Menjumlahkan 'jumlah_kesalahan' per periode
+                        df_pivot = df_tren.groupby('Tanggal')['jumlah_kesalahan'].sum().reset_index()
                         df_pivot = df_pivot.set_index('Tanggal')
-                        st.markdown(f"<br><p>📈 Tren total kesalahan <b>seluruh SSR</b> per tanggal:</p>", unsafe_allow_html=True)
+                        st.markdown(f"<br><p>📈 Tren total kesalahan <b>seluruh SSR</b>:</p>", unsafe_allow_html=True)
                     else:
-                        # Menghitung tren per indikator untuk SSR terpilih
-                        df_filtered = df_tren[df_tren['ssr'] == pilihan_ssr]
-                        df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', aggfunc='size', fill_value=0)
+                        # Filter berdasarkan nama_ssr dan pivot berdasarkan indikator
+                        df_filtered = df_tren[df_tren['nama_ssr'] == pilihan_ssr]
+                        df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', values='jumlah_kesalahan', aggfunc='sum', fill_value=0)
                         st.markdown(f"<br><p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
                 
-                    # 4. Menampilkan Chart
+                    # Menampilkan Chart
                     if not df_pivot.empty:
                         st.area_chart(df_pivot)
                     else:
                         st.info("Data belum tersedia untuk filter ini.")
                 else:
-                    st.info("Belum ada rekam jejak log review tersimpan di tabel rekap_tren_bulanan.")
+                    st.info("Belum ada data rekap tren di tabel rekap_tren_bulanan.")
             except Exception as e:
                 st.error(f"Gagal memuat tren bulanan: {e}")
 
