@@ -342,7 +342,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     else: df['is_rujuk_tes'] = False
 
     dict_pernah_hiv = df.groupby('id_mapped')['is_info_hiv'].any().to_dict()
-    dict_pernah_rujuk = df.groupby('id_mapped')['is_rujuk_tes'].any().to_dict()
+   dict_pernah_rujuk = df.assign(is_rujuk_tes=df['Rujukan'].apply(lambda x: '2' in str(x).replace("'", "").replace(" ", "").replace(".0", "").split(','))).groupby('id_mapped')['is_rujuk_tes'].any().to_dict()
 
     def _safe_float(val):
         try:
