@@ -720,7 +720,7 @@ if st.session_state['proses_selesai']:
                                             "is_revisi": bool(row_edit['Pilih']),
                                             "justifikasi": text_justifikasi
                                     }, on_conflict="lembaga_ssr,tanggal,id_klien,indikator_kesalahan_data").execute() # SINKRONISASI CONSTRAINT
-                                        sukses_simpan += 1
+                                    sukses_simpan += 1
                                 except Exception as e: 
                                         # Tampilkan eror jika ada kendala lain (misal: masalah kuota memori/jaringan)
                                         st.error(f"Gagal menyimpan baris data: {e}")
