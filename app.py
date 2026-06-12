@@ -323,11 +323,21 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                     if '5' in rujukans:
                         dict_pernah_prep_rujukan[key_klien] = True
 
-    id_counts = df.iloc[start_row_idx:]['ID Klien'].astype(str).str.strip().value_counts().to_dict()
+    # 1. MEMBUAT KUNCI MAPPING GABUNGAN (SSR + ID KLIEN) AGAR VALIDASI TIDAK BENTROK ANTAR LEMBAGA
     df['id_mapped'] = df['ID Klien'].astype(str).str.replace("'", "").str.strip()
+    df['ssr_id_key'] = df.get('Lembaga SSR', '').astype(str).str.strip().str.upper() + "_" + df['id_mapped']
+    
+    # Hitung total baris berdasarkan kombinasi Lembaga SSR + ID Klien
+    dict_ssr_id_counts = df.iloc[start_row_idx:]['ssr_id_key'].value_counts().to_dict()
     
     def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
-    def periksa_rujukan(x): return '2' in str(x).replace("'", "").replace(" ", "").split(',')
+    
+    # Fungsi periksa_rujukan yang disempurnakan (Mengubah titik desimal otomatis kembali menjadi koma teks)
+    def periksa_rujukan(x): 
+        s = str(x).replace("'", "").replace(" ", "").replace(".0", "")
+        if '.' in s and ',' not in s: 
+            s = s.replace('.', ',') # Mengembalikan float '1.2' menjadi format teks '1,2'
+        return '2' in s.split(',')
 
     col_info = 'Informasi Yang diberikan' if 'Informasi Yang diberikan' in df.columns else ('Informasi yang diberikan' if 'Informasi yang diberikan' in df.columns else '')
     col_kegiatan = 'Jenis Kegiatan' if 'Jenis Kegiatan' in df.columns else ''
@@ -338,11 +348,14 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     else:
         df['is_info_hiv'] = False
         
-    if col_ruj: df['is_rujuk_tes'] = df[col_ruj].apply(periksa_rujukan)
-    else: df['is_rujuk_tes'] = False
+    if col_ruj: 
+        df['is_rujuk_tes'] = df[col_ruj].apply(periksa_rujukan)
+    else: 
+        df['is_rujuk_tes'] = False
 
-    dict_pernah_hiv = df.groupby('id_mapped')['is_info_hiv'].any().to_dict()
-   dict_pernah_rujuk = df.assign(is_rujuk_tes=df['Rujukan'].apply(lambda x: '2' in str(x).replace("'", "").replace(" ", "").replace(".0", "").split(','))).groupby('id_mapped')['is_rujuk_tes'].any().to_dict()
+    # Grouping berdasarkan kunci gabungan SSR + ID Klien
+    dict_pernah_hiv = df.groupby('ssr_id_key')['is_info_hiv'].any().to_dict()
+    dict_pernah_rujuk = df.groupby('ssr_id_key')['is_rujuk_tes'].any().to_dict()
 
     def _safe_float(val):
         try:
@@ -403,13 +416,19 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         tgl_raw = row.get('Tanggal', None)
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce', format='%d/%m/%Y') if pd.notna(tgl_raw) and '/' in str(tgl_raw) else pd.to_datetime(tgl_raw, errors='coerce')
 
-        pernah_dapat_info_hiv = dict_pernah_hiv.get(id_clean, False) if (id_clean and id_counts.get(id_clean, 0) > 1) else False
-        pernah_dapat_rujuk_tes = dict_pernah_rujuk.get(id_clean, False) if (id_clean and id_counts.get(id_clean, 0) > 1) else False
+        # Penentuan Kunci Gabungan baris saat ini
+        kunci_klien_ref = f"{v_ssr}_{id_clean}"
+
+        # 2. STRATEGI REKAYASA CONTEXT DATA AGAR LAMBDA BAWAAN LAM LENGKAP MEMBACA UTAMA LEMBAGA + ID KLIEN
+        count_untuk_ssr_id = dict_ssr_id_counts.get(kunci_klien_ref, 0)
+        local_id_counts = {id_clean: count_untuk_ssr_id} # Menipu lambda bawaan menggunakan id_clean lokal berisikan jumlah dari gabungan SSR
+
+        pernah_dapat_info_hiv = dict_pernah_hiv.get(kunci_klien_ref, False) if id_clean else False
+        pernah_dapat_rujuk_tes = dict_pernah_rujuk.get(kunci_klien_ref, False) if id_clean else False
 
         any_medsoc_in_lokasi = any(kw in lokasi.lower() for kw in medsoc_keywords)
         is_vo = (jns_kontak == '3')
         is_pwid = (v_tipe_sasaran in ['1401', '1403'])
-        kunci_klien_ref = f"{v_ssr}_{id_clean}"
 
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
@@ -418,7 +437,8 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'rujukan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
             'log_jar': log_jar, 'log_swab': log_swab, 'jarum_kembali': jarum_kembali, 'tgl_p': tgl_p, 'hari_ini': hari_ini,
             'tahun_sekarang': tahun_sekarang, 'any_medsoc_in_lokasi': any_medsoc_in_lokasi, 'is_vo': is_vo, 'is_pwid': is_pwid,
-            'id_counts': id_counts, 'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
+            'id_counts': local_id_counts, # Menyuplai id_counts yang sudah berbasis SSR + ID
+            'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
             'is_file_rujukan': is_file_rujukan, 'df_ref': df_ref, 'ref_ssr_id_to_nik': ref_ssr_id_to_nik, 'ref_nik_ssr_to_id': ref_nik_ssr_to_id,
             'pernah_cbs_di_rujukan': dict_pernah_cbs.get(kunci_klien_ref, False),
             'pernah_prep_di_rujukan': dict_pernah_prep_rujukan.get(kunci_klien_ref, False),
@@ -459,7 +479,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 pass
 
     return pd.DataFrame(list_kesalahan)
-
 # ==========================================================
 # 4. LOGIKA TOMBOL EKSEKUSI
 # ==========================================================
