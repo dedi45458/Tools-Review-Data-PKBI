@@ -692,9 +692,11 @@ if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['
         st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
         
         if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-            with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
-                if jalankan_agregasi_tren():
-                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
-                    st.balloons()
-                else:
-                    st.error("Gagal memproses arsip ke database.")
+            with st.spinner("Sedang memproses pengarsipan data..."):
+                try:
+                    # Kode lama yang error
+                    supabase.rpc("proses_sari_data_bulanan").execute()
+                    st.success("🎉 Data berhasil diarsipkan!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Gagal memproses arsip: {e}")
