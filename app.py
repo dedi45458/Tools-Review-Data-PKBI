@@ -136,7 +136,7 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "LSL/Waria tapi jenis kelamin perempuan", "periksa": lambda c: c['v_tipe_sasaran'] in ['1304', '1301'] and c['jk'] == '2'},
     {"nama": "Jenis kontak dengan Jenis Kegiatan tidak sesuai", "periksa": lambda c: (c['jns_kontak'] == '1' and c['jns_kegiatan'] not in ['1', '5']) or (c['jns_kontak'] == '2' and c['jns_kegiatan'] not in ['2', '3', '4', '6', '7']) or (c['jns_kontak'] == '3' and c['jns_kegiatan'] != '8')},
     {"nama": "Jenis kontak Individual/kelompok tapi kolom Virtual dan Tatap Muka (VC1) tidak diisi", "periksa": lambda c: c['jns_kontak'] in ['1', '2'] and (c['vc1'] == '' or c['vc1'] == 'nan')},
-    {"nama": "Penjangkauan tatap muka tapi lokasi outreach diindikasi ada nama medsos", "periksa": lambda c: c['jns_kontak'] in ['1', '2'] and c['any_medsoc_in_lokasi']},
+    {"nama": "Penjangkauan tatap muka tapi lokasi outreach diindikasi ada nama medsos", "periksa": lambda c: c['jns_kontak'] in ['1', '2'] and bool(re.search(pattern_medsos_dinamis, str(c['lokasi']), re.IGNORECASE))},
     {"nama": "Lokasi outreach diisi IDKD", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and len(c['lokasi']) == 10 and c['lokasi'][:4].isalpha() and c['lokasi'][4:].isdigit()},
     {"nama": "Lokasi outreach diindikasi kurang spesifik atau kurang detil (digit huruf <17 digit) (konfirmasi)", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and len(c['lokasi']) < 17 and not c['is_vo']},
     {"nama": "Lokasi outreach indikasi diisi nomer HP", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and re.search(r'(08\d{8,11})|(\+62\d{8,11})', c['lokasi'].replace('-', '').replace(' ', ''))},
@@ -148,7 +148,7 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Konfirmasi jumlah jarum yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_jar'] > 10},
     {"nama": "Konfirmasi jumlah alkohol SWAB yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_swab'] > 50},
     {"nama": "VO tapi kolom Virtual dan Tatap Muka (VC1) diisi angka 1", "periksa": lambda c: c['is_vo'] and c['vc1'] == '1'},
-    {"nama": "VO tapi lokasi outreach bukan nama medsos/kurang tepat mencatat nama aplikasi medsos", "periksa": lambda c: c['is_vo'] and c['lokasi'] != '' and not c['any_medsoc_in_lokasi']},
+    {"nama": "VO tapi lokasi outreach bukan nama medsos/kurang tepat mencatat nama aplikasi medsos", "periksa": lambda c: c['is_vo'] and str(c['lokasi']).strip() != '' and not bool(re.search(pattern_medsos_dinamis, str(c['lokasi']), re.IGNORECASE))},
     {"nama": "VO tapi menyerahkan jarum", "periksa": lambda c: c['is_vo'] and c['log_jar'] > 0},
     {"nama": "VO menerima logistik selain KIE", "periksa": lambda c: c['is_vo'] and (c['log_kon'] > 0 or c['log_pel'] > 0 or c['log_swab'] > 0)},
     {"nama": "VO tapi nama akun /No. Hp tidak diisi", "periksa": lambda c: c['is_vo'] and (c['no_hp'] == '' or c['no_hp'] == 'nan')},
@@ -279,8 +279,11 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
-    medsoc_keywords = ['whatsapp', 'X', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 'grindr', 'growlr', 'instagram', 'tantan', 'telegram', 'telepon', 'tinder', 'twitter', 'line', 'facebook', 'messenger', 'romeo', 'tiktok', 'tagged', 'litmatch', 'scruff', 'wechat', 'threads']
-    pattern_medsos = r'\b(' + '|'.join(medsoc_keywords) + r')\b'
+    import re
+
+    # Ambil daftar medsos terbaru dari session state secara dinamis
+    keywords_aktif = st.session_state.get('medsoc_keywords', [])
+    pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
 
     try:
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
@@ -984,14 +987,37 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
         st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
         
         if list_medsos:
-            st.markdown("""
-                <div style='max-height: 350px; overflow-y: auto; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; background-color: rgba(0,0,0,0.2);'>
-            """, unsafe_allow_html=True)
-            
+            # Membuat container string HTML untuk badge-badge medsos
+            html_badges = ""
             for m in list_medsos:
-                st.markdown(f"🔹 <code style='font-size: 0.95rem; color: #38bdf8;'>{m}</code>", unsafe_allow_html=True)
-                
-            st.markdown("</div>", unsafe_allow_html=True)
+                html_badges += f"""
+                <span style="
+                    display: inline-block; 
+                    background-color: rgba(56, 189, 248, 0.15); 
+                    color: #38bdf8; 
+                    border: 1px solid rgba(56, 189, 248, 0.3);
+                    padding: 4px 10px; 
+                    margin: 4px; 
+                    border-radius: 6px; 
+                    font-family: monospace; 
+                    font-size: 0.9rem;
+                ">
+                    🔹 {m}
+                </span>
+                """
+            
+            # Tampilkan semua badge di dalam satu box container yang rapi
+            st.markdown(f"""
+                <div style="
+                    padding: 15px; 
+                    border: 1px solid rgba(255,255,255,0.1); 
+                    border-radius: 8px; 
+                    background-color: rgba(0,0,0,0.2);
+                    line-height: 1.8;
+                ">
+                    {html_badges}
+                </div>
+            """, unsafe_allow_html=True)
         else:
             st.info("Belum ada data medsos di database.")
         st.markdown('</div>', unsafe_allow_html=True)
