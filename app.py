@@ -980,50 +980,50 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_kanan:
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    
-    # Mengambil daftar medsos
-    list_medsos = ambil_keyword_medsos()
-    st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
-    
-    if list_medsos:
-        # Membuat container string HTML untuk badge-badge medsos
-        html_badges = ""
-        for m in list_medsos:
-            html_badges += f"""
-            <span style="
-                background-color: rgba(56, 189, 248, 0.15); 
-                color: #38bdf8; 
-                border: 1px solid rgba(56, 189, 248, 0.3);
-                padding: 6px 12px; 
-                border-radius: 20px; 
-                font-family: inherit; 
-                font-size: 0.85rem;
-                font-weight: 500;
-                white-space: nowrap; /* Mencegah 1 badge terbelah jadi 2 baris */
-                display: flex;
-                align-items: center;
-                gap: 5px;
-            ">
-                🔹 {m}
-            </span>
-            """
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
-        # Tampilkan semua badge di dalam satu box container yang rapi menggunakan Flexbox
-        st.markdown(f"""
-            <div style="
-                display: flex;
-                flex-wrap: wrap; /* Otomatis turun ke bawah jika mentok ke kanan */
-                gap: 10px; /* Jarak rapi antar badge */
-                padding: 15px; 
-                border: 1px solid rgba(255,255,255,0.1); 
-                border-radius: 8px; 
-                background-color: rgba(0,0,0,0.2);
-            ">
-                {html_badges}
-            </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.info("Belum ada data medsos di database.")
+        # Mengambil daftar medsos
+        list_medsos = ambil_keyword_medsos()
+        st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
         
-    st.markdown('</div>', unsafe_allow_html=True)
+        if list_medsos:
+            # Membuat container string HTML untuk badge-badge medsos
+            html_badges = ""
+            for m in list_medsos:
+                html_badges += f"""
+                <span style="
+                    background-color: rgba(56, 189, 248, 0.15); 
+                    color: #38bdf8; 
+                    border: 1px solid rgba(56, 189, 248, 0.3);
+                    padding: 6px 12px; 
+                    border-radius: 20px; 
+                    font-family: inherit; 
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                    white-space: nowrap; /* Mencegah 1 badge terbelah jadi 2 baris */
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                ">
+                    🔹 {m}
+                </span>
+                """
+            
+            # Tampilkan semua badge di dalam satu box container yang rapi menggunakan Flexbox
+            st.markdown(f"""
+                <div style="
+                    display: flex;
+                    flex-wrap: wrap; /* Otomatis turun ke bawah jika mentok ke kanan */
+                    gap: 10px; /* Jarak rapi antar badge */
+                    padding: 15px; 
+                    border: 1px solid rgba(255,255,255,0.1); 
+                    border-radius: 8px; 
+                    background-color: rgba(0,0,0,0.2);
+                ">
+                    {html_badges}
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Belum ada data medsos di database.")
+            
+        st.markdown('</div>', unsafe_allow_html=True)
