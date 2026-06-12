@@ -247,7 +247,7 @@ with st.sidebar:
     tombol_proses = st.button("🚀 Jalankan Penelaahan", type="primary", use_container_width=True)
 
 # ==========================================================
-# 3. ENGINE VALIDASI UTAMA
+# 3. ENGINE VALIDASI UTAMA (UPDATED FOR DUAL LOGISTICS)
 # ==========================================================
 def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
@@ -341,16 +341,19 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         except:
             return 0.0
 
-    if len(df.columns) > 21: 
-        df['tmp_log'] = (
-            df.iloc[:, 17].apply(_safe_float) + 
-            df.iloc[:, 18].apply(_safe_float) + 
-            df.iloc[:, 19].apply(_safe_float) + 
-            df.iloc[:, 20].apply(_safe_float) + 
-            df.iloc[:, 21].apply(_safe_float)
-        )
-    else:
-        df['tmp_log'] = 0.0
+    # 🔎 DETEKSI KOLOM LOGISTIK SECARA DINAMIS (Mendukung Multi-Kategori)
+    col_kie_list = [c for c in df.columns if 'KIE' in str(c).upper()]
+    col_kon_list = [c for c in df.columns if 'KONDOM' in str(c).upper()]
+    col_pel_list = [c for c in df.columns if 'PELICIN' in str(c).upper()]
+    col_jar_list = [c for c in df.columns if 'JARUM' in str(c).upper() and 'KEMBALI' not in str(c).upper()]
+    col_swab_list = [c for c in df.columns if 'SWAB' in str(c).upper() or 'ALKOHOL' in str(c).upper()]
+    
+    semua_kolom_logistik = col_kie_list + col_kon_list + col_pel_list + col_jar_list + col_swab_list
+
+    # Hitung total log per baris secara akumulatif dari semua kategori logistik yang ketemu
+    df['tmp_log'] = 0.0
+    for col in semua_kolom_logistik:
+        df['tmp_log'] += df[col].apply(_safe_float)
 
     df['kunci_klien_ref_log'] = df.get('Lembaga SSR', '').astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
@@ -382,14 +385,13 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         vc1 = str(row.get('Virtual & Tatap Muka', '')).replace('.0', '').strip()
 
-        try:
-            log_kie = float(row.iloc[17]) if pd.notna(row.iloc[17]) and str(row.iloc[17]).strip() not in ['', 'NaN'] else 0
-            log_kon = float(row.iloc[18]) if pd.notna(row.iloc[18]) and str(row.iloc[18]).strip() not in ['', 'NaN'] else 0
-            log_pel = float(row.iloc[19]) if pd.notna(row.iloc[19]) and str(row.iloc[19]).strip() not in ['', 'NaN'] else 0
-            log_jar = float(row.iloc[20]) if pd.notna(row.iloc[20]) and str(row.iloc[20]).strip() not in ['', 'NaN'] else 0
-            log_swab = float(row.iloc[21]) if pd.notna(row.iloc[21]) and str(row.iloc[21]).strip() not in ['', 'NaN'] else 0
-            jarum_kembali = float(row.get('Jumlah Jarum Suntik Kembali', 0)) if pd.notna(row.get('Jumlah Jarum Suntik Kembali', 0)) else 0
-        except: log_kie = log_kon = log_pel = log_jar = log_swab = jarum_kembali = 0
+        # 🧮 AKUMULASIKAN NILAI DARI KEDUA KATEGORI LOGISTIK
+        log_kie = sum(_safe_float(row.get(c, 0)) for c in col_kie_list)
+        log_kon = sum(_safe_float(row.get(c, 0)) for c in col_kon_list)
+        log_pel = sum(_safe_float(row.get(c, 0)) for c in col_pel_list)
+        log_jar = sum(_safe_float(row.get(c, 0)) for c in col_jar_list)
+        log_swab = sum(_safe_float(row.get(c, 0)) for c in col_swab_list)
+        jarum_kembali = _safe_float(row.get('Jumlah Jarum Suntik Kembali', 0))
 
         tgl_raw = row.get('Tanggal', None)
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce', format='%d/%m/%Y') if pd.notna(tgl_raw) and '/' in str(tgl_raw) else pd.to_datetime(tgl_raw, errors='coerce')
