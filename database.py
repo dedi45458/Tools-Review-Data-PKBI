@@ -80,35 +80,51 @@ def ambil_rekap_tren():
 from sqlalchemy import create_engine
 
 def import_data_rujukan(df_rujukan):
-    """
-    Mengimpor data Excel rujukan ke dalam tabel data_rujukan_hiv_positif.
-    """
+    # Mapping: Nama di Excel (kiri) -> Nama di Database (kanan)
+    pemetaan = {
+        "Lembaga SR": "Lembaga_SR",
+        "Lembaga SSR": "Lembaga_SSR",
+        "Kode Petugas": "Kode_Petugas",
+        "Nama Kota": "Nama_Kota",
+        "Nama Layanan": "Nama_Layanan",
+        "Tanggal": "Tanggal",
+        "ID Klien": "ID_Klien",
+        "NIK": "NIK",
+        "Tipe Klien": "Tipe_Klien",
+        "Umur": "Umur",
+        "Jenis Kelamin": "Jenis_Kelamin",
+        "Kontak Awal": "Kontak_Awal",
+        "Jenis Layanan": "Jenis_Layanan_Detil", # Pastikan ini cocok
+        "Rujukan": "Rujukan",
+        "Hasil Tes IMS": "Hasil_Tes_IMS",
+        "Menerima Pengobatan IMS": "Menerima_Pengobatan_IMS",
+        "Menerima Hasil VCT": "Menerima_Hasil_VCT",
+        "Hasil Tes HIV": "Hasil_Tes_HIV"
+    }
+
+    # 1. Rename kolom di dataframe agar cocok dengan database
+    df_rujukan.rename(columns=pemetaan, inplace=True)
+    
+    # 2. Pastikan hanya kolom yang ada di database yang di-upload
+    kolom_db = list(pemetaan.values())
+    df_rujukan = df_rujukan[kolom_db]
+
+    # ... lanjut ke proses koneksi dan to_sql seperti sebelumnya ...
     conn = dapatkan_koneksi_neon()
-    if conn is None:
-        return False
+    if conn is None: return False
     
     try:
-        # 1. Bersihkan tabel lama
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE public.data_rujukan_hiv_positif;")
             conn.commit()
         
-        # 2. Persiapkan koneksi SQLAlchemy
-        conn_str = st.secrets["neon_db"]["connection_string"]
-        engine = create_engine(conn_str)
+        from sqlalchemy import create_engine
+        engine = create_engine(st.secrets["neon_db"]["connection_string"])
         
-        # 3. Masukkan data
-        df_rujukan.to_sql(
-            'data_rujukan_hiv_positif', 
-            engine, 
-            if_exists='append', 
-            index=False,
-            method='multi',
-            chunksize=1000
-        )
+        df_rujukan.to_sql('data_rujukan_hiv_positif', engine, if_exists='append', index=False, method='multi', chunksize=500)
         return True
     except Exception as e:
-        st.error(f"Gagal mengimpor data rujukan: {e}")
+        st.error(f"Error: {e}")
         return False
     finally:
         conn.close()
