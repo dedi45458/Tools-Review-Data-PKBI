@@ -693,10 +693,11 @@ if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['
         
         if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
             with st.spinner("Sedang memproses pengarsipan data..."):
-                try:
-                    # Kode lama yang error
-                    supabase.rpc("proses_sari_data_bulanan").execute()
-                    st.success("🎉 Data berhasil diarsipkan!")
+                from database import jalankan_agregasi_tren
+                
+                if jalankan_agregasi_tren():
+                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap dan log detail dibersihkan!")
+                    st.balloons()
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Gagal memproses arsip: {e}")
+                else:
+                    st.error("Gagal memproses arsip. Periksa koneksi database Anda.")
