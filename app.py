@@ -595,7 +595,7 @@ if st.session_state.get('proses_selesai', False):
     with tab2:
         if supabase:
             try:
-                res_tren = supabase.table("log_validasi_review").select("created_at, ssr, indikator_kesalahan").execute()
+                res_tren = supabase.table("rekap_tren_bulanan").select("created_at, ssr, indikator_kesalahan").execute()
                 if res_tren.data:
                     df_tren = pd.DataFrame(res_tren.data)
                     df_tren['Tanggal'] = pd.to_datetime(df_tren['created_at']).dt.strftime('%Y-%m-%d')
