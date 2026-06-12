@@ -267,66 +267,48 @@ with st.sidebar:
 # ==========================================================
 # 3. ENGINE VALIDASI UTAMA (UPDATED FOR DUAL LOGISTICS)
 # ==========================================================
-def perbaiki_header(df):
-    # Menggabungkan dua baris header menjadi satu nama kolom yang unik
-    # Misal: "Dukungan GF" + "KIE" menjadi "Dukungan GF - KIE"
-    if len(df) > 0:
-        header_baru = []
-        for i in range(len(df.columns)):
-            main = str(df.columns[i])
-            sub = str(df.iloc[0, i])
-            
-            # Jika kolom utama adalah 'Unnamed', ambil dari sub saja
-            if "Unnamed" in main:
-                header_baru.append(sub)
-            else:
-                header_baru.append(f"{main} - {sub}")
-        
-        df.columns = header_baru
-        df = df.drop(0).reset_index(drop=True) # Hapus baris header kedua agar tidak jadi data
-    return df
-
 def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
     
     df = df_asli.copy()
-    st.write("Daftar kolom yang terbaca oleh sistem:", df.columns.tolist())
+    
     # ==========================================================
-    # SEMPURNAKAN: MENANGANI HEADER BERTINGKAT (GF & MANDIRI)
+    # LOGIKA PERBAIKAN HEADER BERTINGKAT (MERGED CELLS)
     # ==========================================================
-    start_row_idx = 0
-    # Cek apakah baris indeks 0 adalah kelanjutan sub-header (berisi kata KIE, KONDOM, dll)
-    if len(df) > 0 and any(k in str(df.iloc[0].values).upper() for k in ['KIE', 'KONDOM', 'PELICIN', 'JARUM', 'SWAB']):
-        sub_headers = [str(x).strip() for x in df.iloc[0].values]
-        main_headers = [str(c).strip() for c in df.columns]
-        
+    # Mendeteksi apakah baris ke-0 berisi sub-header logistik
+    cek_sub_header = any(k in str(df.iloc[0].values).upper() for k in ['KIE', 'KONDOM', 'PELICIN', 'JARUM', 'SWAB'])
+    
+    if cek_sub_header:
         columns_fixed = []
-        current_main = ""
+        main_headers = [str(c).strip() for c in df.columns]
+        sub_headers = [str(x).strip() for x in df.iloc[0].values]
         
+        current_main = ""
         for i in range(len(main_headers)):
-            # Jika header utama valid (bukan bawaan pandas 'Unnamed:'), perbarui kategori utama
+            # Update kategori utama jika header bukan 'Unnamed'
             if main_headers[i] and 'UNNAMED' not in main_headers[i].upper():
                 current_main = main_headers[i]
             
             sub = sub_headers[i] if (sub_headers[i] and sub_headers[i].lower() != 'nan') else ""
             
-            # Gabungkan menjadi: "Logistik (GF) - KIE" atau "Logistik Beli Mandiri - KIE"
-            if current_main and sub:
+            # Penggabungan nama kolom
+            if current_main and sub and 'UNNAMED' not in sub.upper():
                 columns_fixed.append(f"{current_main} - {sub}")
-            elif sub:
+            elif sub and 'UNNAMED' not in sub.upper():
                 columns_fixed.append(sub)
             else:
                 columns_fixed.append(main_headers[i])
                 
         df.columns = columns_fixed
-        start_row_idx = 1  # Baris sub-header dilewati agar tidak ikut divalidasi sebagai data klien
+        # Hapus baris sub-header agar data dimulai dari baris yang benar
+        df = df.drop(0).reset_index(drop=True)
     else:
-        # Jika file normal tanpa gabungan baris bertingkat
+        # Jika bukan header bertingkat, bersihkan kolom secara standar
         df.columns = [str(c).strip() for c in df.columns]
+        # Jika baris pertama adalah baris keterangan bantu (misal: format tanggal), hapus
         if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values).lower() or 'laki-laki' in str(df.iloc[0].values).lower()):
-            start_row_idx = 1
-    # ==========================================================
+            df = df.drop(0).reset_index(drop=True)
 
     is_file_rujukan = any('RUJUKAN' in str(c).upper() for c in df.columns) or any('FASYANKES' in str(c).upper() for c in df.columns)
     
