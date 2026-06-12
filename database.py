@@ -16,7 +16,7 @@ def dapatkan_koneksi_neon():
 def simpan_log_ke_neon(list_data_log):
     """
     Menyimpan data hasil review secara batch ke tabel log_validasi_review.
-    Format list_data_log: [(Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi), ...]
+    Tanpa klausa ON CONFLICT untuk menghindari error jika constraint unik belum dibuat.
     """
     if not list_data_log:
         return False
@@ -27,14 +27,11 @@ def simpan_log_ke_neon(list_data_log):
         
     try:
         with conn.cursor() as cur:
+            # Menggunakan INSERT standar tanpa pengecekan konflik
             query = """
                 INSERT INTO public.log_validasi_review 
                 (Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data)
-                DO UPDATE SET 
-                    is_revisi = EXCLUDED.is_revisi,
-                    Justifikasi = EXCLUDED.Justifikasi;
+                VALUES (%s, %s, %s, %s, %s, %s);
             """
             cur.executemany(query, list_data_log)
             conn.commit()
