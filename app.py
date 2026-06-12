@@ -283,7 +283,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     hari_ini = pd.Timestamp(datetime.now().date())
     medsoc_keywords = ['whatsapp', 'wa', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 'sms', 'grindr', 'growlr', 'instagram', 'ig', 'tantan', 'telegram', 'telepon', 'tinder', 'twitter', 'line', 'facebook', 'fb', 'messenger', 'romeo', 'tiktok', 'tagged', 'litmatch', 'scruff', 'wechat', 'threads']
 
-    # Asumsi fungsi pengambilan data Supabase Anda
     try:
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
     except:
@@ -292,7 +291,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     ref_ssr_id_to_nik, ref_nik_ssr_to_id = {}, {}
     dict_pernah_cbs, dict_pernah_prep_rujukan = {}, {}
     
-    # PERBAIKAN: Persiapan mapping dari File Rujukan (Semester Lalu / Bulan Ini)
     if is_file_rujukan and df_ref is not None and not df_ref.empty:
         df_ref_cp = df_ref.copy()
         df_ref_cp.columns = [str(c).strip() for c in df_ref_cp.columns]
@@ -315,13 +313,11 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 if nik_r and nik_r != 'nan' and nik_r != '' and ssr_r and ssr_r != 'nan': 
                     ref_nik_ssr_to_id[f"{nik_r}_{ssr_r}"] = id_r
                 
-                # Cek Layanan CBS (Kode 5 atau 6 di file Rujukan)
                 if col_layanan_ref:
                     layanans = str(r[col_layanan_ref[0]]).replace("'", "").replace(" ", "").split(',')
                     if '5' in layanans or '6' in layanans:
                         dict_pernah_cbs[key_klien] = True
                 
-                # Cek Rujukan PrEP (Kode 5 di kolom Rujukan file Rujukan)
                 if col_rujukan_ref:
                     rujukans = str(r[col_rujukan_ref[0]]).replace("'", "").replace(" ", "").split(',')
                     if '5' in rujukans:
@@ -333,7 +329,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
     def periksa_rujukan(x): return '2' in str(x).replace("'", "").replace(" ", "").split(',')
 
-    # Pengecekan aman karena kolom mungkin bernama sedikit beda (case sensitive)
     col_info = 'Informasi Yang diberikan' if 'Informasi Yang diberikan' in df.columns else ('Informasi yang diberikan' if 'Informasi yang diberikan' in df.columns else '')
     col_kegiatan = 'Jenis Kegiatan' if 'Jenis Kegiatan' in df.columns else ''
     col_ruj = 'Rujukan' if 'Rujukan' in df.columns else ''
@@ -349,14 +344,12 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     dict_pernah_hiv = df.groupby('id_mapped')['is_info_hiv'].any().to_dict()
     dict_pernah_rujuk = df.groupby('id_mapped')['is_rujuk_tes'].any().to_dict()
 
-    # === TAMBAHAN BARU: Menghitung Total Logistik per Klien (SSR + ID Klien) ===
     def _safe_float(val):
         try:
             return float(val) if pd.notna(val) and str(val).strip().lower() not in ['', 'nan'] else 0.0
         except:
             return 0.0
 
-    # Menggunakan index kolom yang sama dengan logika try-except Anda di bawah (17-21)
     if len(df.columns) > 21: 
         df['tmp_log'] = (
             df.iloc[:, 17].apply(_safe_float) + 
@@ -368,12 +361,9 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     else:
         df['tmp_log'] = 0.0
 
-    # Buat kunci unik Lembaga SSR + ID Klien
     df['kunci_klien_ref_log'] = df.get('Lembaga SSR', '').astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
-    # ===========================================================================
 
-    # Menggabungkan aturan bawaan dan kustom
     aturan_kustom = st.session_state.get('aturan_kustom', [])
     SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_BAWAAN + aturan_kustom
 
@@ -401,7 +391,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         vc1 = str(row.get('Virtual & Tatap Muka', '')).replace('.0', '').strip()
 
-        # Deteksi otomatis indeks kolom logistik
         try:
             log_kie = float(row.iloc[17]) if pd.notna(row.iloc[17]) and str(row.iloc[17]).strip() not in ['', 'NaN'] else 0
             log_kon = float(row.iloc[18]) if pd.notna(row.iloc[18]) and str(row.iloc[18]).strip() not in ['', 'NaN'] else 0
@@ -419,10 +408,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
         any_medsoc_in_lokasi = any(kw in lokasi.lower() for kw in medsoc_keywords)
         is_vo = (jns_kontak == '3')
-        
-        # PERBAIKAN: PWID mencakup 1401 dan 1403 sesuai aturan Anda
         is_pwid = (v_tipe_sasaran in ['1401', '1403'])
-        
         kunci_klien_ref = f"{v_ssr}_{id_clean}"
 
         context_data = {
@@ -436,8 +422,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'is_file_rujukan': is_file_rujukan, 'df_ref': df_ref, 'ref_ssr_id_to_nik': ref_ssr_id_to_nik, 'ref_nik_ssr_to_id': ref_nik_ssr_to_id,
             'pernah_cbs_di_rujukan': dict_pernah_cbs.get(kunci_klien_ref, False),
             'pernah_prep_di_rujukan': dict_pernah_prep_rujukan.get(kunci_klien_ref, False),
-            
-            # === TAMBAHAN BARU: Parameter yang dipanggil di aturan validasi logistik ===
             'total_log_keseluruhan_klien': dict_total_log_per_klien.get(kunci_klien_ref, 0.0)
         }
 
@@ -475,6 +459,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 pass
 
     return pd.DataFrame(list_kesalahan)
+
 # ==========================================================
 # 4. LOGIKA TOMBOL EKSEKUSI
 # ==========================================================
@@ -510,7 +495,6 @@ if tombol_proses:
                 DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state['aturan_kustom'])]
                 
                 matrix_rows = []
-                list_batch_tren = []
                 
                 for ind in DAFTAR_INDIKATOR_AKTIF:
                     r_dict = {"INDIKATOR KESALAHAN DATA": ind}
@@ -531,19 +515,9 @@ if tombol_proses:
                 st.session_state['df_tabel_atas'] = df_atas
                 st.session_state['df_tabel_bawah'] = df_bawah
                 
-                if supabase and len(df_bawah) > 0:
-                    try:
-                        for _, row_err in df_bawah.iterrows():
-                            list_batch_tren.append({
-                                "ssr": str(row_err['Lembaga SSR']),
-                                "tanggal": str(row_err['Tanggal']),
-                                "id_klien": str(row_err['ID Klien']),
-                                "indikator_kesalahan": str(row_err['INDIKATOR KESALAHAN DATA']),
-                                "is_revisi": False,
-                                "justifikasi": ""
-                            })
-                        supabase.table("log_validasi_review").upsert(list_batch_tren, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
-                    except Exception: pass
+                # CATATAN: Fitur Auto-Save Database sengaja DIHAPUS 
+                # dari blok ini agar database Supabase aman dari auto-insert massal.
+                
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
@@ -551,19 +525,16 @@ if tombol_proses:
             st.session_state['proses_selesai'] = True
 
 # ==========================================================
-# 5. RENDER LAYOUT EXECUTIVE DASHBOARD (GLASSMORPHISM)
+# 5. RENDER LAYOUT EXECUTIVE DASHBOARD & TABEL BAWAH
 # ==========================================================
-if st.session_state['proses_selesai']:
+if st.session_state.get('proses_selesai', False):
     
-    # Kalkulasi Metrik Utama
-    tot_data = st.session_state['total_entri']
-    tot_err = len(st.session_state['df_tabel_bawah']) if st.session_state['df_tabel_bawah'] is not None else 0
+    tot_data = st.session_state.get('total_entri', 0)
+    tot_err = len(st.session_state['df_tabel_bawah']) if st.session_state.get('df_tabel_bawah') is not None else 0
     akurasi = 100.0 if tot_data == 0 else max(0, 100 - (tot_err / tot_data * 100))
     
-    # <<< BUKA KONTANER GLASSMORPHISM >>>
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 
-    # --- TAMBAHKAN BARIS INI ---
     tanggal_hari_ini = datetime.now().strftime('%d %B %Y')
     st.markdown(f"""
         <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
@@ -571,7 +542,6 @@ if st.session_state['proses_selesai']:
         </p>
     """, unsafe_allow_html=True)
     
-    # --- BARIS 1: METRIK UTAMA ---
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(label="Total Data Diproses", value=f"{tot_data:,}")
@@ -582,38 +552,29 @@ if st.session_state['proses_selesai']:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- BARIS 2: TABS MATRIKS DAN TREN ---
     tab1, tab2 = st.tabs(["📋 Rekap Kesalahan (Matriks)", "📈 Analisis Tren Semester"])
 
     with tab1:
         st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
         
-        df_atas_view = st.session_state['df_tabel_atas'].copy() if st.session_state['df_tabel_atas'] is not None else pd.DataFrame()
+        df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame()).copy()
         
         if not df_atas_view.empty:
             kolom_indikator = 'INDIKATOR KESALAHAN DATA'
             kolom_ssr = [c for c in df_atas_view.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
             
-            # Konversi ke numerik
             for col in kolom_ssr:
                 df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
             
-            # Filter SSR yang memiliki temuan
             ssr_aktif = [col for col in kolom_ssr if df_atas_view[col].sum() > 0]
             kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
             df_final = df_atas_view[[c for c in kolom_final if c in df_atas_view.columns]]
             
-            # ==========================================
-            # PERBAIKAN ERROR PANDAS DI SINI
-            # ==========================================
             df_display = df_final.astype(str)
             for col in ssr_aktif:
                 if col in df_display.columns:
-                    # Menggunakan '.loc' alih-alih '.replace()' untuk menghindari TypeError
                     df_display.loc[df_display[col] == '0', col] = '-'
-            # ==========================================
             
-            # Tampilkan ke dataframe Streamlit
             column_config = {
                 kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=300),
                 "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
@@ -630,7 +591,6 @@ if st.session_state['proses_selesai']:
             )
         else:
             st.info("✨ Tidak ada rekapan karena data bersih.")
-
 
     with tab2:
         if supabase:
@@ -662,24 +622,17 @@ if st.session_state['proses_selesai']:
                     st.info("Belum ada rekam jejak log review tersimpan di database.")
             except Exception: pass
 
-    # <<< TUTUP KONTANER GLASSMORPHISM >>>
     st.markdown('</div>', unsafe_allow_html=True)
-
     st.markdown("<br>", unsafe_allow_html=True)
-    
-    # --- BARIS 3: DETAIL DATA (Berada di luar kontainer kaca agar tabel besar leluasa) ---
+
+# --- BARIS 3: DETAIL DATA (Berada di luar kontainer kaca) ---
 st.markdown("### 🔍 Hasil Review Penjangkauan")
-if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_tabel_bawah'].empty:
+if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
     kolom_susunan = [
         "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
         "NIK", "Tipe Sasaran", "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
     ]
     df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
-    
-    # TAMBAHAN: Mencegah user mengedit 'Justifikasi' jika bukan tipe (konfirmasi)
-    # Streamlit data_editor belum mendukung 'disable' per-sel secara native, 
-    # namun kita bisa menggunakan trik validasi di belakang layar yang sudah Anda miliki 
-    # dan menambahkan peringatan visual.
 
     df_hasil_edit = st.data_editor(
         df_bawah_view,
@@ -692,7 +645,6 @@ if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_t
             "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
             "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
             "validasi hasil review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
-            # Kita arahkan user untuk hanya mengisi baris tertentu
             "Justifikasi": st.column_config.TextColumn("Justifikasi (HANYA untuk baris yg ada teks 'konfirmasi')", width=280),
         },
         disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
@@ -708,39 +660,43 @@ if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_t
                 sukses_simpan = 0
                 peringatan_justifikasi = False
                 indeks_baris_terpilih = []
+                pesan_error_db = ""
                 
                 with st.spinner("Menyimpan progres validasi..."):
                     for idx, row_edit in df_hasil_edit.iterrows():
                         ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
                         text_justifikasi = str(row_edit['Justifikasi']).strip()
                         
-                        # LOGIKA PROTEKSI: Mengabaikan input justifikasi jika bukan tipe konfirmasi
+                        # Aturan: Hanya bisa mengisi justifikasi jika ada kata "konfirmasi"
                         is_konfirmasi = "konfirmasi" in ind_text.lower()
-                        if not is_konfirmasi and text_justifikasi != "" and text_justifikasi != "None":
+                        if not is_konfirmasi and text_justifikasi not in ["", "None"]:
                             peringatan_justifikasi = True
                             text_justifikasi = "" 
                         
-                        # Hanya proses data jika dicentang 'Pilih' ATAU ada teks 'Justifikasi' (pada tipe konfirmasi)
-                        if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi != "" and text_justifikasi != "None"):
+                        # Aturan: Hanya kirim ke DB jika baris DICENTANG (Pilih) ATAU ada justifikasi sah
+                        if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi not in ["", "None"]):
                             try:
                                 supabase.table("log_validasi_review").upsert({
-                                    # SINKRONISASI NAMA KOLOM SUPABASE
-                                    "lembaga_ssr": str(row_edit['Lembaga SSR']),
+                                    # KEY INI SUDAH DISESUAIKAN DENGAN STRUKTUR ASLI DATABASE ANDA
+                                    "ssr": str(row_edit['Lembaga SSR']),
                                     "tanggal": str(row_edit['Tanggal']),
                                     "id_klien": str(row_edit['ID Klien']),
-                                    "indikator_kesalahan_data": ind_text,
+                                    "indikator_kesalahan": ind_text,
                                     "is_revisi": bool(row_edit['Pilih']),
                                     "justifikasi": text_justifikasi
-                                }, on_conflict="lembaga_ssr,tanggal,id_klien,indikator_kesalahan_data").execute()
+                                }, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
                                 
                                 sukses_simpan += 1
                                 indeks_baris_terpilih.append(idx)
                                 
                             except Exception as e:
-                                st.error(f"Gagal menyimpan baris data: {e}")
+                                pesan_error_db = str(e)
                 
-                # --- MENGHILANGKAN BARIS YANG SUKSES DARI TABEL ---
-                if sukses_simpan > 0:
+                # Umpan balik (Feedback) ke User
+                if pesan_error_db != "":
+                    st.error(f"Gagal menyimpan ke database. Cek apakah storage Supabase masih penuh/Read-Only. Error detail: {pesan_error_db}")
+                elif sukses_simpan > 0:
+                    # Hapus baris yang berhasil disimpan dari tampilan layar
                     df_sekarang = st.session_state['df_tabel_bawah']
                     df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
                     st.session_state['df_tabel_bawah'] = df_sisa
@@ -748,12 +704,13 @@ if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_t
                     st.success(f"🎉 Berhasil menyimpan {sukses_simpan} baris! Data yang selesai otomatis disembunyikan.")
                     
                     if peringatan_justifikasi:
-                        st.warning("⚠️ Beberapa teks Justifikasi ditolak/diabaikan karena baris tersebut bukan tipe indikator (konfirmasi).")
+                        st.warning("⚠️ Beberapa teks Justifikasi diabaikan/dikosongkan karena baris tersebut BUKAN indikator konfirmasi.")
                     
+                    import time
+                    time.sleep(1.5)
                     st.rerun()
                 else:
-                    st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
-                        
+                    st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")                        
         # --- TAMBAHKAN DI BAWAHNYA ---
         st.markdown("<br>", unsafe_allow_html=True) # Memberi sedikit jarak
         st.markdown("---") # Memberi garis pemisah agar terlihat sebagai aksi berbeda
