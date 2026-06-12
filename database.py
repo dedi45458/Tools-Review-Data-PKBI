@@ -80,51 +80,68 @@ def ambil_rekap_tren():
 from sqlalchemy import create_engine
 
 def import_data_rujukan(df_rujukan):
-    # Mapping: Nama di Excel (kiri) -> Nama di Database (kanan)
+    # Bersihkan spasi gaib di awal/akhir nama kolom Excel jika ada
+    df_rujukan.columns = df_rujukan.columns.str.strip()
+
+    # Mapping: Nama di Excel (kiri) -> Nama di Database (Ubah ke HURUF KECIL semua)
     pemetaan = {
-        "Lembaga SR": "Lembaga_SR",
-        "Lembaga SSR": "Lembaga_SSR",
-        "Kode Petugas": "Kode_Petugas",
-        "Nama Kota": "Nama_Kota",
-        "Nama Layanan": "Nama_Layanan",
-        "Tanggal": "Tanggal",
-        "ID Klien": "ID_Klien",
-        "NIK": "NIK",
-        "Tipe Klien": "Tipe_Klien",
-        "Umur": "Umur",
-        "Jenis Kelamin": "Jenis_Kelamin",
-        "Kontak Awal": "Kontak_Awal",
-        "Jenis Layanan": "Jenis_Layanan_Detil", # Pastikan ini cocok
-        "Rujukan": "Rujukan",
-        "Hasil Tes IMS": "Hasil_Tes_IMS",
-        "Menerima Pengobatan IMS": "Menerima_Pengobatan_IMS",
-        "Menerima Hasil VCT": "Menerima_Hasil_VCT",
-        "Hasil Tes HIV": "Hasil_Tes_HIV"
+        "Lembaga SR": "lembaga_sr",
+        "Lembaga SSR": "lembaga_ssr",
+        "Kode Petugas": "kode_petugas",
+        "Nama Kota": "nama_kota",
+        "Nama Layanan": "nama_layanan",
+        "Tanggal": "tanggal",
+        "ID Klien": "id_klien",
+        "NIK": "nik",
+        "Tipe Klien": "tipe_klien",
+        "Umur": "umur",
+        "Jenis Kelamin": "jenis_kelamin",
+        "Kontak Awal": "kontak_awal",
+        "Jenis Layanan": "jenis_layanan_detil", 
+        "Rujukan": "rujukan",
+        "Hasil Tes IMS": "hasil_tes_ims",
+        "Menerima Pengobatan IMS": "menerima_pengobatan_ims",
+        "Menerima Hasil VCT": "menerima_hasil_vct",
+        "Hasil Tes HIV": "hasil_tes_hiv"
     }
 
-    # 1. Rename kolom di dataframe agar cocok dengan database
+    # 1. Rename kolom di dataframe agar cocok dengan database (versi lowercase)
     df_rujukan.rename(columns=pemetaan, inplace=True)
     
-    # 2. Pastikan hanya kolom yang ada di database yang di-upload
+    # 2. Antisipasi: Jika ada kolom rujukan yang absen di Excel, isi otomatis dengan Kosong/None
     kolom_db = list(pemetaan.values())
+    for col in kolom_db:
+        if col not in df_rujukan.columns:
+            df_rujukan[col] = None 
+            
+    # Saring dataframe hanya berisi kolom yang terdaftar di DB
     df_rujukan = df_rujukan[kolom_db]
 
-    # ... lanjut ke proses koneksi dan to_sql seperti sebelumnya ...
+    # 3. Proses pengosongan tabel lama & upload ulang
     conn = dapatkan_koneksi_neon()
-    if conn is None: return False
+    if conn is None: 
+        return False
     
     try:
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE public.data_rujukan_hiv_positif;")
             conn.commit()
         
-        from sqlalchemy import create_engine
+        # Buka engine SQLAlchemy untuk upload data secara massal
         engine = create_engine(st.secrets["neon_db"]["connection_string"])
         
-        df_rujukan.to_sql('data_rujukan_hiv_positif', engine, if_exists='append', index=False, method='multi', chunksize=500)
+        # Kirim data ke database
+        df_rujukan.to_sql(
+            'data_rujukan_hiv_positif', 
+            engine, 
+            if_exists='append', 
+            index=False, 
+            method='multi', 
+            chunksize=500
+        )
         return True
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Gagal melakukan sinkronisasi ke database Neon: {e}")
         return False
     finally:
         conn.close()
