@@ -712,18 +712,15 @@ if st.session_state['proses_selesai']:
                             if row_edit['Pilih'] or text_justifikasi != "":
                                 try:
                                     supabase.table("log_validasi_review").upsert({
-                                        # SINKRONISASI: Ubah key dictionary sesuai nama kolom di SQL
-                                            "lembaga_ssr": str(row_edit['Lembaga SSR']), 
-                                            "tanggal": str(row_edit['Tanggal']),
-                                            "id_klien": str(row_edit['ID Klien']),
-                                            "indikator_kesalahan_data": ind_text, 
-                                            "is_revisi": bool(row_edit['Pilih']),
-                                            "justifikasi": text_justifikasi
-                                    }, on_conflict="lembaga_ssr,tanggal,id_klien,indikator_kesalahan_data").execute() # SINKRONISASI CONSTRAINT
+                                        "ssr": str(row_edit['Lembaga SSR']),
+                                        "tanggal": str(row_edit['Tanggal']),
+                                        "id_klien": str(row_edit['ID Klien']),
+                                        "indikator_kesalahan": ind_text,
+                                        "is_revisi": bool(row_edit['Pilih']),
+                                        "justifikasi": text_justifikasi
+                                    }, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
                                     sukses_simpan += 1
-                                except Exception as e: 
-                                        # Tampilkan eror jika ada kendala lain (misal: masalah kuota memori/jaringan)
-                                        st.error(f"Gagal menyimpan baris data: {e}")
+                                except Exception: pass
                             
                         if peringatan_justifikasi:
                             st.warning("⚠️ Beberapa teks Justifikasi otomatis diabaikan karena ditaruh pada indikator mutlak (bukan tipe konfirmasi).")
