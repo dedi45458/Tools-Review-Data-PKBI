@@ -980,47 +980,50 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_kanan:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    
+    # Mengambil daftar medsos
+    list_medsos = ambil_keyword_medsos()
+    st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
+    
+    if list_medsos:
+        # Membuat container string HTML untuk badge-badge medsos
+        html_badges = ""
+        for m in list_medsos:
+            html_badges += f"""
+            <span style="
+                background-color: rgba(56, 189, 248, 0.15); 
+                color: #38bdf8; 
+                border: 1px solid rgba(56, 189, 248, 0.3);
+                padding: 6px 12px; 
+                border-radius: 20px; 
+                font-family: inherit; 
+                font-size: 0.85rem;
+                font-weight: 500;
+                white-space: nowrap; /* Mencegah 1 badge terbelah jadi 2 baris */
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            ">
+                🔹 {m}
+            </span>
+            """
         
-        # Mengambil daftar medsos
-        list_medsos = ambil_keyword_medsos()
-        st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
+        # Tampilkan semua badge di dalam satu box container yang rapi menggunakan Flexbox
+        st.markdown(f"""
+            <div style="
+                display: flex;
+                flex-wrap: wrap; /* Otomatis turun ke bawah jika mentok ke kanan */
+                gap: 10px; /* Jarak rapi antar badge */
+                padding: 15px; 
+                border: 1px solid rgba(255,255,255,0.1); 
+                border-radius: 8px; 
+                background-color: rgba(0,0,0,0.2);
+            ">
+                {html_badges}
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("Belum ada data medsos di database.")
         
-        if list_medsos:
-            # 1. KUMPULKAN dulu semua badge HTML ke dalam satu variabel teks
-            html_badges = ""
-            for m in list_medsos:
-                html_badges += f"""
-                <span style="
-                    display: inline-block; 
-                    background-color: rgba(56, 189, 248, 0.15); 
-                    color: #38bdf8; 
-                    border: 1px solid rgba(56, 189, 248, 0.3);
-                    padding: 4px 10px; 
-                    margin: 4px; 
-                    border-radius: 6px; 
-                    font-family: monospace; 
-                    font-size: 0.9rem;
-                    white-space: nowrap;
-                ">
-                    🔹 {m}
-                </span>
-                """
-            
-            # 2. TAMPILKAN SEKALIGUS di luar perulangan agar mengalir ke samping
-            st.markdown(f"""
-                <div style="
-                    padding: 15px; 
-                    border: 1px solid rgba(255, 255, 255, 0.1); 
-                    border-radius: 8px; 
-                    background-color: rgba(0, 0, 0, 0.2);
-                    display: block;
-                    width: 100%;
-                ">
-                    {html_badges}
-                </div>
-            """, unsafe_allow_html=True)
-            
-        else:
-            st.info("Belum ada data medsos di database.")
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
