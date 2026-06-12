@@ -267,12 +267,30 @@ with st.sidebar:
 # ==========================================================
 # 3. ENGINE VALIDASI UTAMA (UPDATED FOR DUAL LOGISTICS)
 # ==========================================================
+def perbaiki_header(df):
+    # Menggabungkan dua baris header menjadi satu nama kolom yang unik
+    # Misal: "Dukungan GF" + "KIE" menjadi "Dukungan GF - KIE"
+    if len(df) > 0:
+        header_baru = []
+        for i in range(len(df.columns)):
+            main = str(df.columns[i])
+            sub = str(df.iloc[0, i])
+            
+            # Jika kolom utama adalah 'Unnamed', ambil dari sub saja
+            if "Unnamed" in main:
+                header_baru.append(sub)
+            else:
+                header_baru.append(f"{main} - {sub}")
+        
+        df.columns = header_baru
+        df = df.drop(0).reset_index(drop=True) # Hapus baris header kedua agar tidak jadi data
+    return df
+
 def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
     
     df = df_asli.copy()
-    
     # ==========================================================
     # SEMPURNAKAN: MENANGANI HEADER BERTINGKAT (GF & MANDIRI)
     # ==========================================================
