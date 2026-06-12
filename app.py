@@ -987,7 +987,7 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
         st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
         
         if list_medsos:
-            # 1. KUMPULKAN dulu semua badge HTML ke dalam satu variabel teks
+            # Membuat container string HTML untuk badge-badge medsos
             html_badges = ""
             for m in list_medsos:
                 html_badges += f"""
@@ -1001,26 +1001,23 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
                     border-radius: 6px; 
                     font-family: monospace; 
                     font-size: 0.9rem;
-                    white-space: nowrap;
                 ">
                     🔹 {m}
                 </span>
                 """
             
-            # 2. TAMPILKAN SEKALIGUS di luar perulangan agar mengalir ke samping
+            # Tampilkan semua badge di dalam satu box container yang rapi
             st.markdown(f"""
                 <div style="
                     padding: 15px; 
-                    border: 1px solid rgba(255, 255, 255, 0.1); 
+                    border: 1px solid rgba(255,255,255,0.1); 
                     border-radius: 8px; 
-                    background-color: rgba(0, 0, 0, 0.2);
-                    display: block;
-                    width: 100%;
+                    background-color: rgba(0,0,0,0.2);
+                    line-height: 1.8;
                 ">
                     {html_badges}
                 </div>
             """, unsafe_allow_html=True)
-            
         else:
             st.info("Belum ada data medsos di database.")
         st.markdown('</div>', unsafe_allow_html=True)
