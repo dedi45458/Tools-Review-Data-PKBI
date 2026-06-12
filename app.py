@@ -181,7 +181,24 @@ with st.sidebar:
     
     with st.container():
         st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>📁 MANAJEMEN BERKAS</b>", unsafe_allow_html=True)
-        file_referensi = st.file_uploader("Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"], help="Opsional: Digunakan sebagai basis data rujukan konfirmasi")
+        # Upload data referensi untuk validasi (di-import ke database)
+        file_referensi = st.file_uploader("Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"], help="Digunakan sebagai basis data rujukan konfirmasi")
+        
+        # TOMBOL UPDATE DATABASE REFERENSI (BARU)
+        if file_referensi:
+            if st.button("🔄 Update Database Referensi", use_container_width=True):
+                with st.spinner("Mengunggah data rujukan ke database..."):
+                    try:
+                        df_ref = pd.read_excel(file_referensi)
+                        # Memanggil fungsi yang kita buat di database.py
+                        from database import import_data_rujukan
+                        if import_data_rujukan(df_ref):
+                            st.success("✅ Database referensi berhasil diperbarui!")
+                        else:
+                            st.error("❌ Gagal mengupdate database.")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
         files_review = st.file_uploader("Raw Data Penjangkauan (Multi-File)", type=["xlsx", "csv"], accept_multiple_files=True, help="Wajib: Anda bisa memilih lebih dari satu file sekaligus")
     
     st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
