@@ -692,12 +692,13 @@ if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['
         st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
         
         if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-            with st.spinner("Sedang memproses pengarsipan data..."):
-                from database import jalankan_agregasi_tren
-                
+            # Pastikan fungsi ini sudah diimpor di atas file Anda: from database import jalankan_agregasi_tren
+            from database import jalankan_agregasi_tren
+            
+            with st.spinner("Sedang memproses pengarsipan data ke database..."):
                 if jalankan_agregasi_tren():
                     st.success("🎉 Data berhasil diarsipkan ke tabel rekap dan log detail dibersihkan!")
-                    st.balloons()
+                    st.balloons() 
                     st.rerun()
                 else:
-                    st.error("Gagal memproses arsip. Periksa koneksi database Anda.")
+                    st.error("Gagal memproses arsip. Periksa koneksi database Anda di file database.py.")
