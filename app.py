@@ -75,21 +75,6 @@ def set_modern_theme():
     /* 7. Penyesuaian Angka Metrik */
     [data-testid="stMetricValue"] { color: #38bdf8 !important; font-weight: 700; }
     [data-testid="stMetricDelta"] { font-weight: 500; }
-
-    /* Mengunci posisi container yang memiliki class penanda 'box-simpan-melayang' */
-    div[data-testid="stVerticalBlock"]:has(.box-simpan-melayang) {
-        position: fixed;
-        bottom: 35px;       /* Jarak konstan dari bawah layar */
-        right: 40px;        /* Jarak konstan dari kanan layar */
-        z-index: 999999;    /* Memaksa menembus semua layer termasuk saat tabel Full Screen */
-        background-color: rgba(17, 22, 34, 0.95); /* Warna background gelap panel */
-        padding: 16px;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(6px); /* Efek blur estetik pada data di belakang panel */
-        width: 340px;       /* Lebar kotak dikunci agar proporsional */
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -694,11 +679,9 @@ if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['
         disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
     )
     
-    with st.container():
-        # Jangkar HTML sebagai pemicu script CSS di atas
-        st.markdown('<div class="box-simpan-melayang"></div>', unsafe_allow_html=True)
-    
-        # Tombol menggunakan lebar penuh container melayang (340px)
+    st.markdown("<br>", unsafe_allow_html=True)
+    col_save, _ = st.columns([1, 2])
+    with col_save:
         if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
             if not supabase:
                 st.error("Koneksi database tidak tersedia.")
@@ -707,38 +690,37 @@ if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['
                 peringatan_justifikasi = False
                 indeks_baris_terpilih = []
                 pesan_error_db = ""
-            
+                
                 with st.spinner("Menyimpan progres validasi..."):
                     for idx, row_edit in df_hasil_edit.iterrows():
                         ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
                         text_justifikasi = str(row_edit['Justifikasi']).strip()
-                    
+                        
                         # Aturan: Hanya bisa mengisi justifikasi jika ada kata "konfirmasi"
                         is_konfirmasi = "konfirmasi" in ind_text.lower()
                         if not is_konfirmasi and text_justifikasi not in ["", "None"]:
                             peringatan_justifikasi = True
                             text_justifikasi = "" 
-                    
+                        
                         # Aturan: Hanya kirim ke DB jika baris DICENTANG (Pilih) ATAU ada justifikasi sah
                         if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi not in ["", "None"]):
                             try:
-                                # 💡 CATATAN: Jika error 'Could not find column' di screenshot Anda muncul kembali,
-                                # Ubah "indikator_kesalahan" di bawah menjadi "indikator_kesalahan_data" (sesuaikan dengan isi DB)
                                 supabase.table("log_validasi_review").upsert({
+                                    # KEY INI SUDAH DISESUAIKAN DENGAN STRUKTUR ASLI DATABASE ANDA
                                     "ssr": str(row_edit['Lembaga SSR']),
                                     "tanggal": str(row_edit['Tanggal']),
                                     "id_klien": str(row_edit['ID Klien']),
-                                    "indikator_kesalahan": ind_text, 
+                                    "indikator_kesalahan": ind_text,
                                     "is_revisi": bool(row_edit['Pilih']),
                                     "justifikasi": text_justifikasi
                                 }, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
-                            
+                                
                                 sukses_simpan += 1
                                 indeks_baris_terpilih.append(idx)
-                            
+                                
                             except Exception as e:
-                               pesan_error_db = str(e)
-            
+                                pesan_error_db = str(e)
+                
                 # Umpan balik (Feedback) ke User
                 if pesan_error_db != "":
                     st.error(f"Gagal menyimpan ke database. Cek apakah storage Supabase masih penuh/Read-Only. Error detail: {pesan_error_db}")
@@ -747,12 +729,12 @@ if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['
                     df_sekarang = st.session_state['df_tabel_bawah']
                     df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
                     st.session_state['df_tabel_bawah'] = df_sisa
-                
+                    
                     st.success(f"🎉 Berhasil menyimpan {sukses_simpan} baris! Data yang selesai otomatis disembunyikan.")
-                
+                    
                     if peringatan_justifikasi:
                         st.warning("⚠️ Beberapa teks Justifikasi diabaikan/dikosongkan karena baris tersebut BUKAN indikator konfirmasi.")
-                
+                    
                     import time
                     time.sleep(1.5)
                     st.rerun()
