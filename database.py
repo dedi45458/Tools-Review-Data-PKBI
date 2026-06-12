@@ -1,81 +1,59 @@
-import streamlit as st
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import pandas as pd
+# --- TAMBAHKAN DI BAWAH FILE database.py ---
+from sqlalchemy import create_engine
 
-def dapatkan_koneksi_neon():
-    """Membuka koneksi aman ke Neon Postgres menggunakan connection pooling."""
+def import_data_rujukan(df_rujukan):
+    """
+    Mengimpor data Excel rujukan ke dalam tabel data_rujukan_hiv_positif.
+    Data lama akan dihapus (TRUNCATE) agar database selalu berisi data terbaru.
+    """
+    conn = dapatkan_koneksi_neon()
+    if conn is None:
+        return False
+    
     try:
+        # 1. Bersihkan tabel lama
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE TABLE public.data_rujukan_hiv_positif;")
+            conn.commit()
+        
+        # 2. Persiapkan koneksi SQLAlchemy untuk insert massal yang cepat
         conn_str = st.secrets["neon_db"]["connection_string"]
-        conn = psycopg2.connect(conn_str)
-        return conn
-    except Exception as e:
-        st.error(f"Gagal menyambungkan ke Neon Postgres: {e}")
-        return None
-
-def simpan_log_ke_neon(list_data_log):
-    """
-    Menyimpan data hasil review secara batch ke tabel log_validasi_review.
-    Format list_data_log: [(Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi), ...]
-    """
-    if not list_data_log:
-        return False
+        engine = create_engine(conn_str)
         
+        # 3. Masukkan data dari DataFrame
+        # Pastikan nama kolom di DataFrame sudah sesuai dengan nama kolom di tabel SQL
+        df_rujukan.to_sql(
+            'data_rujukan_hiv_positif', 
+            engine, 
+            if_exists='append', 
+            index=False,
+            method='multi', # Mengoptimalkan kecepatan insert
+            chunksize=1000
+        )
+        return True
+        
+    except Exception as e:
+        st.error(f"Gagal mengimpor data rujukan ke database: {e}")
+        return False
+    finally:
+        conn.close()
+
+def cek_nik_di_rujukan(nik_target):
+    """
+    Mengecek apakah NIK sudah terdaftar di database referensi HIV Positif.
+    Berguna untuk validasi data rujukan.
+    """
     conn = dapatkan_koneksi_neon()
     if conn is None:
         return False
         
     try:
         with conn.cursor() as cur:
-            query = """
-                INSERT INTO public.log_validasi_review 
-                (Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data)
-                DO UPDATE SET 
-                    is_revisi = EXCLUDED.is_revisi,
-                    Justifikasi = EXCLUDED.Justifikasi;
-            """
-            cur.executemany(query, list_data_log)
-            conn.commit()
-            return True
+            # Menggunakan parameterized query untuk keamanan
+            cur.execute("SELECT 1 FROM public.data_rujukan_hiv_positif WHERE NIK = %s LIMIT 1;", (str(nik_target),))
+            hasil = cur.fetchone()
+            return hasil is not None
     except Exception as e:
-        conn.rollback()
-        st.error(f"Gagal menyimpan log ke database: {e}")
         return False
-    finally:
-        conn.close()
-
-def jalankan_agregasi_tren():
-    """Memanggil fungsi PL/pgSQL untuk memindahkan log harian ke rekap tren bulanan."""
-    conn = dapatkan_koneksi_neon()
-    if conn is None:
-        return False
-        
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT proses_sari_data_bulanan();")
-            conn.commit()
-            return True
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Gagal menjalankan agregasi data: {e}")
-        return False
-    finally:
-        conn.close()
-
-def ambil_rekap_tren():
-    """Mengambil data tren bulanan untuk ditampilkan dalam grafik/tabel di Streamlit."""
-    conn = dapatkan_koneksi_neon()
-    if conn is None:
-        return pd.DataFrame()
-        
-    try:
-        query = "SELECT periode, nama_ssr, indikator_kesalahan, jumlah_kesalahan FROM rekap_tren_bulanan ORDER BY periode DESC;"
-        df = pd.read_sql(query, conn)
-        return df
-    except Exception as e:
-        st.error(f"Gagal mengambil data rekap tren: {e}")
-        return pd.DataFrame()
     finally:
         conn.close()
