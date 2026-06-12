@@ -291,6 +291,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
     
     df = df_asli.copy()
+    st.write("Daftar kolom yang terbaca oleh sistem:", df.columns.tolist())
     # ==========================================================
     # SEMPURNAKAN: MENANGANI HEADER BERTINGKAT (GF & MANDIRI)
     # ==========================================================
