@@ -181,24 +181,7 @@ with st.sidebar:
     
     with st.container():
         st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>📁 MANAJEMEN BERKAS</b>", unsafe_allow_html=True)
-        # Upload data referensi untuk validasi (di-import ke database)
-        file_referensi = st.file_uploader("Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"], help="Digunakan sebagai basis data rujukan konfirmasi")
-        
-        # TOMBOL UPDATE DATABASE REFERENSI (BARU)
-        if file_referensi:
-            if st.button("🔄 Update Database Referensi", use_container_width=True):
-                with st.spinner("Mengunggah data rujukan ke database..."):
-                    try:
-                        df_ref = pd.read_excel(file_referensi)
-                        # Memanggil fungsi yang kita buat di database.py
-                        from database import import_data_rujukan
-                        if import_data_rujukan(df_ref):
-                            st.success("✅ Database referensi berhasil diperbarui!")
-                        else:
-                            st.error("❌ Gagal mengupdate database.")
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-
+        file_referensi = st.file_uploader("Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"], help="Opsional: Digunakan sebagai basis data rujukan konfirmasi")
         files_review = st.file_uploader("Raw Data Penjangkauan (Multi-File)", type=["xlsx", "csv"], accept_multiple_files=True, help="Wajib: Anda bisa memilih lebih dari satu file sekaligus")
     
     st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
@@ -692,13 +675,9 @@ if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['
         st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
         
         if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-            # Pastikan fungsi ini sudah diimpor di atas file Anda: from database import jalankan_agregasi_tren
-            from database import jalankan_agregasi_tren
-            
-            with st.spinner("Sedang memproses pengarsipan data ke database..."):
+            with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
                 if jalankan_agregasi_tren():
-                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap dan log detail dibersihkan!")
-                    st.balloons() 
-                    st.rerun()
+                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
+                    st.balloons()
                 else:
-                    st.error("Gagal memproses arsip. Periksa koneksi database Anda di file database.py.")
+                    st.error("Gagal memproses arsip ke database.")
