@@ -728,12 +728,37 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     else:
                         st.error("Gagal memproses arsip ke database.")
 
-# ----------------------------------------------------------
-# MENU 2: PENGATURAN MEDSOS (Menu Tambahan Baru)
-# ----------------------------------------------------------
+# ==========================================================
+# FUNGSI & INISIALISASI KEYWORD MEDSOS (Taruh di atas/sebelum Menu 2)
+# ==========================================================
+if 'medsoc_keywords' not in st.session_state:
+    # Memasukkan daftar bawaan yang Anda berikan agar langsung muncul di menu baru
+    st.session_state['medsoc_keywords'] = [
+        'whatsapp', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 
+        'grindr', 'growlr', 'instagram', 'tantan', 'telegram', 'telepon', 
+        'tinder', 'twitter', 'line', 'facebook', 'messenger', 'romeo', 
+        'tiktok', 'tagged', 'litmatch', 'scruff', 'wechat', 'threads'
+    ]
+
+def ambil_keyword_medsos():
+    """Mengambil daftar keyword medsos aktif dari session state"""
+    return sorted(st.session_state['medsoc_keywords'])
+
+def tambah_keyword_medsos(keyword):
+    """Menambahkan keyword medsos baru ke dalam daftar"""
+    keyword_clean = keyword.strip().lower()
+    if keyword_clean and keyword_clean not in st.session_state['medsoc_keywords']:
+        st.session_state['medsoc_keywords'].append(keyword_clean)
+        return True
+    return False
+
+
+# ==========================================================
+# MENU 2: PENGATURAN MEDSOS (Ganti bagian menu 2 Anda dengan ini)
+# ==========================================================
 elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
     st.title("⚙️ Pengaturan Keyword Media Sosial")
-    st.markdown("Gunakan menu ini untuk menambahkan atau melihat daftar nama media sosial yang akan digunakan sebagai filter pada pencarian **Lokasi Outreach / Penjangkauan Online**.")
+    st.markdown("Gunakan menu ini untuk menambahkan atau melihat daftar nama media sosial yang digunakan sebagai filter pada pencarian **Lokasi Outreach / Penjangkauan Online**.")
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -743,35 +768,39 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         st.subheader("➕ Tambah Medsos Baru")
         with st.form("form_tambah_medsos", clear_on_submit=True):
-            medsos_baru = st.text_input("Masukkan Nama Medsos:", placeholder="Contoh: threads, wechat, tinder")
+            medsos_baru = st.text_input("Masukkan Nama Medsos:", placeholder="Contoh: grindr, michat, wechat")
             tombol_simpan = st.form_submit_button("Simpan Keyword", use_container_width=True)
             
             if tombol_simpan:
                 if medsos_baru:
-                    # Pastikan fungsi tambah_keyword_medsos sudah ada di script Anda
                     sukses = tambah_keyword_medsos(medsos_baru)
                     if sukses:
-                        st.success(f"Berhasil menambahkan '{medsos_baru.lower()}'!")
+                        st.success(f"Berhasil menambahkan '{medsos_baru.lower()}' ke daftar aktif!")
+                        import time
+                        time.sleep(1)
+                        st.rerun()
                     else:
-                        st.error("Gagal menyimpan ke database.")
+                        st.warning(f"Keyword '{medsos_baru.lower()}' sudah ada di dalam daftar.")
                 else:
                     st.warning("Kolom tidak boleh kosong!")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_kanan:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.subheader("📋 Daftar Keyword Aktif")
-        # Pastikan fungsi ambil_keyword_medsos sudah ada di script Anda
+        
+        # Mengambil daftar medsos (sudah termasuk 25 keyword bawaan)
         list_medsos = ambil_keyword_medsos()
+        st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
         
         if list_medsos:
-            # Menggunakan wadah yang bisa di-scroll agar rapi jika datanya banyak
+            # Menggunakan wadah scrollable (maksimal tinggi 350px) agar tampilan tetap rapi dan ringkas
             st.markdown("""
-                <div style='max-height: 300px; overflow-y: auto; padding-right: 10px;'>
+                <div style='max-height: 350px; overflow-y: auto; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; background-color: rgba(0,0,0,0.2);'>
             """, unsafe_allow_html=True)
             
+            # Menampilkan list medsos menggunakan style badge kecil ala code
             for m in list_medsos:
-                st.markdown(f"- <code>{m}</code>", unsafe_allow_html=True)
+                st.markdown(f"🔹 <code style='font-size: 0.95rem; color: #38bdf8;'>{m}</code>", unsafe_allow_html=True)
                 
             st.markdown("</div>", unsafe_allow_html=True)
         else:
