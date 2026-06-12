@@ -272,13 +272,45 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
     
     df = df_asli.copy()
-    df.columns = [str(c).strip() for c in df.columns]
+    
+    # ==========================================================
+    # SEMPURNAKAN: MENANGANI HEADER BERTINGKAT (GF & MANDIRI)
+    # ==========================================================
+    start_row_idx = 0
+    # Cek apakah baris indeks 0 adalah kelanjutan sub-header (berisi kata KIE, KONDOM, dll)
+    if len(df) > 0 and any(k in str(df.iloc[0].values).upper() for k in ['KIE', 'KONDOM', 'PELICIN', 'JARUM', 'SWAB']):
+        sub_headers = [str(x).strip() for x in df.iloc[0].values]
+        main_headers = [str(c).strip() for c in df.columns]
+        
+        columns_fixed = []
+        current_main = ""
+        
+        for i in range(len(main_headers)):
+            # Jika header utama valid (bukan bawaan pandas 'Unnamed:'), perbarui kategori utama
+            if main_headers[i] and 'UNNAMED' not in main_headers[i].upper():
+                current_main = main_headers[i]
+            
+            sub = sub_headers[i] if (sub_headers[i] and sub_headers[i].lower() != 'nan') else ""
+            
+            # Gabungkan menjadi: "Logistik (GF) - KIE" atau "Logistik Beli Mandiri - KIE"
+            if current_main and sub:
+                columns_fixed.append(f"{current_main} - {sub}")
+            elif sub:
+                columns_fixed.append(sub)
+            else:
+                columns_fixed.append(main_headers[i])
+                
+        df.columns = columns_fixed
+        start_row_idx = 1  # Baris sub-header dilewati agar tidak ikut divalidasi sebagai data klien
+    else:
+        # Jika file normal tanpa gabungan baris bertingkat
+        df.columns = [str(c).strip() for c in df.columns]
+        if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values).lower() or 'laki-laki' in str(df.iloc[0].values).lower()):
+            start_row_idx = 1
+    # ==========================================================
+
     is_file_rujukan = any('RUJUKAN' in str(c).upper() for c in df.columns) or any('FASYANKES' in str(c).upper() for c in df.columns)
     
-    start_row_idx = 0
-    if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values).lower() or 'laki-laki' in str(df.iloc[0].values).lower()):
-        start_row_idx = 1
-
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
     import re
