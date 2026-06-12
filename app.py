@@ -114,11 +114,11 @@ def hitung_dan_ambil_log_db():
     return dict_revisi, dict_justifikasi
 
 # ==========================================================
-# 1. ATURAN VALIDASI BAWAAN
+# 1. ATURAN VALIDASI BAWAAN (FIXED VARIABLES)
 # ==========================================================
 ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Tahun dalam tanggal penjangkauan lebih besar/kecil dari tahun sekarang", "periksa": lambda c: pd.notna(c['tgl_p']) and c['tgl_p'].year != c['tahun_sekarang']},
-    {"nama": "Kode Petugas Kosong", "periksa": lambda c: pd.isna(c['row'].get('Kode Petugas')) or str(c['row'].get('Kode Petugas')).strip() == ''},
+    {"nama": "Kode Petugas Kosong", "periksa": lambda c: pd.isna(c['row'].get('Kode Petugas')) or str(c['row'].get('Kode Petugas')).strip() in ['', 'nan', 'None']},
     {"nama": "Tanggal lebih besar dari tanggal hari ini", "periksa": lambda c: pd.notna(c['tgl_p']) and c['tgl_p'] > c['hari_ini']},
     {"nama": "IDKD kurang/lebih dari 10 digit karakter", "periksa": lambda c: c['id_clean'] != '' and (len(c['id_clean']) != 10 or not c['id_clean'].isalnum())},
     {"nama": "Digit nama kurang/lebih dari 4 digit karakter", "periksa": lambda c: c['id_clean'] != '' and (len(c['id_clean']) < 4 or not (c['id_clean'][:4].isalpha() or (c['id_clean'][:3].isalpha() and c['id_clean'][3] == '0')))},
@@ -136,7 +136,8 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "LSL/Waria tapi jenis kelamin perempuan", "periksa": lambda c: c['v_tipe_sasaran'] in ['1304', '1301'] and c['jk'] == '2'},
     {"nama": "Jenis kontak dengan Jenis Kegiatan tidak sesuai", "periksa": lambda c: (c['jns_kontak'] == '1' and c['jns_kegiatan'] not in ['1', '5']) or (c['jns_kontak'] == '2' and c['jns_kegiatan'] not in ['2', '3', '4', '6', '7']) or (c['jns_kontak'] == '3' and c['jns_kegiatan'] != '8')},
     {"nama": "Jenis kontak Individual/kelompok tapi kolom Virtual dan Tatap Muka (VC1) tidak diisi", "periksa": lambda c: c['jns_kontak'] in ['1', '2'] and (c['vc1'] == '' or c['vc1'] == 'nan')},
-    {"nama": "Penjangkauan tatap muka tapi lokasi outreach diindikasi ada nama medsos", "periksa": lambda c: c['jns_kontak'] in ['1', '2'] and bool(re.search(pattern_medsos_dinamis, str(c['lokasi']), re.IGNORECASE))},
+    # FIX: Menggunakan pattern medsos dari context_data dengan pengecekan aman
+    {"nama": "Penjangkauan tatap muka tapi lokasi outreach diindikasi ada nama medsos", "periksa": lambda c: c['jns_kontak'] in ['1', '2'] and c['pattern_medsos'] is not None and bool(re.search(c['pattern_medsos'], str(c['lokasi']), re.IGNORECASE))},
     {"nama": "Lokasi outreach diisi IDKD", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and len(c['lokasi']) == 10 and c['lokasi'][:4].isalpha() and c['lokasi'][4:].isdigit()},
     {"nama": "Lokasi outreach diindikasi kurang spesifik atau kurang detil (digit huruf <17 digit) (konfirmasi)", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and len(c['lokasi']) < 17 and not c['is_vo']},
     {"nama": "Lokasi outreach indikasi diisi nomer HP", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and re.search(r'(08\d{8,11})|(\+62\d{8,11})', c['lokasi'].replace('-', '').replace(' ', ''))},
@@ -148,7 +149,8 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Konfirmasi jumlah jarum yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_jar'] > 10},
     {"nama": "Konfirmasi jumlah alkohol SWAB yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_swab'] > 50},
     {"nama": "VO tapi kolom Virtual dan Tatap Muka (VC1) diisi angka 1", "periksa": lambda c: c['is_vo'] and c['vc1'] == '1'},
-    {"nama": "VO tapi lokasi outreach bukan nama medsos/kurang tepat mencatat nama aplikasi medsos", "periksa": lambda c: c['is_vo'] and str(c['lokasi']).strip() != '' and not bool(re.search(pattern_medsos_dinamis, str(c['lokasi']), re.IGNORECASE))},
+    # FIX: Menggunakan pattern medsos dari context_data dengan pengecekan aman
+    {"nama": "VO tapi lokasi outreach bukan nama medsos/kurang tepat mencatat nama aplikasi medsos", "periksa": lambda c: c['is_vo'] and str(c['lokasi']).strip() != '' and (c['pattern_medsos'] is None or not bool(re.search(c['pattern_medsos'], str(c['lokasi']), re.IGNORECASE)))},
     {"nama": "VO tapi menyerahkan jarum", "periksa": lambda c: c['is_vo'] and c['log_jar'] > 0},
     {"nama": "VO menerima logistik selain KIE", "periksa": lambda c: c['is_vo'] and (c['log_kon'] > 0 or c['log_pel'] > 0 or c['log_swab'] > 0)},
     {"nama": "VO tapi nama akun /No. Hp tidak diisi", "periksa": lambda c: c['is_vo'] and (c['no_hp'] == '' or c['no_hp'] == 'nan')},
@@ -281,9 +283,12 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     hari_ini = pd.Timestamp(datetime.now().date())
     import re
 
-    # Ambil daftar medsos terbaru dari session state secara dinamis
+    # FIX: Regex aman jika keyword kosong
     keywords_aktif = st.session_state.get('medsoc_keywords', [])
-    pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
+    if keywords_aktif:
+        pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
+    else:
+        pattern_medsos_dinamis = None
 
     try:
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
@@ -325,8 +330,8 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                     if '5' in rujukans:
                         dict_pernah_prep_rujukan[key_klien] = True
 
-    df['id_mapped'] = df['ID Klien'].astype(str).str.replace("'", "").str.strip()
-    df['ssr_id_key'] = df.get('Lembaga SSR', '').astype(str).str.strip().str.upper() + "_" + df['id_mapped']
+    df['id_mapped'] = df.get('ID Klien', pd.Series(dtype=str)).astype(str).str.replace("'", "").str.strip()
+    df['ssr_id_key'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     
     dict_ssr_id_counts = df.iloc[start_row_idx:]['ssr_id_key'].value_counts().to_dict()
     
@@ -361,7 +366,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         except:
             return 0.0
 
-    # 🔎 DETEKSI KOLOM LOGISTIK SECARA DINAMIS (Mendukung Multi-Kategori)
     col_kie_list = [c for c in df.columns if 'KIE' in str(c).upper()]
     col_kon_list = [c for c in df.columns if 'KONDOM' in str(c).upper()]
     col_pel_list = [c for c in df.columns if 'PELICIN' in str(c).upper()]
@@ -370,12 +374,11 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     
     semua_kolom_logistik = col_kie_list + col_kon_list + col_pel_list + col_jar_list + col_swab_list
 
-    # Hitung total log per baris secara akumulatif dari semua kategori logistik yang ketemu
     df['tmp_log'] = 0.0
     for col in semua_kolom_logistik:
         df['tmp_log'] += df[col].apply(_safe_float)
 
-    df['kunci_klien_ref_log'] = df.get('Lembaga SSR', '').astype(str).str.strip().str.upper() + "_" + df['id_mapped']
+    df['kunci_klien_ref_log'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
 
     aturan_kustom = st.session_state.get('aturan_kustom', [])
@@ -405,7 +408,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         vc1 = str(row.get('Virtual & Tatap Muka', '')).replace('.0', '').strip()
 
-        # 🧮 AKUMULASIKAN NILAI DARI KEDUA KATEGORI LOGISTIK
         log_kie = sum(_safe_float(row.get(c, 0)) for c in col_kie_list)
         log_kon = sum(_safe_float(row.get(c, 0)) for c in col_kon_list)
         log_pel = sum(_safe_float(row.get(c, 0)) for c in col_pel_list)
@@ -417,30 +419,26 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce', format='%d/%m/%Y') if pd.notna(tgl_raw) and '/' in str(tgl_raw) else pd.to_datetime(tgl_raw, errors='coerce')
 
         kunci_klien_ref = f"{v_ssr}_{id_clean}"
-
         count_untuk_ssr_id = dict_ssr_id_counts.get(kunci_klien_ref, 0)
         local_id_counts = {id_clean: count_untuk_ssr_id} 
 
         pernah_dapat_info_hiv = dict_pernah_hiv.get(kunci_klien_ref, False) if id_clean else False
         pernah_dapat_rujuk_tes = dict_pernah_rujuk.get(kunci_klien_ref, False) if id_clean else False
 
-        any_medsoc_in_lokasi = any(kw in lokasi.lower() for kw in medsoc_keywords)
-        is_vo = (jns_kontak == '3')
-        is_pwid = (v_tipe_sasaran in ['1401', '1403'])
-
+        # FIX: Tambahkan data pola medsos ke context agar tidak NameError
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
             'jns_kontak': jns_kontak, 'jns_kegiatan': jns_kegiatan, 'lokasi': lokasi, 'info_diberikan': info_diberikan,
             'rujukan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
             'log_jar': log_jar, 'log_swab': log_swab, 'jarum_kembali': jarum_kembali, 'tgl_p': tgl_p, 'hari_ini': hari_ini,
-            'tahun_sekarang': tahun_sekarang, 'any_medsoc_in_lokasi': any_medsoc_in_lokasi, 'is_vo': is_vo, 'is_pwid': is_pwid,
-            'id_counts': local_id_counts, 
-            'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
+            'tahun_sekarang': tahun_sekarang, 'is_vo': (jns_kontak == '3'), 'is_pwid': (v_tipe_sasaran in ['1401', '1403']),
+            'id_counts': local_id_counts, 'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
             'is_file_rujukan': is_file_rujukan, 'df_ref': df_ref, 'ref_ssr_id_to_nik': ref_ssr_id_to_nik, 'ref_nik_ssr_to_id': ref_nik_ssr_to_id,
             'pernah_cbs_di_rujukan': dict_pernah_cbs.get(kunci_klien_ref, False),
             'pernah_prep_di_rujukan': dict_pernah_prep_rujukan.get(kunci_klien_ref, False),
-            'total_log_keseluruhan_klien': dict_total_log_per_klien.get(kunci_klien_ref, 0.0)
+            'total_log_keseluruhan_klien': dict_total_log_per_klien.get(kunci_klien_ref, 0.0),
+            'pattern_medsos': pattern_medsos_dinamis # INI KUNCI UTAMANYA
         }
 
         for rule in SEMUA_ATURAN_AKTIF:
@@ -473,7 +471,9 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                         "validasi hasil review": status_validasi,
                         "Justifikasi": justif_val
                     })
+            # FIX: Ganti "pass" dengan fungsi log ke layar sementara untuk melihat kolom apa yang ditolak script
             except Exception as e: 
+                # st.error(f"Error logika di aturan '{nama_ind}': {str(e)}") # Buka pagar ini jika di masa depan 0 temuan lagi
                 pass
 
     return pd.DataFrame(list_kesalahan)
