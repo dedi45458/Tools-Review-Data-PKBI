@@ -190,7 +190,7 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "VO tapi menyerahkan jarum", "periksa": lambda c: c['is_vo'] and c['log_jar'] > 0},
     {"nama": "VO menerima logistik selain KIE", "periksa": lambda c: c['is_vo'] and (c['log_kon'] > 0 or c['log_pel'] > 0 or c['log_swab'] > 0)},
     {"nama": "VO tapi nama akun /No. Hp tidak diisi", "periksa": lambda c: c['is_vo'] and (c['no_hp'] == '' or c['no_hp'] == 'nan')},
-    {"nama": "Tidak ada informasi satupun yang diberikan / tidak diisi", "periksa": lambda c: c['info_diberikan'] == '' or c['info_diberikan'] == 'nan'},
+    {"nama": "Tidak ada informasi satupun yang diberikan / tidak diisi", "periksa": lambda c: c['info_diberikan'] in ['', 'nan']},
     {"nama": "KD dikontak lebih dari 1x tapi tidak mendapat informasi HIV", "periksa": lambda c: c['id_clean'] != '' and c['id_counts'].get(c['id_clean'], 0) > 1 and not c['pernah_dapat_info_hiv']},
     
     # PERBAIKAN CBS & PrEP: Sekarang membaca silang dari file Rujukan (melalui context dictionary)
@@ -204,7 +204,7 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Popkun selain PWID menerima jarum suntik", "periksa": lambda c: not c['is_pwid'] and c['log_jar'] > 0},
     {"nama": "Popkun selain PWID menerima alkohol swab", "periksa": lambda c: not c['is_pwid'] and c['log_swab'] > 0},
     {"nama": "Popkun selain PWID menyerahkan jarum", "periksa": lambda c: not c['is_pwid'] and c['jarum_kembali'] > 0},
-    {"nama": "Tidak ada rujukan yang diberikan satupun / tidak diisi", "periksa": lambda c: c['rujukan'] == '' or c['rujukan'] == 'nan'},
+    {"nama": "Tidak ada rujukan yang diberikan satupun / tidak diisi", "periksa": lambda c: c['rujukan'] in ['', 'nan']},
     {"nama": "KD dikontak lebih dari 1x tetapi tidak ada Rujukan Tes HIV (konfirmasi)", "periksa": lambda c: c['id_clean'] != '' and c['id_counts'].get(c['id_clean'], 0) > 1 and not c['pernah_dapat_rujuk_tes']},
     {"nama": "Bukan penasun rujukan 3,4", "periksa": lambda c: not c['is_pwid'] and (cek_kode(c['rujukan'], '3') or cek_kode(c['rujukan'], '4'))}
 ]
@@ -313,13 +313,19 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 if nik_r and nik_r != 'nan' and nik_r != '' and ssr_r and ssr_r != 'nan': 
                     ref_nik_ssr_to_id[f"{nik_r}_{ssr_r}"] = id_r
                 
+                # Pembersihan desimal pada layanan df_ref
                 if col_layanan_ref:
-                    layanans = str(r[col_layanan_ref[0]]).replace("'", "").replace(" ", "").split(',')
+                    layanans_str = str(r[col_layanan_ref[0]]).replace("'", "").replace(".0", "").replace(" ", "")
+                    if '.' in layanans_str and ',' not in layanans_str: layanans_str = layanans_str.replace('.', ',')
+                    layanans = layanans_str.split(',')
                     if '5' in layanans or '6' in layanans:
                         dict_pernah_cbs[key_klien] = True
                 
+                # Pembersihan desimal pada rujukan df_ref
                 if col_rujukan_ref:
-                    rujukans = str(r[col_rujukan_ref[0]]).replace("'", "").replace(" ", "").split(',')
+                    rujukans_str = str(r[col_rujukan_ref[0]]).replace("'", "").replace(".0", "").replace(" ", "")
+                    if '.' in rujukans_str and ',' not in rujukans_str: rujukans_str = rujukans_str.replace('.', ',')
+                    rujukans = rujukans_str.split(',')
                     if '5' in rujukans:
                         dict_pernah_prep_rujukan[key_klien] = True
 
@@ -327,12 +333,16 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     df['id_mapped'] = df['ID Klien'].astype(str).str.replace("'", "").str.strip()
     df['ssr_id_key'] = df.get('Lembaga SSR', '').astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     
-    # Hitung total baris berdasarkan kombinasi Lembaga SSR + ID Klien
     dict_ssr_id_counts = df.iloc[start_row_idx:]['ssr_id_key'].value_counts().to_dict()
     
-    def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
+    # Fungsi periksa_hiv disempurnakan (Anti-desimal & spasi)
+    def periksa_hiv(x): 
+        s = str(x).replace("'", "").replace(" ", "").replace(".0", "")
+        if '.' in s and ',' not in s:
+            s = s.replace('.', ',')
+        return '1' in s.split(',')
     
-    # Fungsi periksa_rujukan yang disempurnakan (Mengubah titik desimal otomatis kembali menjadi koma teks)
+    # Fungsi periksa_rujukan disempurnakan (Anti-desimal & spasi)
     def periksa_rujukan(x): 
         s = str(x).replace("'", "").replace(" ", "").replace(".0", "")
         if '.' in s and ',' not in s: 
@@ -353,7 +363,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     else: 
         df['is_rujuk_tes'] = False
 
-    # Grouping berdasarkan kunci gabungan SSR + ID Klien
     dict_pernah_hiv = df.groupby('ssr_id_key')['is_info_hiv'].any().to_dict()
     dict_pernah_rujuk = df.groupby('ssr_id_key')['is_rujuk_tes'].any().to_dict()
 
@@ -397,10 +406,28 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         umur = row.get('Umur', None)
         jk = str(row.get('Jenis Kelamin', '')).replace('.0', '').strip()
         jns_kontak = str(row.get('Jenis Kontak', '')).replace('.0', '').strip()
-        jns_kegiatan = str(row.get('Jenis Kegiatan', '')).strip()
+        
+        # Penanganan anti-desimal untuk kolom Jenis Kegiatan
+        jns_kegiatan = str(row.get('Jenis Kegiatan', '')).replace('.0', '').strip()
+        
         lokasi = str(row.get('Lokasi Outreach / Jenis Sosial Media', '')).strip()
-        info_diberikan = str(row.get(col_info, '')).strip() if col_info else ''
-        rujukan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
+        
+        # =========================================================
+        # 4. PENANGANAN TEKS MURNI UNTUK INFORMASI & RUJUKAN
+        # =========================================================
+        info_raw = str(row.get(col_info, '')) if col_info else ''
+        info_diberikan = info_raw.replace("'", "").replace(".0", "").replace(" ", "").strip()
+        # Jika Excel mengubah '1,2' menjadi float '1.2'
+        if '.' in info_diberikan and ',' not in info_diberikan:
+            info_diberikan = info_diberikan.replace('.', ',')
+            
+        ruj_raw = str(row.get(col_ruj, '')) if col_ruj else ''
+        rujukan = ruj_raw.replace("'", "").replace(".0", "").replace(" ", "").strip()
+        # Jika Excel mengubah '1,2' menjadi float '1.2'
+        if '.' in rujukan and ',' not in rujukan:
+            rujukan = rujukan.replace('.', ',')
+        # =========================================================
+
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         vc1 = str(row.get('Virtual & Tatap Muka', '')).replace('.0', '').strip()
 
@@ -416,12 +443,10 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         tgl_raw = row.get('Tanggal', None)
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce', format='%d/%m/%Y') if pd.notna(tgl_raw) and '/' in str(tgl_raw) else pd.to_datetime(tgl_raw, errors='coerce')
 
-        # Penentuan Kunci Gabungan baris saat ini
         kunci_klien_ref = f"{v_ssr}_{id_clean}"
 
-        # 2. STRATEGI REKAYASA CONTEXT DATA AGAR LAMBDA BAWAAN LAM LENGKAP MEMBACA UTAMA LEMBAGA + ID KLIEN
         count_untuk_ssr_id = dict_ssr_id_counts.get(kunci_klien_ref, 0)
-        local_id_counts = {id_clean: count_untuk_ssr_id} # Menipu lambda bawaan menggunakan id_clean lokal berisikan jumlah dari gabungan SSR
+        local_id_counts = {id_clean: count_untuk_ssr_id} 
 
         pernah_dapat_info_hiv = dict_pernah_hiv.get(kunci_klien_ref, False) if id_clean else False
         pernah_dapat_rujuk_tes = dict_pernah_rujuk.get(kunci_klien_ref, False) if id_clean else False
@@ -430,6 +455,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         is_vo = (jns_kontak == '3')
         is_pwid = (v_tipe_sasaran in ['1401', '1403'])
 
+        # Data yang diumpan ke dalam lambda sekarang DIJAMIN bertipe STRING MURNI tanpa ".0"
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
@@ -437,7 +463,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'rujukan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
             'log_jar': log_jar, 'log_swab': log_swab, 'jarum_kembali': jarum_kembali, 'tgl_p': tgl_p, 'hari_ini': hari_ini,
             'tahun_sekarang': tahun_sekarang, 'any_medsoc_in_lokasi': any_medsoc_in_lokasi, 'is_vo': is_vo, 'is_pwid': is_pwid,
-            'id_counts': local_id_counts, # Menyuplai id_counts yang sudah berbasis SSR + ID
+            'id_counts': local_id_counts,
             'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
             'is_file_rujukan': is_file_rujukan, 'df_ref': df_ref, 'ref_ssr_id_to_nik': ref_ssr_id_to_nik, 'ref_nik_ssr_to_id': ref_nik_ssr_to_id,
             'pernah_cbs_di_rujukan': dict_pernah_cbs.get(kunci_klien_ref, False),
