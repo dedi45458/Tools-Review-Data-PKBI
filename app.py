@@ -4,15 +4,18 @@ import io
 import re
 from datetime import datetime
 
-# Penanganan pencegahan hard-crash jika modul supabase belum terinstal di environment
-try:
-    from supabase import create_client, Client
-    HAS_SUPABASE = True
-except ModuleNotFoundError:
-    HAS_SUPABASE = False
+# ==========================================================
+# IMPORT FUNGSI NEON DARI FILE database.py
+# ==========================================================
+from database import (
+    dapatkan_koneksi_neon,
+    simpan_log_ke_neon,
+    jalankan_agregasi_tren,
+    ambil_rekap_tren
+)
 
 # ==========================================================
-# 0. KONFIGURASI UTAMA & TEMA GLASSMORPHISM (DIPERBAIKI)
+# 0. KONFIGURASI UTAMA & TEMA GLASSMORPHISM
 # ==========================================================
 st.set_page_config(page_title="Executive Review - PKBI Jabar", page_icon="📊", layout="wide")
 
@@ -21,27 +24,14 @@ def set_modern_theme():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    /* 1. Menerapkan font HANYA pada elemen aplikasi secara aman */
-    html, body, .stApp {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* PENTING: Mengembalikan aturan font khusus untuk Material Icons agar panah sidebar tidak menjadi teks */
+    html, body, .stApp { font-family: 'Inter', sans-serif; }
     i, .material-icons, .material-symbols-rounded, [class^="stIcon"], [class*="icon"] {
         font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
     }
 
-    /* 2. Mengubah background utama aplikasi */
-    .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
-    }
-    
-    /* 3. Menormalkan Sidebar agar tidak berbayang */
-    [data-testid="stSidebar"] {
-        background-color: #0f172a !important;
-    }
+    .stApp { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
+    [data-testid="stSidebar"] { background-color: #0f172a !important; }
 
-    /* 4. ISOLASI KETAT: Efek Glassmorphism khusus untuk container utama buatan kita */
     .glass-card {
         background: rgba(255, 255, 255, 0.03);
         backdrop-filter: blur(12px);
@@ -53,32 +43,21 @@ def set_modern_theme():
         margin-bottom: 20px;
     }
     
-    /* 5. Mempercantik struktur Tabs agar kontras dengan tema gelap */
-    .stTabs [data-baseweb="tab-list"] {
-        background-color: transparent !important;
-    }
-    .stTabs [data-baseweb="tab"] {
-        color: #94a3b8 !important;
-    }
-    .stTabs [aria-selected="true"] {
-        color: #38bdf8 !important;
-        border-bottom-color: #38bdf8 !important;
-    }
+    .stTabs [data-baseweb="tab-list"] { background-color: transparent !important; }
+    .stTabs [data-baseweb="tab"] { color: #94a3b8 !important; }
+    .stTabs [aria-selected="true"] { color: #38bdf8 !important; border-bottom-color: #38bdf8 !important; }
 
-    /* 6. Pewarnaan Teks Tipografi Eksekutif */
     h1, h2, h3, h4, .main-title { color: #f8fafc !important; }
     p, span, label, .sub-title { color: #cbd5e1 !important; }
     
     .main-title { font-size: 2.2rem; font-weight: 800; margin-bottom: 0.2rem; letter-spacing: -0.5px;}
     .sub-title { font-size: 1.1rem; color: #94a3b8 !important; margin-bottom: 2rem; font-weight: 400;}
     
-    /* 7. Penyesuaian Angka Metrik */
     [data-testid="stMetricValue"] { color: #38bdf8 !important; font-weight: 700; }
     [data-testid="stMetricDelta"] { font-weight: 500; }
     </style>
     """, unsafe_allow_html=True)
 
-# Panggil fungsi tema yang sudah diperbaiki
 set_modern_theme()
 
 # Manajemen Default State
@@ -88,35 +67,17 @@ if 'df_tabel_bawah' not in st.session_state: st.session_state['df_tabel_bawah'] 
 if 'df_tabel_atas' not in st.session_state: st.session_state['df_tabel_atas'] = None
 if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = []
 
-# Konfigurasi Supabase
-SUPABASE_URL = "https://fughiktqrtrtxrwoerud.supabase.co" 
-SUPABASE_KEY = "sb_publishable_0RXs2YvzFtj2b8K2zeCFvQ_XAMQW1aM"
-
-@st.cache_resource
-def init_supabase():
-    if not HAS_SUPABASE: return None
-    try: return create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception: return None
-
-supabase = init_supabase()
-
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu (Neon DB)</div>', unsafe_allow_html=True)
 
 # ==========================================================
 # FUNGSI HELPER
 # ==========================================================
 def cek_kode(teks_kolom, kode_target):
-    # 1. Antisipasi jika kolom benar-benar kosong/NA atau berisi teks 'nan'
-    if pd.isna(teks_kolom) or str(teks_kolom).strip().lower() in ['', 'nan']: 
-        return False
-    # 2. Bersihkan tanda petik dan spasi
+    if pd.isna(teks_kolom) or str(teks_kolom).strip().lower() in ['', 'nan']: return False
     clean_str = str(teks_kolom).replace("'", "").replace(" ", "")
-    # 3. Split berdasarkan koma
     mentah_list = clean_str.split(",")
-    # 4. Normalisasi: hilangkan '.0' jika ada angka desimal akibat pembacaan Excel (misal '5.0' menjadi '5')
     list_kode = [kode.split('.')[0] for kode in mentah_list if kode != '']
-    # 5. Cek apakah kode target ada di dalam list yang sudah bersih
     return str(kode_target) in list_kode
 
 def buat_fungsi_validasi_kustom(target, kondisi, pembanding):
@@ -134,18 +95,26 @@ def buat_fungsi_validasi_kustom(target, kondisi, pembanding):
 
 def hitung_dan_ambil_log_db():
     dict_revisi, dict_justifikasi = {}, {}
-    if supabase:
+    conn = dapatkan_koneksi_neon()
+    if conn:
         try:
-            res = supabase.table("log_validasi_review").select("ssr, tanggal, id_klien, indikator_kesalahan, is_revisi, justifikasi").execute()
-            for r in res.data:
-                key = f"{str(r['ssr']).upper()}_{str(r['tanggal'])}_{str(r['id_klien'])}_{str(r['indikator_kesalahan'])}"
-                dict_revisi[key] = r['is_revisi']
-                if r['justifikasi']: dict_justifikasi[key] = r['justifikasi']
-        except Exception: pass
+            with conn.cursor() as cur:
+                # Ambil data langsung menggunakan query Postgres
+                cur.execute("SELECT Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi FROM log_validasi_review")
+                rows = cur.fetchall()
+                for r in rows:
+                    ssr, tgl, id_klien, ind, is_rev, just = r
+                    key = f"{str(ssr).upper()}_{str(tgl)}_{str(id_klien)}_{str(ind)}"
+                    dict_revisi[key] = is_rev
+                    if just: dict_justifikasi[key] = just
+        except Exception as e:
+            pass
+        finally:
+            conn.close()
     return dict_revisi, dict_justifikasi
 
 # ==========================================================
-# 1. ATURAN VALIDASI BAWAAN (DIUPDATE SESUAI SPESIFIKASI)
+# 1. ATURAN VALIDASI BAWAAN
 # ==========================================================
 ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Tahun dalam tanggal penjangkauan lebih besar/kecil dari tahun sekarang", "periksa": lambda c: pd.notna(c['tgl_p']) and c['tgl_p'].year != c['tahun_sekarang']},
@@ -163,10 +132,7 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (konfirmasi)", "periksa": lambda c: c['id_clean'] != '' and len(c['id_clean']) == 10 and c['nik_clean'] != '' and len(c['nik_clean']) == 16 and c['id_clean'][4:6] != (str(c['row'].get('NIK', '')) if str(c['row'].get('NIK', '')).startswith("'") else "'" + c['nik_clean'])[11:13]},
     {"nama": "NIK kurang/lebih dari 16 digit (konfirmasi)", "periksa": lambda c: c['nik_clean'] != '' and len(c['nik_clean']) != 16},
     {"nama": "Kesalahan dalam penulisan NIK (00) (konfirmasi)", "periksa": lambda c: c['nik_clean'] != '' and c['nik_clean'].endswith('00')},
-    
-    # PERBAIKAN: Jika JK sistem Laki-Laki (1), tapi tanggal lahir di NIK > 31 (Artinya NIK tersebut milik Perempuan)
     {"nama": "Secara NIK harusnya perempuan bukan laki-laki (konfirmasi)", "periksa": lambda c: len(c['nik_clean']) == 16 and c['jk'] == '1' and int(c['nik_clean'][6:8]) > 31 if c['nik_clean'].isdigit() and len(c['nik_clean'])>=8 else False},
-    
     {"nama": "LSL/Waria tapi jenis kelamin perempuan", "periksa": lambda c: c['v_tipe_sasaran'] in ['1304', '1301'] and c['jk'] == '2'},
     {"nama": "Jenis kontak dengan Jenis Kegiatan tidak sesuai", "periksa": lambda c: (c['jns_kontak'] == '1' and c['jns_kegiatan'] not in ['1', '5']) or (c['jns_kontak'] == '2' and c['jns_kegiatan'] not in ['2', '3', '4', '6', '7']) or (c['jns_kontak'] == '3' and c['jns_kegiatan'] != '8')},
     {"nama": "Jenis kontak Individual/kelompok tapi kolom Virtual dan Tatap Muka (VC1) tidak diisi", "periksa": lambda c: c['jns_kontak'] in ['1', '2'] and (c['vc1'] == '' or c['vc1'] == 'nan')},
@@ -176,41 +142,34 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Lokasi outreach indikasi diisi nomer HP", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and re.search(r'(08\d{8,11})|(\+62\d{8,11})', c['lokasi'].replace('-', '').replace(' ', ''))},
     {"nama": "Bukan PWID mendapatkan info 8 atau 9 (LASS, PTRM)", "periksa": lambda c: not c['is_pwid'] and (cek_kode(c['info_diberikan'], '8') or cek_kode(c['info_diberikan'], '9'))},
     {"nama": "LSL/TG/PWID menerima informasi PMTC (konfirmasi)", "periksa": lambda c: c['v_tipe_sasaran'] in ['1304', '1301', '1401'] and (cek_kode(c['info_diberikan'], '6') or cek_kode(c['jns_kegiatan'], '6'))},
-    
-    # TAMBAHAN BARU: Validasi jumlah batas wajar Logistik
     {"nama": "Konfirmasi jumlah KIE yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_kie'] > 5},
     {"nama": "Konfirmasi jumlah kondom yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_kon'] > 144},
     {"nama": "Konfirmasi jumlah pelicin yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_pel'] > 50},
     {"nama": "Konfirmasi jumlah jarum yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_jar'] > 10},
     {"nama": "Konfirmasi jumlah alkohol SWAB yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_swab'] > 50},
-    
-    # PERBAIKAN NAMA RULE: Sesuai deskripsi harusnya diisi 2 (Tatap Muka)
     {"nama": "VO tapi kolom Virtual dan Tatap Muka (VC1) diisi angka 2", "periksa": lambda c: c['is_vo'] and c['vc1'] == '2'},
     {"nama": "VO tapi lokasi outreach bukan nama medsos/kurang tepat mencatat nama aplikasi medsos", "periksa": lambda c: c['is_vo'] and c['lokasi'] != '' and not c['any_medsoc_in_lokasi']},
     {"nama": "VO tapi menyerahkan jarum", "periksa": lambda c: c['is_vo'] and c['log_jar'] > 0},
     {"nama": "VO menerima logistik selain KIE", "periksa": lambda c: c['is_vo'] and (c['log_kon'] > 0 or c['log_pel'] > 0 or c['log_swab'] > 0)},
     {"nama": "VO tapi nama akun /No. Hp tidak diisi", "periksa": lambda c: c['is_vo'] and (c['no_hp'] == '' or c['no_hp'] == 'nan')},
-    {"nama": "Tidak ada informasi satupun yang diberikan / tidak diisi", "periksa": lambda c: c['info_diberikan'] in ['', 'nan']},
+    {"nama": "Tidak ada informasi satupun yang diberikan / tidak diisi", "periksa": lambda c: c['info_diberikan'] == '' or c['info_diberikan'] == 'nan'},
     {"nama": "KD dikontak lebih dari 1x tapi tidak mendapat informasi HIV", "periksa": lambda c: c['id_clean'] != '' and c['id_counts'].get(c['id_clean'], 0) > 1 and not c['pernah_dapat_info_hiv']},
-    
-    # PERBAIKAN CBS & PrEP: Sekarang membaca silang dari file Rujukan (melalui context dictionary)
     {"nama": "KD telah menerima layanan CBS tapi tidak ada informasi CBS", "periksa": lambda c: c['pernah_cbs_di_rujukan'] and not cek_kode(c['info_diberikan'], '13')},
     {"nama": "KD ada rujukan PrEp di penjangkauan tapi tidak ada informasi PrEp", "periksa": lambda c: cek_kode(c['rujukan'], '5') and not cek_kode(c['info_diberikan'], '10')},
     {"nama": "KD telah menerima layanan PrEp tapi tidak ada rujukan PrEp di penjangkauan", "periksa": lambda c: c['pernah_prep_di_rujukan'] and not cek_kode(c['rujukan'], '5')},
-    
     {"nama": "Logistik kosong (Konfirmasi)", "periksa": lambda c: c['total_log_keseluruhan_klien'] == 0},
     {"nama": "Tipe klien PWID tapi tidak menerima jarum (konfirmasi)", "periksa": lambda c: c['is_pwid'] and c['log_jar'] == 0 and not c['is_vo']},
     {"nama": "Tipe klien PWID tapi tidak menerima alkohol SWAB (konfirmasi)", "periksa": lambda c: c['is_pwid'] and c['log_swab'] == 0 and not c['is_vo']},
     {"nama": "Popkun selain PWID menerima jarum suntik", "periksa": lambda c: not c['is_pwid'] and c['log_jar'] > 0},
     {"nama": "Popkun selain PWID menerima alkohol swab", "periksa": lambda c: not c['is_pwid'] and c['log_swab'] > 0},
     {"nama": "Popkun selain PWID menyerahkan jarum", "periksa": lambda c: not c['is_pwid'] and c['jarum_kembali'] > 0},
-    {"nama": "Tidak ada rujukan yang diberikan satupun / tidak diisi", "periksa": lambda c: c['rujukan'] in ['', 'nan']},
+    {"nama": "Tidak ada rujukan yang diberikan satupun / tidak diisi", "periksa": lambda c: c['rujukan'] == '' or c['rujukan'] == 'nan'},
     {"nama": "KD dikontak lebih dari 1x tetapi tidak ada Rujukan Tes HIV (konfirmasi)", "periksa": lambda c: c['id_clean'] != '' and c['id_counts'].get(c['id_clean'], 0) > 1 and not c['pernah_dapat_rujuk_tes']},
     {"nama": "Bukan penasun rujukan 3,4", "periksa": lambda c: not c['is_pwid'] and (cek_kode(c['rujukan'], '3') or cek_kode(c['rujukan'], '4'))}
 ]
 
 # ==========================================================
-# 2. PANEL SIDEBAR (UPLOAD & RULE BUILDER - OPTIMIZED UI)
+# 2. PANEL SIDEBAR
 # ==========================================================
 with st.sidebar:
     st.markdown("""
@@ -265,7 +224,7 @@ with st.sidebar:
     tombol_proses = st.button("🚀 Jalankan Penelaahan", type="primary", use_container_width=True)
 
 # ==========================================================
-# 3. ENGINE VALIDASI UTAMA (DITAMBAH CROSS-CHECK CBS & PREP)
+# 3. ENGINE VALIDASI UTAMA
 # ==========================================================
 def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
@@ -281,7 +240,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
-    medsoc_keywords = ['whatsapp', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 'sms', 'grindr', 'growlr', 'instagram', 'tantan', 'telegram', 'tinder', 'twitter', 'line', 'facebook', 'messenger', 'romeo', 'tiktok', 'tagged', 'litmatch', 'scruff', 'wechat', 'threads']
+    medsoc_keywords = ['whatsapp', 'wa', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 'sms', 'grindr', 'growlr', 'instagram', 'ig', 'tantan', 'telegram', 'telepon', 'tinder', 'twitter', 'line', 'facebook', 'fb', 'messenger', 'romeo', 'tiktok', 'tagged', 'litmatch', 'scruff', 'wechat', 'threads']
 
     try:
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
@@ -313,40 +272,27 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 if nik_r and nik_r != 'nan' and nik_r != '' and ssr_r and ssr_r != 'nan': 
                     ref_nik_ssr_to_id[f"{nik_r}_{ssr_r}"] = id_r
                 
-                # Pembersihan desimal pada layanan df_ref
                 if col_layanan_ref:
-                    layanans_str = str(r[col_layanan_ref[0]]).replace("'", "").replace(".0", "").replace(" ", "")
-                    if '.' in layanans_str and ',' not in layanans_str: layanans_str = layanans_str.replace('.', ',')
-                    layanans = layanans_str.split(',')
+                    layanans = str(r[col_layanan_ref[0]]).replace("'", "").replace(" ", "").split(',')
                     if '5' in layanans or '6' in layanans:
                         dict_pernah_cbs[key_klien] = True
                 
-                # Pembersihan desimal pada rujukan df_ref
                 if col_rujukan_ref:
-                    rujukans_str = str(r[col_rujukan_ref[0]]).replace("'", "").replace(".0", "").replace(" ", "")
-                    if '.' in rujukans_str and ',' not in rujukans_str: rujukans_str = rujukans_str.replace('.', ',')
-                    rujukans = rujukans_str.split(',')
+                    rujukans = str(r[col_rujukan_ref[0]]).replace("'", "").replace(" ", "").split(',')
                     if '5' in rujukans:
                         dict_pernah_prep_rujukan[key_klien] = True
 
-    # 1. MEMBUAT KUNCI MAPPING GABUNGAN (SSR + ID KLIEN) AGAR VALIDASI TIDAK BENTROK ANTAR LEMBAGA
     df['id_mapped'] = df['ID Klien'].astype(str).str.replace("'", "").str.strip()
     df['ssr_id_key'] = df.get('Lembaga SSR', '').astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     
     dict_ssr_id_counts = df.iloc[start_row_idx:]['ssr_id_key'].value_counts().to_dict()
     
-    # Fungsi periksa_hiv disempurnakan (Anti-desimal & spasi)
-    def periksa_hiv(x): 
-        s = str(x).replace("'", "").replace(" ", "").replace(".0", "")
-        if '.' in s and ',' not in s:
-            s = s.replace('.', ',')
-        return '1' in s.split(',')
+    def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
     
-    # Fungsi periksa_rujukan disempurnakan (Anti-desimal & spasi)
     def periksa_rujukan(x): 
         s = str(x).replace("'", "").replace(" ", "").replace(".0", "")
         if '.' in s and ',' not in s: 
-            s = s.replace('.', ',') # Mengembalikan float '1.2' menjadi format teks '1,2'
+            s = s.replace('.', ',')
         return '2' in s.split(',')
 
     col_info = 'Informasi Yang diberikan' if 'Informasi Yang diberikan' in df.columns else ('Informasi yang diberikan' if 'Informasi yang diberikan' in df.columns else '')
@@ -406,28 +352,10 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         umur = row.get('Umur', None)
         jk = str(row.get('Jenis Kelamin', '')).replace('.0', '').strip()
         jns_kontak = str(row.get('Jenis Kontak', '')).replace('.0', '').strip()
-        
-        # Penanganan anti-desimal untuk kolom Jenis Kegiatan
-        jns_kegiatan = str(row.get('Jenis Kegiatan', '')).replace('.0', '').strip()
-        
+        jns_kegiatan = str(row.get('Jenis Kegiatan', '')).strip()
         lokasi = str(row.get('Lokasi Outreach / Jenis Sosial Media', '')).strip()
-        
-        # =========================================================
-        # 4. PENANGANAN TEKS MURNI UNTUK INFORMASI & RUJUKAN
-        # =========================================================
-        info_raw = str(row.get(col_info, '')) if col_info else ''
-        info_diberikan = info_raw.replace("'", "").replace(".0", "").replace(" ", "").strip()
-        # Jika Excel mengubah '1,2' menjadi float '1.2'
-        if '.' in info_diberikan and ',' not in info_diberikan:
-            info_diberikan = info_diberikan.replace('.', ',')
-            
-        ruj_raw = str(row.get(col_ruj, '')) if col_ruj else ''
-        rujukan = ruj_raw.replace("'", "").replace(".0", "").replace(" ", "").strip()
-        # Jika Excel mengubah '1,2' menjadi float '1.2'
-        if '.' in rujukan and ',' not in rujukan:
-            rujukan = rujukan.replace('.', ',')
-        # =========================================================
-
+        info_diberikan = str(row.get(col_info, '')).strip() if col_info else ''
+        rujukan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         vc1 = str(row.get('Virtual & Tatap Muka', '')).replace('.0', '').strip()
 
@@ -455,7 +383,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         is_vo = (jns_kontak == '3')
         is_pwid = (v_tipe_sasaran in ['1401', '1403'])
 
-        # Data yang diumpan ke dalam lambda sekarang DIJAMIN bertipe STRING MURNI tanpa ".0"
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
@@ -463,7 +390,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'rujukan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
             'log_jar': log_jar, 'log_swab': log_swab, 'jarum_kembali': jarum_kembali, 'tgl_p': tgl_p, 'hari_ini': hari_ini,
             'tahun_sekarang': tahun_sekarang, 'any_medsoc_in_lokasi': any_medsoc_in_lokasi, 'is_vo': is_vo, 'is_pwid': is_pwid,
-            'id_counts': local_id_counts,
+            'id_counts': local_id_counts, 
             'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
             'is_file_rujukan': is_file_rujukan, 'df_ref': df_ref, 'ref_ssr_id_to_nik': ref_ssr_id_to_nik, 'ref_nik_ssr_to_id': ref_nik_ssr_to_id,
             'pernah_cbs_di_rujukan': dict_pernah_cbs.get(kunci_klien_ref, False),
@@ -505,6 +432,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 pass
 
     return pd.DataFrame(list_kesalahan)
+
 # ==========================================================
 # 4. LOGIKA TOMBOL EKSEKUSI
 # ==========================================================
@@ -559,9 +487,6 @@ if tombol_proses:
                 
                 st.session_state['df_tabel_atas'] = df_atas
                 st.session_state['df_tabel_bawah'] = df_bawah
-                
-                # CATATAN: Fitur Auto-Save Database sengaja DIHAPUS 
-                # dari blok ini agar database Supabase aman dari auto-insert massal.
                 
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
@@ -638,49 +563,36 @@ if st.session_state.get('proses_selesai', False):
             st.info("✨ Tidak ada rekapan karena data bersih.")
 
     with tab2:
-        if supabase:
-            try:
-                # Mengambil data sesuai dengan kolom tabel rekap_tren_bulanan
-                res_tren = supabase.table("rekap_tren_bulanan").select("periode, nama_ssr, indikator_kesalahan, jumlah_kesalahan").execute()
-            
-                if res_tren.data:
-                    df_tren = pd.DataFrame(res_tren.data)
-                
-                    # Menggunakan kolom 'periode' sebagai acuan waktu
-                    # Jika 'periode' dalam format YYYY-MM-DD, kita bisa langsung pakai
-                    df_tren['Tanggal'] = df_tren['periode']
-                
-                    col_kiri, col_kanan = st.columns([1, 2])
-                    with col_kiri:
-                        daftar_ssr = ["SEMUA"] + sorted(df_tren['nama_ssr'].dropna().unique().tolist())
-                        pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr, key="select_ssr_tren")
-                
-                    # Logika Pivot Data
-                    if pilihan_ssr == "SEMUA":
-                        # Menjumlahkan 'jumlah_kesalahan' per periode
-                        df_pivot = df_tren.groupby('Tanggal')['jumlah_kesalahan'].sum().reset_index()
-                        df_pivot = df_pivot.set_index('Tanggal')
-                        st.markdown(f"<br><p>📈 Tren total kesalahan <b>seluruh SSR</b>:</p>", unsafe_allow_html=True)
-                    else:
-                        # Filter berdasarkan nama_ssr dan pivot berdasarkan indikator
-                        df_filtered = df_tren[df_tren['nama_ssr'] == pilihan_ssr]
-                        df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', values='jumlah_kesalahan', aggfunc='sum', fill_value=0)
-                        st.markdown(f"<br><p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
-                
-                    # Menampilkan Chart
-                    if not df_pivot.empty:
-                        st.area_chart(df_pivot)
-                    else:
-                        st.info("Data belum tersedia untuk filter ini.")
-                else:
-                    st.info("Belum ada data rekap tren di tabel rekap_tren_bulanan.")
-            except Exception as e:
-                st.error(f"Gagal memuat tren bulanan: {e}")
+        df_tren = ambil_rekap_tren()
+        if not df_tren.empty:
+            # Sesuaikan nama kolom jika perlu
+            df_tren['Tanggal'] = df_tren['periode']
+        
+            col_kiri, col_kanan = st.columns([1, 2])
+            with col_kiri:
+                daftar_ssr = ["SEMUA"] + sorted(df_tren['nama_ssr'].dropna().unique().tolist())
+                pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr, key="select_ssr_tren")
+        
+            if pilihan_ssr == "SEMUA":
+                df_pivot = df_tren.groupby('Tanggal')['jumlah_kesalahan'].sum().reset_index()
+                df_pivot = df_pivot.set_index('Tanggal')
+                st.markdown(f"<br><p>📈 Tren total kesalahan <b>seluruh SSR</b>:</p>", unsafe_allow_html=True)
+            else:
+                df_filtered = df_tren[df_tren['nama_ssr'] == pilihan_ssr]
+                df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', values='jumlah_kesalahan', aggfunc='sum', fill_value=0)
+                st.markdown(f"<br><p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
+        
+            if not df_pivot.empty:
+                st.area_chart(df_pivot)
+            else:
+                st.info("Data belum tersedia untuk filter ini.")
+        else:
+            st.info("Belum ada data rekap tren di tabel rekap_tren_bulanan.")
 
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
-# --- BARIS 3: DETAIL DATA (Berada di luar kontainer kaca) ---
+# --- BARIS 3: DETAIL DATA ---
 st.markdown("### 🔍 Hasil Review Penjangkauan")
 if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
     kolom_susunan = [
@@ -709,77 +621,63 @@ if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['
     col_save, _ = st.columns([1, 2])
     with col_save:
         if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
-            if not supabase:
-                st.error("Koneksi database tidak tersedia.")
-            else:
-                sukses_simpan = 0
-                peringatan_justifikasi = False
+            
+            with st.spinner("Menyimpan progres validasi..."):
+                list_log_db = []
                 indeks_baris_terpilih = []
-                pesan_error_db = ""
-                
-                with st.spinner("Menyimpan progres validasi..."):
-                    for idx, row_edit in df_hasil_edit.iterrows():
-                        ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
-                        text_justifikasi = str(row_edit['Justifikasi']).strip()
+                peringatan_justifikasi = False
+
+                for idx, row_edit in df_hasil_edit.iterrows():
+                    ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
+                    text_justifikasi = str(row_edit['Justifikasi']).strip()
+                    
+                    is_konfirmasi = "konfirmasi" in ind_text.lower()
+                    if not is_konfirmasi and text_justifikasi not in ["", "None"]:
+                        peringatan_justifikasi = True
+                        text_justifikasi = "" 
+                    
+                    if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi not in ["", "None"]):
+                        # Bungkus ke dalam list of tuples sesuai parameter di file database.py
+                        list_log_db.append((
+                            str(row_edit['Lembaga SSR']),
+                            str(row_edit['Tanggal']),
+                            str(row_edit['ID Klien']),
+                            ind_text,
+                            bool(row_edit['Pilih']),
+                            text_justifikasi
+                        ))
+                        indeks_baris_terpilih.append(idx)
+
+                # Eksekusi fungsi batch insert ke Neon DB
+                if len(list_log_db) > 0:
+                    if simpan_log_ke_neon(list_log_db):
+                        df_sekarang = st.session_state['df_tabel_bawah']
+                        df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
+                        st.session_state['df_tabel_bawah'] = df_sisa
                         
-                        # Aturan: Hanya bisa mengisi justifikasi jika ada kata "konfirmasi"
-                        is_konfirmasi = "konfirmasi" in ind_text.lower()
-                        if not is_konfirmasi and text_justifikasi not in ["", "None"]:
-                            peringatan_justifikasi = True
-                            text_justifikasi = "" 
+                        st.success(f"🎉 Berhasil menyimpan {len(list_log_db)} baris secara kolektif! Data yang selesai otomatis disembunyikan.")
                         
-                        # Aturan: Hanya kirim ke DB jika baris DICENTANG (Pilih) ATAU ada justifikasi sah
-                        if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi not in ["", "None"]):
-                            try:
-                                supabase.table("log_validasi_review").upsert({
-                                    # KEY INI SUDAH DISESUAIKAN DENGAN STRUKTUR ASLI DATABASE ANDA
-                                    "ssr": str(row_edit['Lembaga SSR']),
-                                    "tanggal": str(row_edit['Tanggal']),
-                                    "id_klien": str(row_edit['ID Klien']),
-                                    "indikator_kesalahan": ind_text,
-                                    "is_revisi": bool(row_edit['Pilih']),
-                                    "justifikasi": text_justifikasi
-                                }, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
-                                
-                                sukses_simpan += 1
-                                indeks_baris_terpilih.append(idx)
-                                
-                            except Exception as e:
-                                pesan_error_db = str(e)
-                
-                # Umpan balik (Feedback) ke User
-                if pesan_error_db != "":
-                    st.error(f"Gagal menyimpan ke database. Cek apakah storage Supabase masih penuh/Read-Only. Error detail: {pesan_error_db}")
-                elif sukses_simpan > 0:
-                    # Hapus baris yang berhasil disimpan dari tampilan layar
-                    df_sekarang = st.session_state['df_tabel_bawah']
-                    df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
-                    st.session_state['df_tabel_bawah'] = df_sisa
-                    
-                    st.success(f"🎉 Berhasil menyimpan {sukses_simpan} baris! Data yang selesai otomatis disembunyikan.")
-                    
-                    if peringatan_justifikasi:
-                        st.warning("⚠️ Beberapa teks Justifikasi diabaikan/dikosongkan karena baris tersebut BUKAN indikator konfirmasi.")
-                    
-                    import time
-                    time.sleep(1.5)
-                    st.rerun()
+                        if peringatan_justifikasi:
+                            st.warning("⚠️ Beberapa teks Justifikasi diabaikan/dikosongkan karena baris tersebut BUKAN indikator konfirmasi.")
+                        
+                        import time
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("Gagal menyimpan data ke Neon Database. Periksa pengaturan koneksi.")
                 else:
                     st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")                        
-        # --- TAMBAHKAN DI BAWAHNYA ---
-        st.markdown("<br>", unsafe_allow_html=True) # Memberi sedikit jarak
-        st.markdown("---") # Memberi garis pemisah agar terlihat sebagai aksi berbeda
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("---")
         
         st.markdown("### ⚙️ Manajemen Akhir Periode")
         st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
         
         if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-            with st.spinner("Sedang memproses pengarsipan data..."):
-                try:
-                    # Memanggil fungsi SQL yang sudah kita buat di Supabase
-                    supabase.rpc("proses_sari_data_bulanan").execute()
-                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap dan log detail dibersihkan!")
-                    st.balloons() # Efek animasi sukses
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Gagal memproses arsip: {e}")
+            with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
+                if jalankan_agregasi_tren():
+                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
+                    st.balloons()
+                else:
+                    st.error("Gagal memproses arsip ke database.")
