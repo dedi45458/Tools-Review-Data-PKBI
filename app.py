@@ -668,64 +668,91 @@ if st.session_state['proses_selesai']:
     st.markdown("<br>", unsafe_allow_html=True)
     
     # --- BARIS 3: DETAIL DATA (Berada di luar kontainer kaca agar tabel besar leluasa) ---
-    st.markdown("### 🔍 Hasil Review Penjangkauan")
-    if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_tabel_bawah'].empty:
-        kolom_susunan = [
-            "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
-            "NIK", "Tipe Sasaran", "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
-        ]
-        df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
-        
-        df_hasil_edit = st.data_editor(
-            df_bawah_view,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika telah direvisi", default=False),
-                "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
-                "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
-                "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
-                "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
-                "validasi hasil review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
-                "Justifikasi": st.column_config.TextColumn("Justifikasi (Khusus Baris Konfirmasi)", width=280),
-            },
-            disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
-        )
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        col_save, _ = st.columns([1, 2])
-        with col_save:
-            if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
-                if not supabase:
-                    st.error("Koneksi database tidak tersedia.")
+st.markdown("### 🔍 Hasil Review Penjangkauan")
+if st.session_state['df_tabel_bawah'] is not None and not st.session_state['df_tabel_bawah'].empty:
+    kolom_susunan = [
+        "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
+        "NIK", "Tipe Sasaran", "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
+    ]
+    df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
+    
+    # TAMBAHAN: Mencegah user mengedit 'Justifikasi' jika bukan tipe (konfirmasi)
+    # Streamlit data_editor belum mendukung 'disable' per-sel secara native, 
+    # namun kita bisa menggunakan trik validasi di belakang layar yang sudah Anda miliki 
+    # dan menambahkan peringatan visual.
+
+    df_hasil_edit = st.data_editor(
+        df_bawah_view,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika telah direvisi", default=False),
+            "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
+            "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
+            "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
+            "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
+            "validasi hasil review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
+            # Kita arahkan user untuk hanya mengisi baris tertentu
+            "Justifikasi": st.column_config.TextColumn("Justifikasi (HANYA untuk baris yg ada teks 'konfirmasi')", width=280),
+        },
+        disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
+    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    col_save, _ = st.columns([1, 2])
+    with col_save:
+        if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
+            if not supabase:
+                st.error("Koneksi database tidak tersedia.")
+            else:
+                sukses_simpan = 0
+                peringatan_justifikasi = False
+                indeks_baris_terpilih = []
+                
+                with st.spinner("Menyimpan progres validasi..."):
+                    for idx, row_edit in df_hasil_edit.iterrows():
+                        ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
+                        text_justifikasi = str(row_edit['Justifikasi']).strip()
+                        
+                        # LOGIKA PROTEKSI: Mengabaikan input justifikasi jika bukan tipe konfirmasi
+                        is_konfirmasi = "konfirmasi" in ind_text.lower()
+                        if not is_konfirmasi and text_justifikasi != "" and text_justifikasi != "None":
+                            peringatan_justifikasi = True
+                            text_justifikasi = "" 
+                        
+                        # Hanya proses data jika dicentang 'Pilih' ATAU ada teks 'Justifikasi' (pada tipe konfirmasi)
+                        if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi != "" and text_justifikasi != "None"):
+                            try:
+                                supabase.table("log_validasi_review").upsert({
+                                    # SINKRONISASI NAMA KOLOM SUPABASE
+                                    "lembaga_ssr": str(row_edit['Lembaga SSR']),
+                                    "tanggal": str(row_edit['Tanggal']),
+                                    "id_klien": str(row_edit['ID Klien']),
+                                    "indikator_kesalahan_data": ind_text,
+                                    "is_revisi": bool(row_edit['Pilih']),
+                                    "justifikasi": text_justifikasi
+                                }, on_conflict="lembaga_ssr,tanggal,id_klien,indikator_kesalahan_data").execute()
+                                
+                                sukses_simpan += 1
+                                indeks_baris_terpilih.append(idx)
+                                
+                            except Exception as e:
+                                st.error(f"Gagal menyimpan baris data: {e}")
+                
+                # --- MENGHILANGKAN BARIS YANG SUKSES DARI TABEL ---
+                if sukses_simpan > 0:
+                    df_sekarang = st.session_state['df_tabel_bawah']
+                    df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
+                    st.session_state['df_tabel_bawah'] = df_sisa
+                    
+                    st.success(f"🎉 Berhasil menyimpan {sukses_simpan} baris! Data yang selesai otomatis disembunyikan.")
+                    
+                    if peringatan_justifikasi:
+                        st.warning("⚠️ Beberapa teks Justifikasi ditolak/diabaikan karena baris tersebut bukan tipe indikator (konfirmasi).")
+                    
+                    st.rerun()
                 else:
-                    sukses_simpan, peringatan_justifikasi = 0, False
-                    with st.spinner("Menyimpan data..."):
-                        for idx, row_edit in df_hasil_edit.iterrows():
-                            ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
-                            text_justifikasi = str(row_edit['Justifikasi']).strip()
-                            
-                            if "konfirmasi" not in ind_text.lower() and text_justifikasi != "":
-                                peringatan_justifikasi = True
-                                text_justifikasi = "" 
-                            
-                            if row_edit['Pilih'] or text_justifikasi != "":
-                                try:
-                                    supabase.table("log_validasi_review").upsert({
-                                        "ssr": str(row_edit['Lembaga SSR']),
-                                        "tanggal": str(row_edit['Tanggal']),
-                                        "id_klien": str(row_edit['ID Klien']),
-                                        "indikator_kesalahan": ind_text,
-                                        "is_revisi": bool(row_edit['Pilih']),
-                                        "justifikasi": text_justifikasi
-                                    }, on_conflict="ssr,tanggal,id_klien,indikator_kesalahan").execute()
-                                    sukses_simpan += 1
-                                except Exception: pass
-                            
-                        if peringatan_justifikasi:
-                            st.warning("⚠️ Beberapa teks Justifikasi otomatis diabaikan karena ditaruh pada indikator mutlak (bukan tipe konfirmasi).")
-                        st.success(f"🎉 Sukses memproses {sukses_simpan} baris validasi ke database Supabase!")
-                        st.rerun()
+                    st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
                         
         # --- TAMBAHKAN DI BAWAHNYA ---
         st.markdown("<br>", unsafe_allow_html=True) # Memberi sedikit jarak
