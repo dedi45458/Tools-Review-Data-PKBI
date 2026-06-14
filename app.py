@@ -317,11 +317,12 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     hari_ini = pd.Timestamp(datetime.now().date())
     import re
 
+    # PENGAMAN REGEX: Jika kosong, gunakan pola dummy yang tidak akan pernah cocok
     keywords_aktif = st.session_state.get('medsoc_keywords', [])
     if keywords_aktif:
         pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
     else:
-        pattern_medsos_dinamis = None
+        pattern_medsos_dinamis = r'\b(TIDAK_ADA_MEDSOS_TERDAFTAR_DI_SISTEM)\b'
 
     # Pengaman Database terintegrasi
     try:
@@ -408,7 +409,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     
     semua_kolom_logistik = col_kie_list + col_kon_list + col_pel_list + col_jar_list + col_swab_list
 
-    # Penghitungan kolom tmp_log tunggal aman dari KeyError
     df['tmp_log'] = 0.0
     for col in semua_kolom_logistik:
         df['tmp_log'] += df[col].apply(_safe_float)
@@ -418,7 +418,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     aturan_kustom = st.session_state.get('aturan_kustom', [])
     
-    # Blok integrasi utama aturan validasi
     SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_BAWAAN + aturan_kustom
 
     for idx in range(start_row_idx, len(df)):
@@ -474,6 +473,8 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'pernah_cbs_di_rujukan': dict_pernah_cbs.get(kunci_klien_ref, False),
             'pernah_prep_di_rujukan': dict_pernah_prep_rujukan.get(kunci_klien_ref, False),
             'total_log_keseluruhan_klien': dict_total_log_per_klien.get(kunci_klien_ref, 0.0),
+            
+            # Memasukkan regex ke dalam dictionary agar bisa dibaca oleh aturan di luar fungsi
             'pattern_medsos': pattern_medsos_dinamis
         }
 
