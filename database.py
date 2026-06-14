@@ -145,3 +145,39 @@ def import_data_rujukan(df_rujukan):
         return False
     finally:
         conn.close()
+
+def hitung_dan_ambil_log_db():
+    """
+    Mengambil riwayat log validasi dari Neon Postgres 
+    untuk mengecek status revisi dan justifikasi.
+    """
+    conn = dapatkan_koneksi_neon()
+    dict_revisi = {}
+    dict_justifikasi = {}
+    
+    if conn is None:
+        return dict_revisi, dict_justifikasi
+        
+    try:
+        # Menggunakan RealDictCursor agar hasil query bisa diakses dengan nama kolom
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT lembaga_ssr, tanggal, id_klien, indikator_kesalahan_data, is_revisi, justifikasi 
+                FROM public.log_validasi_review;
+            """
+            cur.execute(query)
+            rows = cur.fetchall()
+            
+            for row in rows:
+                # Membuat format kunci: SSR_Tanggal_IDKlien_Indikator
+                key_db = f"{row['lembaga_ssr']}_{row['tanggal']}_{row['id_klien']}_{row['indikator_kesalahan_data']}"
+                dict_revisi[key_db] = row['is_revisi']
+                dict_justifikasi[key_db] = row['justifikasi'] if row['justifikasi'] else ""
+                
+    except Exception as e:
+        # Kita biarkan lewat jika tabel belum ada agar aplikasi tidak mati total
+        pass
+    finally:
+        conn.close()
+        
+    return dict_revisi, dict_justifikasi
