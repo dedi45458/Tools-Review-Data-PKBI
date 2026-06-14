@@ -265,61 +265,61 @@ with st.sidebar:
         tombol_proses = st.button("🚀 Jalankan Penelaahan", type="primary", use_container_width=True)
 
 # ==========================================================
-# 3. ENGINE VALIDASI UTAMA (UPDATED FOR DUAL LOGISTICS)
+# 3. ENGINE VALIDASI UTAMA (UPDATED FOR DUAL LOGISTICS & MERGED HEADERS)
 # ==========================================================
-def perbaiki_header(df):
-    # Menggabungkan dua baris header menjadi satu nama kolom yang unik
-    # Misal: "Dukungan GF" + "KIE" menjadi "Dukungan GF - KIE"
-    if len(df) > 0:
-        header_baru = []
-        for i in range(len(df.columns)):
-            main = str(df.columns[i])
-            sub = str(df.iloc[0, i])
-
-            # Jika kolom utama adalah 'Unnamed', ambil dari sub saja
-            if "Unnamed" in main:
-                header_baru.append(sub)
-            else:
-                header_baru.append(f"{main} - {sub}")
-        df.columns = header_baru
-        df = df.drop(0).reset_index(drop=True) # Hapus baris header kedua agar tidak jadi data
-    return df
-
 def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
+    
     df = df_asli.copy()
-    st.write("Daftar kolom yang terbaca oleh sistem:", df.columns.tolist())
     
     # ==========================================================
-    # SEMPURNAKAN: MENANGANI HEADER BERTINGKAT (GF & MANDIRI)
+    # LOGIKA PERBAIKAN HEADER BERTINGKAT (MERGED CELLS)
     # ==========================================================
-    start_row_idx = 0
     # Cek apakah baris indeks 0 adalah kelanjutan sub-header (berisi kata KIE, KONDOM, dll)
-    if len(df) > 0 and any(k in str(df.iloc[0].values).upper() for k in ['KIE', 'KONDOM', 'PELICIN', 'JARUM', 'SWAB']):
-        sub_headers = [str(x).strip() for x in df.iloc[0].values]
-        main_headers = [str(c).strip() for c in df.columns]
+    cek_sub_header = False
+    if len(df) > 0:
+        baris_pertama = str(df.iloc[0].values).upper()
+        if any(k in baris_pertama for k in ['KIE', 'KONDOM', 'PELICIN', 'JARUM', 'SWAB']):
+            cek_sub_header = True
+
+    if cek_sub_header:
         columns_fixed = []
+        main_headers = [str(c).strip() for c in df.columns]
+        sub_headers = [str(x).strip() for x in df.iloc[0].values]
+        
         current_main = ""
         for i in range(len(main_headers)):
-            # Jika header utama valid (bukan bawaan pandas 'Unnamed:'), perbarui kategori utama
+            # Update kategori utama jika header bukan bawaan pandas 'Unnamed'
             if main_headers[i] and 'UNNAMED' not in main_headers[i].upper():
                 current_main = main_headers[i]
-            sub = sub_headers[i] if (sub_headers[i] and sub_headers[i].lower() != 'nan') else ""
-            # Gabungkan menjadi: "Logistik (GF) - KIE" atau "Logistik Beli Mandiri - KIE"
-            if current_main and sub:
+            
+            sub = sub_headers[i] if (sub_headers[i] and str(sub_headers[i]).lower() != 'nan') else ""
+            
+            # Gabungkan menjadi: "Logistik Yang Diberikan - KIE" atau "Logistik Beli Mandiri - KIE"
+            if current_main and sub and 'UNNAMED' not in sub.upper():
                 columns_fixed.append(f"{current_main} - {sub}")
-            elif sub:
+            elif sub and 'UNNAMED' not in sub.upper():
                 columns_fixed.append(sub)
             else:
                 columns_fixed.append(main_headers[i])
+                
         df.columns = columns_fixed
-        start_row_idx = 1  # Baris sub-header dilewati agar tidak ikut divalidasi sebagai data klien
+        
+        # Hapus baris sub-header (indeks 0) agar tidak ikut divalidasi sebagai data klien
+        df = df.drop(0).reset_index(drop=True)
+        start_row_idx = 0 
     else:
         # Jika file normal tanpa gabungan baris bertingkat
         df.columns = [str(c).strip() for c in df.columns]
+        start_row_idx = 0
+        # Cek jika baris pertama adalah keterangan format tanggal/kelamin, kita lewati baris tersebut
         if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values).lower() or 'laki-laki' in str(df.iloc[0].values).lower()):
             start_row_idx = 1
+            
+    # Hapus pagar di bawah ini sementara jika Anda ingin mengecek hasil perbaikan kolom di layar
+    # st.write("Daftar kolom yang terbaca oleh sistem:", df.columns.tolist())
+    # ==========================================================
 
     is_file_rujukan = any('RUJUKAN' in str(c).upper() for c in df.columns) or any('FASYANKES' in str(c).upper() for c in df.columns)
     
@@ -327,7 +327,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     hari_ini = pd.Timestamp(datetime.now().date())
     import re
 
-    # FIX: Regex aman jika keyword kosong
+    # Regex aman jika keyword kosong
     keywords_aktif = st.session_state.get('medsoc_keywords', [])
     if keywords_aktif:
         pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
@@ -469,7 +469,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         pernah_dapat_info_hiv = dict_pernah_hiv.get(kunci_klien_ref, False) if id_clean else False
         pernah_dapat_rujuk_tes = dict_pernah_rujuk.get(kunci_klien_ref, False) if id_clean else False
 
-        # FIX: Tambahkan data pola medsos ke context agar tidak NameError
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
@@ -482,7 +481,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'pernah_cbs_di_rujukan': dict_pernah_cbs.get(kunci_klien_ref, False),
             'pernah_prep_di_rujukan': dict_pernah_prep_rujukan.get(kunci_klien_ref, False),
             'total_log_keseluruhan_klien': dict_total_log_per_klien.get(kunci_klien_ref, 0.0),
-            'pattern_medsos': pattern_medsos_dinamis # INI KUNCI UTAMANYA
+            'pattern_medsos': pattern_medsos_dinamis
         }
 
         for rule in SEMUA_ATURAN_AKTIF:
@@ -515,9 +514,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                         "validasi hasil review": status_validasi,
                         "Justifikasi": justif_val
                     })
-            # FIX: Ganti "pass" dengan fungsi log ke layar sementara untuk melihat kolom apa yang ditolak script
             except Exception as e: 
-                # st.error(f"Error logika di aturan '{nama_ind}': {str(e)}") # Buka pagar ini jika di masa depan 0 temuan lagi
                 pass
 
     return pd.DataFrame(list_kesalahan)
