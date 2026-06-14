@@ -13,7 +13,6 @@ from database import (
     jalankan_agregasi_tren,
     ambil_rekap_tren,
     hitung_dan_ambil_log_db,   # <--- TAMBAHKAN INI
-    ATURAN_VALIDASI_BAWAAN     # <--- TAMBAHKAN INI JUGA AGAR TIDAK EROR SELANJUTNYA
 )
 
 # ==========================================================
