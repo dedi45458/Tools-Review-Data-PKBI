@@ -378,9 +378,27 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             s = s.replace('.', ',')
         return '2' in s.split(',')
 
-    col_info = 'Informasi Yang diberikan' if 'Informasi Yang diberikan' in df.columns else ('Informasi yang diberikan' if 'Informasi yang diberikan' in df.columns else '')
-    col_kegiatan = 'Jenis Kegiatan' if 'Jenis Kegiatan' in df.columns else ''
-    col_ruj = 'Rujukan' if 'Rujukan' in df.columns else ''
+    # ==========================================================
+    # PERBAIKAN: DETEKSI KOLOM INFO, KEGIATAN, RUJUKAN (ANTI TYPO/MERGED)
+    # ==========================================================
+    col_info = ""
+    for c in df.columns:
+        if "INFORMASI" in str(c).upper() and "DIBERIKAN" in str(c).upper():
+            col_info = c
+            break
+            
+    col_kegiatan = ""
+    for c in df.columns:
+        if "JENIS KEGIATAN" in str(c).upper():
+            col_kegiatan = c
+            break
+
+    col_ruj = ""
+    for c in df.columns:
+        if "RUJUKAN" in str(c).upper():
+            col_ruj = c
+            break
+    # ==========================================================
     
     if col_info and col_kegiatan:
         df['is_info_hiv'] = df[col_info].apply(periksa_hiv) | df[col_kegiatan].apply(periksa_hiv)
