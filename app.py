@@ -418,6 +418,13 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     
     semua_kolom_logistik = col_kie_list + col_kon_list + col_pel_list + col_jar_list + col_swab_list
 
+    # --- TAMBAHKAN BAGIAN YANG HILANG INI ---
+    df['tmp_log'] = 0.0
+    for col in semua_kolom_logistik:
+        df['tmp_log'] += df[col].apply(_safe_float)
+    df['kunci_klien_ref_log'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
+    dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
+
     df['tmp_log'] = 0.0
     for col in semua_kolom_logistik:
         df['tmp_log'] += df[col].apply(_safe_float)
