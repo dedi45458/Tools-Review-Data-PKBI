@@ -276,7 +276,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     # ==========================================================
     # LOGIKA PERBAIKAN HEADER BERTINGKAT (MERGED CELLS)
     # ==========================================================
-    # Cek apakah baris indeks 0 adalah kelanjutan sub-header (berisi kata KIE, KONDOM, dll)
     cek_sub_header = False
     if len(df) > 0:
         baris_pertama = str(df.iloc[0].values).upper()
@@ -290,13 +289,11 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         
         current_main = ""
         for i in range(len(main_headers)):
-            # Update kategori utama jika header bukan bawaan pandas 'Unnamed'
             if main_headers[i] and 'UNNAMED' not in main_headers[i].upper():
                 current_main = main_headers[i]
             
             sub = sub_headers[i] if (sub_headers[i] and str(sub_headers[i]).lower() != 'nan') else ""
             
-            # Gabungkan menjadi: "Logistik Yang Diberikan - KIE" atau "Logistik Beli Mandiri - KIE"
             if current_main and sub and 'UNNAMED' not in sub.upper():
                 columns_fixed.append(f"{current_main} - {sub}")
             elif sub and 'UNNAMED' not in sub.upper():
@@ -305,29 +302,20 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 columns_fixed.append(main_headers[i])
                 
         df.columns = columns_fixed
-        
-        # Hapus baris sub-header (indeks 0) agar tidak ikut divalidasi sebagai data klien
         df = df.drop(0).reset_index(drop=True)
         start_row_idx = 0 
     else:
-        # Jika file normal tanpa gabungan baris bertingkat
         df.columns = [str(c).strip() for c in df.columns]
         start_row_idx = 0
-        # Cek jika baris pertama adalah keterangan format tanggal/kelamin, kita lewati baris tersebut
         if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values).lower() or 'laki-laki' in str(df.iloc[0].values).lower()):
             start_row_idx = 1
             
-    # Hapus pagar di bawah ini sementara jika Anda ingin mengecek hasil perbaikan kolom di layar
-    # st.write("Daftar kolom yang terbaca oleh sistem:", df.columns.tolist())
-    # ==========================================================
-
     is_file_rujukan = any('RUJUKAN' in str(c).upper() for c in df.columns) or any('FASYANKES' in str(c).upper() for c in df.columns)
     
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
     import re
 
-    # Regex aman jika keyword kosong
     keywords_aktif = st.session_state.get('medsoc_keywords', [])
     if keywords_aktif:
         pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
@@ -418,19 +406,16 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     
     semua_kolom_logistik = col_kie_list + col_kon_list + col_pel_list + col_jar_list + col_swab_list
 
-    # --- TAMBAHKAN BAGIAN YANG HILANG INI ---
-    df['tmp_log'] = 0.0
-    for col in semua_kolom_logistik:
-        df['tmp_log'] += df[col].apply(_safe_float)
-    df['kunci_klien_ref_log'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
-    dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
-
+    # ==========================================================
+    # PERBAIKAN: INISIALISASI & KALKULASI tmp_log (DUPLIKAT DIHAPUS)
+    # ==========================================================
     df['tmp_log'] = 0.0
     for col in semua_kolom_logistik:
         df['tmp_log'] += df[col].apply(_safe_float)
 
     df['kunci_klien_ref_log'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
+    # ==========================================================
 
     aturan_kustom = st.session_state.get('aturan_kustom', [])
     SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_BAWAAN + aturan_kustom
@@ -525,7 +510,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 pass
 
     return pd.DataFrame(list_kesalahan)
-
 # ==========================================================
 # 4. LOGIKA TOMBOL EKSEKUSI
 # ==========================================================
