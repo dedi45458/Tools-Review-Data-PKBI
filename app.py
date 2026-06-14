@@ -324,10 +324,10 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     else:
         pattern_medsos_dinamis = None
 
+    # Pengaman Database terintegrasi
     try:
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
     except Exception as e:
-        st.warning(f"Gagal mengambil log dari database: {e}")
         dict_revisi, dict_justifikasi = {}, {}
 
     ref_ssr_id_to_nik, ref_nik_ssr_to_id = {}, {}
@@ -409,18 +409,17 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     
     semua_kolom_logistik = col_kie_list + col_kon_list + col_pel_list + col_jar_list + col_swab_list
 
-    # ==========================================================
-    # PERBAIKAN: INISIALISASI & KALKULASI tmp_log (DUPLIKAT DIHAPUS)
-    # ==========================================================
+    # Penghitungan kolom tmp_log tunggal aman dari KeyError
     df['tmp_log'] = 0.0
     for col in semua_kolom_logistik:
         df['tmp_log'] += df[col].apply(_safe_float)
 
     df['kunci_klien_ref_log'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
-    # ==========================================================
 
     aturan_kustom = st.session_state.get('aturan_kustom', [])
+    
+    # Blok integrasi utama aturan validasi
     SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_BAWAAN + aturan_kustom
 
     for idx in range(start_row_idx, len(df)):
