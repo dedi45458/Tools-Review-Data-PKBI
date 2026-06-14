@@ -11,7 +11,9 @@ from database import (
     dapatkan_koneksi_neon,
     simpan_log_ke_neon,
     jalankan_agregasi_tren,
-    ambil_rekap_tren
+    ambil_rekap_tren,
+    hitung_dan_ambil_log_db,   # <--- TAMBAHKAN INI
+    ATURAN_VALIDASI_BAWAAN     # <--- TAMBAHKAN INI JUGA AGAR TIDAK EROR SELANJUTNYA
 )
 
 # ==========================================================
@@ -324,7 +326,8 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     try:
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
-    except:
+    except Exception as e:
+        st.warning(f"Gagal mengambil log dari database: {e}")
         dict_revisi, dict_justifikasi = {}, {}
 
     ref_ssr_id_to_nik, ref_nik_ssr_to_id = {}, {}
