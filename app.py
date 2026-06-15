@@ -860,17 +860,16 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             st.markdown("### 📈 Pusat Analisis & Wawasan Data")
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # Import Plotly untuk visualisasi interaktif pengganti tabel
             import plotly.express as px
             
             # =========================================================================
-            # 1. BAGIAN A: VISUALISASI TOP 5 TEMUAN (PENGGANTI TABEL)
+            # 1. BAGIAN A: VISUALISASI CLEVELAND DOT PLOT (PENGGANTI TOTAL BAR)
             # =========================================================================
             if st.session_state.get('proses_selesai', False) and st.session_state.get('df_tabel_bawah') is not None:
                 df_bawah = st.session_state['df_tabel_bawah'].copy()
                 
                 if not df_bawah.empty:
-                    st.markdown("#### 📊 Kontribusi Kesalahan Berdasarkan Kelompok Sasaran")
+                    st.markdown("#### 📊 Sebaran Titik Kesalahan Berdasarkan Kelompok Sasaran")
                     
                     # Standarisasi Tipe Sasaran & Mapping Label
                     df_bawah['Tipe Sasaran'] = df_bawah['Tipe Sasaran'].astype(str).str.replace('.0', '', regex=False).str.strip()
@@ -889,34 +888,31 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     df_mutlak_all = df_bawah[~is_konfirmasi]
                     df_konf_all = df_bawah[is_konfirmasi]
                     
-                    kolom_sasaran_utama = ['1304 (MSM)', '1301 (TG)', '1401 (PWID)']
-                    
-                    # --- VISUALISASI KATEGORI 1: TEMUAN MUTLAK ---
+                    # --- VISUALISASI KATEGORI 1: TEMUAN MUTLAK (DOT PLOT) ---
                     st.markdown("##### 🟥 A. Top 5 Temuan Mutlak (Perlu Koreksi / Non-Konfirmasi)")
                     if not df_mutlak_all.empty:
+                        # Ambil top 5 indikator
                         top_5_mutlak_idx = df_mutlak_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
                         df_top_5_mutlak = df_mutlak_all[df_mutlak_all['INDIKATOR KESALAHAN DATA'].isin(top_5_mutlak_idx)]
                         
-                        pivot_mutlak = df_top_5_mutlak.pivot_table(index='INDIKATOR KESALAHAN DATA', columns='Kelompok Sasaran', aggfunc='size', fill_value=0)
-                        for col in kolom_sasaran_utama:
-                            if col not in pivot_mutlak.columns: pivot_mutlak[col] = 0
+                        # Hitung jumlah per kombinasi Indikator + Kelompok Sasaran (Format Panjang/Long-form untuk Scatter)
+                        df_dot_mutlak = df_top_5_mutlak.groupby(['INDIKATOR KESALAHAN DATA', 'Kelompok Sasaran']).size().reset_index(name='Jumlah Kasus')
                         
-                        pivot_mutlak['Total'] = pivot_mutlak.sum(axis=1)
-                        # Di-sort ascending=True agar saat digambar di grafik horizontal, nilai terbesar muncul di PALING ATAS
-                        pivot_mutlak = pivot_mutlak.sort_values(by='Total', ascending=True).reset_index()
-                        
-                        # Membuat Grafik Horizontal Stacked Bar
-                        fig_mutlak = px.bar(
-                            pivot_mutlak,
-                            x=kolom_sasaran_utama,
+                        # Membuat Cleveland Dot Plot menggunakan px.scatter
+                        fig_mutlak = px.scatter(
+                            df_dot_mutlak,
+                            x='Jumlah Kasus',
                             y='INDIKATOR KESALAHAN DATA',
-                            orientation='h',
-                            barmode='stack',
-                            color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'} # Merah, Biru, Hijau modern
+                            color='Kelompok Sasaran',
+                            template="plotly_dark", # Memaksa tema gelap resmi Plotly
+                            color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
                         )
-                        # Cari bagian fig_mutlak.update_layout Anda, lalu sesuaikan isinya menjadi seperti ini:
+                        
+                        # Memperbesar ukuran titik (marker) agar estetik dan mudah dilihat
+                        fig_mutlak.update_traces(marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')))
+                        
+                        # Pengaturan Layout & Anti-Kotak Putih
                         fig_mutlak.update_layout(
-                            template="plotly_dark",  # <-- Kunci Utama: Paksa pakai tema gelap bawaan Plotly
                             margin=dict(l=10, r=10, t=10, b=10),
                             paper_bgcolor='rgba(0,0,0,0)', 
                             plot_bgcolor='rgba(0,0,0,0)',
@@ -926,45 +922,41 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             legend_title_text="Sasaran", 
                             height=280, 
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                            # 👇 TAMBAHKAN BLOK INI: Mengatur warna pop-up kotak hover agar menjadi gelap elegan
-                            hoverlabel=dict(
-                                bgcolor="#1E1E24",       # Warna latar kotak (gelap)
-                                font_size=12,
-                                font_color="#FFFFFF"     # Warna teks di dalam kotak (putih)
-                            )
+                            yaxis={'categoryorder':'total ascending'}, # Otomatis urut dari yang terbesar di paling atas
+                            hoverlabel=dict(bgcolor="#1E1E24", font_size=12, font_color="#FFFFFF") # Fix kotak putih
                         )
                         fig_mutlak.update_xaxes(showgrid=True, gridcolor='#333333')
+                        fig_mutlak.update_yaxes(showgrid=True, gridcolor='#222222') # Garis pandu horizontal untuk titik
+                        
                         st.plotly_chart(fig_mutlak, use_container_width=True)
                     else:
                         st.info("✨ Bersih! Tidak ada temuan mutlak terdeteksi.")
                         
                     st.markdown("<br>", unsafe_allow_html=True)
         
-                    # --- VISUALISASI KATEGORI 2: TEMUAN BUTUH KONFIRMASI ---
+                    # --- VISUALISASI KATEGORI 2: TEMUAN BUTUH KONFIRMASI (DOT PLOT) ---
                     st.markdown("##### 🟨 B. Top 5 Temuan Butuh Klarifikasi (Ada Unsur Justifikasi / Konfirmasi)")
                     if not df_konf_all.empty:
+                        # Ambil top 5 indikator
                         top_5_konf_idx = df_konf_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
                         df_top_5_konf = df_konf_all[df_konf_all['INDIKATOR KESALAHAN DATA'].isin(top_5_konf_idx)]
                         
-                        pivot_konf = df_top_5_konf.pivot_table(index='INDIKATOR KESALAHAN DATA', columns='Kelompok Sasaran', aggfunc='size', fill_value=0)
-                        for col in kolom_sasaran_utama:
-                            if col not in pivot_konf.columns: pivot_konf[col] = 0
+                        # Hitung jumlah per kombinasi
+                        df_dot_konf = df_top_5_konf.groupby(['INDIKATOR KESALAHAN DATA', 'Kelompok Sasaran']).size().reset_index(name='Jumlah Kasus')
                         
-                        pivot_konf['Total'] = pivot_konf.sum(axis=1)
-                        pivot_konf = pivot_konf.sort_values(by='Total', ascending=True).reset_index()
-                        
-                        # Membuat Grafik Horizontal Stacked Bar
-                        fig_konf = px.bar(
-                            pivot_konf,
-                            x=kolom_sasaran_utama,
+                        # Membuat Cleveland Dot Plot
+                        fig_konf = px.scatter(
+                            df_dot_konf,
+                            x='Jumlah Kasus',
                             y='INDIKATOR KESALAHAN DATA',
-                            orientation='h',
-                            barmode='stack',
+                            color='Kelompok Sasaran',
+                            template="plotly_dark",
                             color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
                         )
-                        # Lakukan hal yang persis sama pada fig_konf.update_layout:
+                        
+                        fig_konf.update_traces(marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')))
+                        
                         fig_konf.update_layout(
-                            template="plotly_dark",  # <-- Kunci Utama
                             margin=dict(l=10, r=10, t=10, b=10),
                             paper_bgcolor='rgba(0,0,0,0)', 
                             plot_bgcolor='rgba(0,0,0,0)',
@@ -974,14 +966,12 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             legend_title_text="Sasaran", 
                             height=280, 
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                            # 👇 TAMBAHKAN BLOK INI JUGA:
-                            hoverlabel=dict(
-                                bgcolor="#1E1E24", 
-                                font_size=12,
-                                font_color="#FFFFFF"
-                            )
+                            yaxis={'categoryorder':'total ascending'},
+                            hoverlabel=dict(bgcolor="#1E1E24", font_size=12, font_color="#FFFFFF") # Fix kotak putih
                         )
                         fig_konf.update_xaxes(showgrid=True, gridcolor='#333333')
+                        fig_konf.update_yaxes(showgrid=True, gridcolor='#222222')
+                        
                         st.plotly_chart(fig_konf, use_container_width=True)
                     else:
                         st.info("✨ Aman! Tidak ada data yang membutuhkan konfirmasi tambahan.")
@@ -995,7 +985,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             st.markdown("<br>", unsafe_allow_html=True)
             
             # =========================================================================
-            # 2. BAGIAN B: ANALISIS TREN SEMESTER (TETAP MENGGUNAKAN AREA CHART)
+            # 2. BAGIAN B: ANALISIS TREN SEMESTER (AREA CHART)
             # =========================================================================
             st.markdown("#### 📉 Analisis Tren Kesalahan per Periode")
             
