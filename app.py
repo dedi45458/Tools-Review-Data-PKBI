@@ -13,6 +13,7 @@ from database import (
     jalankan_agregasi_tren,
     ambil_rekap_tren,
     hitung_dan_ambil_log_db,    # <--- TAMBAHKAN BARIS INI
+    ambil_keyword_medsos
 )
 
 # ==========================================================
@@ -609,6 +610,31 @@ if tombol_proses:
             st.session_state['proses_selesai'] = True
 
 # ==========================================================
+# FUNGSI & INISIALISASI KEYWORD MEDSOS
+# PENTING: Harus diletakkan SEBELUM logika if/elif menu_pilihan
+# ==========================================================
+if 'medsoc_keywords' not in st.session_state:
+    # Memasukkan daftar bawaan yang Anda berikan agar langsung muncul di menu baru
+    st.session_state['medsoc_keywords'] = [
+        'whatsapp', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 
+        'grindr', 'growlr', 'instagram', 'tantan', 'telegram', 'telepon', 
+        'tinder', 'twitter', 'line', 'facebook', 'messenger', 'romeo', 
+        'tiktok', 'tagged', 'litmatch', 'scruff', 'wechat', 'threads'
+    ]
+
+def ambil_keyword_medsos():
+    """Mengambil daftar keyword medsos aktif dari session state"""
+    return sorted(st.session_state['medsoc_keywords'])
+
+def tambah_keyword_medsos(keyword):
+    """Menambahkan keyword medsos baru ke dalam daftar"""
+    keyword_clean = keyword.strip().lower()
+    if keyword_clean and keyword_clean not in st.session_state['medsoc_keywords']:
+        st.session_state['medsoc_keywords'].append(keyword_clean)
+        return True
+    return False
+
+# ==========================================================
 # 5. RENDER LAYOUT UTAMA (BERDASARKAN PILIHAN MENU)
 # ==========================================================
 
@@ -783,7 +809,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             else:
                                 st.error("Gagal menyimpan data ke Neon Database. Periksa pengaturan koneksi.")
                         else:
-                            st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")                       
+                            st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")                        
             
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
@@ -832,53 +858,21 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_kanan:
-        # Mengambil daftar medsos dari database.py
-        list_medsos = ambil_keyword_medsos()
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
+        # Mengambil daftar medsos
+        list_medsos = ambil_keyword_medsos()
         st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
         
         if list_medsos:
-            # Membuat container string HTML untuk badge-badge medsos
-            html_badges = ""
-            for m in list_medsos:
-                html_badges += f"""
-                <span style="
-                    background-color: rgba(56, 189, 248, 0.15); 
-                    color: #38bdf8; 
-                    border: 1px solid rgba(56, 189, 248, 0.3);
-                    padding: 6px 12px; 
-                    border-radius: 20px; 
-                    font-family: inherit; 
-                    font-size: 0.85rem;
-                    font-weight: 500;
-                    white-space: nowrap; /* Mencegah 1 badge terbelah jadi 2 baris */
-                    display: inline-flex; /* Diubah ke inline-flex agar badge tidak melebar penuh ke kanan */
-                    align-items: center;
-                    gap: 5px;
-                ">
-                    🔹 {m}
-                </span>
-                """
-            
-            # Tampilkan Glass Card dan Flexbox Container secara utuh sekaligus dalam 1 fungsi st.markdown
-            st.markdown(f"""
-                <div class="glass-card" style="padding: 2rem; margin-bottom: 20px;">
-                    <div style="
-                        display: flex;
-                        flex-wrap: wrap; /* Otomatis turun ke bawah jika mentok ke kanan */
-                        gap: 10px; /* Jarak rapi antar badge */
-                        padding: 15px; 
-                        border: 1px solid rgba(255,255,255,0.1); 
-                        border-radius: 8px; 
-                        background-color: rgba(0,0,0,0.2);
-                    ">
-                        {html_badges}
-                    </div>
-                </div>
+            st.markdown("""
+                <div style='max-height: 350px; overflow-y: auto; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; background-color: rgba(0,0,0,0.2);'>
             """, unsafe_allow_html=True)
             
+            for m in list_medsos:
+                st.markdown(f"🔹 <code style='font-size: 0.95rem; color: #38bdf8;'>{m}</code>", unsafe_allow_html=True)
+                
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
-            # Jika data kosong, tampilkan info di dalam Glass Card yang rapi
-            st.markdown('<div class="glass-card" style="padding: 2rem; margin-bottom: 20px;">', unsafe_allow_html=True)
             st.info("Belum ada data medsos di database.")
-            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
