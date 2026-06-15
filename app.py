@@ -334,8 +334,10 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
 
-    # PENGAMAN REGEX MEDSOS
-    keywords_aktif = st.session_state.get('medsoc_keywords', [])
+    # ==========================================================
+    # PENGAMAN REGEX MEDSOS (SUDAH TERINTEGRASI DENGAN FUNGSI)
+    # ==========================================================
+    keywords_aktif = ambil_keyword_medsos()  # <-- SEKARANG SUDAH TERPANGGIL DI SINI
     if keywords_aktif:
         pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
     else:
@@ -484,7 +486,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         jns_kegiatan = str(row.get('Jenis Kegiatan', '')).strip()
         lokasi = str(row.get('Lokasi Outreach / Jenis Sosial Media', '')).strip()
         info_diberikan = str(row.get(col_info, '')).strip() if col_info else ''
-        rujukan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
+        rujakan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         vc1 = str(row.get('Virtual & Tatap Muka', '')).replace('.0', '').strip()
 
@@ -509,7 +511,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
             'jns_kontak': jns_kontak, 'jns_kegiatan': jns_kegiatan, 'lokasi': lokasi, 'info_diberikan': info_diberikan,
-            'rujukan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
+            'rujakan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
             'log_jar': log_jar, 'log_swab': log_swab, 'jarum_kembali': jarum_kembali, 'tgl_p': tgl_p, 'hari_ini': hari_ini,
             'tahun_sekarang': tahun_sekarang, 'is_vo': (jns_kontak == '3'), 'is_pwid': (v_tipe_sasaran in ['1401', '1403']),
             'id_counts': local_id_counts, 'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
@@ -556,6 +558,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                 pass
 
     return pd.DataFrame(list_kesalahan)
+    
 # ==========================================================
 # 4. LOGIKA TOMBOL EKSEKUSI
 # ==========================================================
@@ -622,7 +625,7 @@ if tombol_proses:
 # PENTING: Harus diletakkan SEBELUM logika if/elif menu_pilihan
 # ==========================================================
 if 'medsoc_keywords' not in st.session_state:
-    # Memasukkan daftar bawaan yang Anda berikan agar langsung muncul di menu baru
+    # Daftar bawaan langsung otomatis huruf kecil
     st.session_state['medsoc_keywords'] = [
         'whatsapp', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 
         'grindr', 'growlr', 'instagram', 'tantan', 'telegram', 'telepon', 
@@ -631,8 +634,11 @@ if 'medsoc_keywords' not in st.session_state:
     ]
 
 def ambil_keyword_medsos():
-    """Mengambil daftar keyword medsos aktif dari session state"""
-    return sorted(st.session_state['medsoc_keywords'])
+    """Mengambil daftar keyword medsos aktif dengan proteksi ganda (clean & lowercase)"""
+    keywords = st.session_state.get('medsoc_keywords', [])
+    # Membersihkan spasi, memastikan lowercase, membuang duplikat, dan mengabaikan teks kosong
+    keywords_bersih = list(set(str(k).strip().lower() for k in keywords if str(k).strip() != ""))
+    return sorted(keywords_bersih)
 
 def tambah_keyword_medsos(keyword):
     """Menambahkan keyword medsos baru ke dalam daftar"""
