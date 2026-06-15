@@ -59,35 +59,6 @@ def set_modern_theme():
     [data-testid="stMetricValue"] { color: #38bdf8 !important; font-weight: 700; }
     [data-testid="stMetricDelta"] { font-weight: 500; }
 
-    .js-plotly-plot .hoverlayer path {
-        fill: #1E1E24 !important;     /* Paksa latar belakang kotak menjadi abu-abu gelap */
-        stroke: #555555 !important;   /* Beri garis tepi tipis agar elegan */
-    }
-    
-    .js-plotly-plot .hoverlayer text {
-        fill: #FFFFFF !important;     /* Paksa teks utama di dalam kotak menjadi putih bersih */
-    }
-    
-    .js-plotly-plot .hoverlayer text tspan {
-        fill: #FFFFFF !important;     /* Jaga-jaga jika teksnya menggunakan elemen tspan internal */
-    }
-
-    /* --- OBAT PAMUNGKAS ANTI KOTAK HOVER PUTIH/BLANK --- */
-    g.hovertext path {
-        fill: #1A1A1E !important;       /* Paksa latar belakang kotak hover menjadi hitam/gelap pekat */
-        fill-opacity: 0.95 !important;  /* Tingkat kepekatan kotak */
-        stroke: #444446 !important;     /* Garis tepi kotak agar tegas */
-        stroke-width: 1px !important;
-    }
-    
-    g.hovertext text {
-        fill: #FFFFFF !important;       /* Paksa teks di dalam kotak menjadi putih susu pekat */
-    }
-    
-    g.hovertext text tspan {
-        fill: #FFFFFF !important;       /* Pengaman tambahan untuk sub-teks di dalam plotly */
-    }
-
     /* --- JINAKKAN KOTAK HOVER PLOTLY SECARA TOTAL --- */
     div[data-testid="stPlotlyChart"] .hoverlayer path {
         fill: #1e293b !important;       /* Ubah latar belakang kotak menjadi slate gelap */
