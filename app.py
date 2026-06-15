@@ -58,6 +58,19 @@ def set_modern_theme():
     
     [data-testid="stMetricValue"] { color: #38bdf8 !important; font-weight: 700; }
     [data-testid="stMetricDelta"] { font-weight: 500; }
+
+    .js-plotly-plot .hoverlayer path {
+        fill: #1E1E24 !important;     /* Paksa latar belakang kotak menjadi abu-abu gelap */
+        stroke: #555555 !important;   /* Beri garis tepi tipis agar elegan */
+    }
+    
+    .js-plotly-plot .hoverlayer text {
+        fill: #FFFFFF !important;     /* Paksa teks utama di dalam kotak menjadi putih bersih */
+    }
+    
+    .js-plotly-plot .hoverlayer text tspan {
+        fill: #FFFFFF !important;     /* Jaga-jaga jika teksnya menggunakan elemen tspan internal */
+    }
 </style>
     """, unsafe_allow_html=True)
 
@@ -909,7 +922,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         )
                         
                         # Memperbesar ukuran titik (marker) agar estetik dan mudah dilihat
-                        fig_mutlak.update_traces(marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')))
+                        fig_mutlak.update_traces(
+                            marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
+                            # 👇 TAMBAHKAN DUA BARIS INI: Mengunci teks pendek & warna di tingkat objek (trace)
+                            hoverlabel=dict(bgcolor="#1E1E24", font_color="#FFFFFF"),
+                            hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
+                            hovertext=df_dot_mutlak['Kelompok Sasaran'] # Mengambil nama kelompok sasaran
+                        )
                         
                         # Pengaturan Layout & Anti-Kotak Putih
                         fig_mutlak.update_layout(
@@ -954,7 +973,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
                         )
                         
-                        fig_konf.update_traces(marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')))
+                        fig_konf.update_traces(
+                            marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
+                            # 👇 TAMBAHKAN DUA BARIS INI JUGA:
+                            hoverlabel=dict(bgcolor="#1E1E24", font_color="#FFFFFF"),
+                            hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
+                            hovertext=df_dot_konf['Kelompok Sasaran']
+                        )
                         
                         fig_konf.update_layout(
                             margin=dict(l=10, r=10, t=10, b=10),
