@@ -56,7 +56,25 @@ def set_modern_theme():
     
     [data-testid="stMetricValue"] { color: #38bdf8 !important; font-weight: 700; }
     [data-testid="stMetricDelta"] { font-weight: 500; }
-    </style>
+
+    /* ==========================================================
+       TAMBAHAN: WARNA HOVER BARIS TABEL (BIRU TIPIS)
+       ========================================================== */
+    table.dataframe tbody tr:hover, 
+    [data-testid="stTable"] tbody tr:hover,
+    [data-testid="stDataFrameDataPage"] tr:hover,
+    .stDataFrame table tbody tr:hover {
+        background-color: rgba(56, 189, 248, 0.18) !important; /* Biru transparan tipis */
+    }
+    
+    /* Memastikan warna teks di dalam baris tetap putih cerah saat kursor diarahkan */
+    table.dataframe tbody tr:hover td, 
+    [data-testid="stTable"] tbody tr:hover td,
+    [data-testid="stDataFrameDataPage"] tr:hover td,
+    .stDataFrame table tbody tr:hover td {
+        color: #ffffff !important;
+    }
+</style>
     """, unsafe_allow_html=True)
 
 set_modern_theme()
