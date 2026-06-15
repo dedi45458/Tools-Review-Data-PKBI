@@ -70,6 +70,20 @@ if 'df_tabel_bawah' not in st.session_state: st.session_state['df_tabel_bawah'] 
 if 'df_tabel_atas' not in st.session_state: st.session_state['df_tabel_atas'] = None
 if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = []
 
+# ==========================================================
+# FUNGSI & INISIALISASI KEYWORD MEDSOS (Tersinkron Neon DB)
+# ==========================================================
+
+# 1. Inisialisasi dari Database
+if 'medsoc_keywords' not in st.session_state:
+    # Memanggil fungsi dari database.py yang mengambil data dari tabel 'keyword_medsos'
+    st.session_state['medsoc_keywords'] = ambil_keyword_medsos_db()
+
+def ambil_keyword_medsos():
+    """Mengambil daftar keyword medsos aktif dari session state"""
+    # Mengembalikan list yang sudah diurutkan dari database
+    return sorted(st.session_state['medsoc_keywords'])
+
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu (Neon DB)</div>', unsafe_allow_html=True)
 
@@ -621,31 +635,6 @@ if tombol_proses:
             st.session_state['proses_selesai'] = True
 
 # ==========================================================
-# FUNGSI & INISIALISASI KEYWORD MEDSOS
-# PENTING: Harus diletakkan SEBELUM logika if/elif menu_pilihan
-# ==========================================================
-if 'medsoc_keywords' not in st.session_state:
-    # Memasukkan daftar bawaan yang Anda berikan agar langsung muncul di menu baru
-    st.session_state['medsoc_keywords'] = [
-        'whatsapp', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 
-        'grindr', 'growlr', 'instagram', 'tantan', 'telegram', 'telepon', 
-        'tinder', 'twitter', 'line', 'facebook', 'messenger', 'romeo', 
-        'tiktok', 'tagged', 'litmatch', 'scruff', 'wechat', 'threads'
-    ]
-
-def ambil_keyword_medsos():
-    """Mengambil daftar keyword medsos aktif dari session state"""
-    return sorted(st.session_state['medsoc_keywords'])
-
-def tambah_keyword_medsos(keyword):
-    """Menambahkan keyword medsos baru ke dalam daftar"""
-    keyword_clean = keyword.strip().lower()
-    if keyword_clean and keyword_clean not in st.session_state['medsoc_keywords']:
-        st.session_state['medsoc_keywords'].append(keyword_clean)
-        return True
-    return False
-
-# ==========================================================
 # 5. RENDER LAYOUT UTAMA (BERDASARKAN PILIHAN MENU)
 # ==========================================================
 
@@ -837,7 +826,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         st.error("Gagal memproses arsip ke database.")
 
 # ----------------------------------------------------------
-# MENU 2: PENGATURAN MEDSOS (Tersambung langsung dengan "if" di atas)
+# MENU 2: PENGATURAN MEDSOS 
 # ----------------------------------------------------------
 elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
     st.title("⚙️ Pengaturan Keyword Media Sosial")
@@ -855,15 +844,22 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
             tombol_simpan = st.form_submit_button("Simpan Keyword", use_container_width=True)
             
             if tombol_simpan:
-                if medsos_baru:
-                    sukses = tambah_keyword_medsos(medsos_baru)
+                keyword_clean = medsos_baru.strip().lower()
+                if keyword_clean:
+                    # 1. Simpan ke database
+                    sukses = tambah_keyword_medsos_db(keyword_clean)
+                    
                     if sukses:
-                        st.success(f"Berhasil menambahkan '{medsos_baru.lower()}' ke daftar aktif!")
+                        # 2. Update session_state agar tampil langsung tanpa refresh database
+                        st.session_state['medsoc_keywords'].append(keyword_clean)
+                        st.session_state['medsoc_keywords'].sort()
+                        st.success(f"Berhasil menambahkan '{keyword_clean}' ke database!")
+                        
                         import time
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.warning(f"Keyword '{medsos_baru.lower()}' sudah ada di dalam daftar.")
+                        st.warning(f"Keyword '{keyword_clean}' sudah ada di dalam database.")
                 else:
                     st.warning("Kolom tidak boleh kosong!")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -871,12 +867,11 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
     with col_kanan:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
-        # Mengambil daftar medsos
-        list_medsos = ambil_keyword_medsos()
+        # Ambil langsung dari session state yang sudah tersinkron database
+        list_medsos = st.session_state.get('medsoc_keywords', [])
         st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
         
         if list_medsos:
-            # Membuat container string HTML untuk badge-badge medsos
             html_badges = ""
             for m in list_medsos:
                 html_badges += f"""
@@ -889,7 +884,7 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
                     font-family: inherit; 
                     font-size: 0.85rem;
                     font-weight: 500;
-                    white-space: nowrap; /* Mencegah 1 badge terbelah jadi 2 baris */
+                    white-space: nowrap;
                     display: flex;
                     align-items: center;
                     gap: 5px;
@@ -898,12 +893,11 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
                 </span>
                 """
             
-            # Tampilkan semua badge di dalam satu box container yang rapi menggunakan Flexbox
             st.markdown(f"""
                 <div style="
                     display: flex;
-                    flex-wrap: wrap; /* Otomatis turun ke bawah jika mentok ke kanan */
-                    gap: 10px; /* Jarak rapi antar badge */
+                    flex-wrap: wrap;
+                    gap: 10px;
                     padding: 15px; 
                     border: 1px solid rgba(255,255,255,0.1); 
                     border-radius: 8px; 
