@@ -12,7 +12,7 @@ from database import (
     simpan_log_ke_neon,
     jalankan_agregasi_tren,
     ambil_rekap_tren,
-    hitung_dan_ambil_log_db    # <--- TAMBAHKAN BARIS INI
+    hitung_dan_ambil_log_db,    # <--- TAMBAHKAN BARIS INI
     ambil_keyword_medsos
 )
 
