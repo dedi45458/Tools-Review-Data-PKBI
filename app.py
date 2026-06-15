@@ -624,7 +624,7 @@ if tombol_proses:
 # PENTING: Harus diletakkan SEBELUM logika if/elif menu_pilihan
 # ==========================================================
 if 'medsoc_keywords' not in st.session_state:
-    # Memasukkan daftar bawaan yang Anda berikan agar langsung muncul di menu baru
+    # Daftar bawaan langsung otomatis huruf kecil
     st.session_state['medsoc_keywords'] = [
         'whatsapp', 'badoo', 'hornet', 'michat', 'blued', 'bumble', 'walla', 
         'grindr', 'growlr', 'instagram', 'tantan', 'telegram', 'telepon', 
@@ -633,8 +633,11 @@ if 'medsoc_keywords' not in st.session_state:
     ]
 
 def ambil_keyword_medsos():
-    """Mengambil daftar keyword medsos aktif dari session state"""
-    return sorted(st.session_state['medsoc_keywords'])
+    """Mengambil daftar keyword medsos aktif dengan proteksi ganda (clean & lowercase)"""
+    keywords = st.session_state.get('medsoc_keywords', [])
+    # Membersihkan spasi, memastikan lowercase, membuang duplikat, dan mengabaikan teks kosong
+    keywords_bersih = list(set(str(k).strip().lower() for k in keywords if str(k).strip() != ""))
+    return sorted(keywords_bersih)
 
 def tambah_keyword_medsos(keyword):
     """Menambahkan keyword medsos baru ke dalam daftar"""
@@ -642,6 +645,7 @@ def tambah_keyword_medsos(keyword):
     if keyword_clean and keyword_clean not in st.session_state['medsoc_keywords']:
         st.session_state['medsoc_keywords'].append(keyword_clean)
         return True
+    return False
     return False
 
 # ==========================================================
