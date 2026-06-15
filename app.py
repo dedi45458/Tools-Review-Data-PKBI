@@ -284,7 +284,7 @@ with st.sidebar:
         tombol_proses = st.button("🚀 Jalankan Penelaahan", type="primary", use_container_width=True)
 
 # ==========================================================
-# 3. ENGINE VALIDASI UTAMA
+# 3. ENGINE VALIDASI UTAMA (VERSI FIX SUB-HEADER MATCH)
 # ==========================================================
 def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
@@ -334,8 +334,32 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
 
-    # PENGAMAN REGEX MEDSOS
-    keywords_aktif = st.session_state.get('medsoc_keywords', [])
+    # ==========================================================
+    # DETEKTOR NAMA KOLOM FLEKSIBEL (PENGAMAN GABUNGAN SUB-HEADER)
+    # ==========================================================
+    def cari_kolom(list_kolom, keyword):
+        for c in list_kolom:
+            if keyword.upper() in str(c).upper():
+                return c
+        return keyword
+
+    # Daftarkan pemetaan kolom yang rawan berubah nama karena sub-header
+    col_ssr = cari_kolom(df.columns, 'Lembaga SSR')
+    col_petugas = cari_kolom(df.columns, 'Kode Petugas')
+    col_kota = cari_kolom(df.columns, 'Nama Kota')
+    col_id = cari_kolom(df.columns, 'ID Klien')
+    col_nik = cari_kolom(df.columns, 'NIK')
+    col_umur = cari_kolom(df.columns, 'Umur')
+    col_jk = cari_kolom(df.columns, 'Jenis Kelamin')
+    col_jns_kontak = cari_kolom(df.columns, 'Jenis Kontak')
+    col_jns_kegiatan = cari_kolom(df.columns, 'Jenis Kegiatan')
+    col_lokasi = cari_kolom(df.columns, 'Lokasi Outreach')
+    col_no_hp = cari_kolom(df.columns, 'No. HP')
+    col_vc1 = cari_kolom(df.columns, 'Virtual & Tatap Muka')
+    col_jarum_kembali = cari_kolom(df.columns, 'Jumlah Jarum Suntik Kembali')
+
+    # Pengaman Regex Medsos
+    keywords_aktif = ambil_keyword_medsos()  
     if keywords_aktif:
         pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
     else:
@@ -382,8 +406,8 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                     if '5' in rujukans:
                         dict_pernah_prep_rujukan[key_klien] = True
 
-    df['id_mapped'] = df.get('ID Klien', pd.Series(dtype=str)).astype(str).str.replace("'", "").str.strip()
-    df['ssr_id_key'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
+    df['id_mapped'] = df.get(col_id, pd.Series(dtype=str)).astype(str).str.replace("'", "").str.strip()
+    df['ssr_id_key'] = df.get(col_ssr, pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     
     dict_ssr_id_counts = df.iloc[start_row_idx:]['ssr_id_key'].value_counts().to_dict()
     
@@ -395,19 +419,13 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             s = s.replace('.', ',')
         return '2' in s.split(',')
 
-    # DETEKSI KOLOM DINAMIS
+    # DETEKSI KOLOM DINAMIS BAWAAN
     col_info = ""
     for c in df.columns:
         if "INFORMASI" in str(c).upper() and "DIBERIKAN" in str(c).upper():
             col_info = c
             break
             
-    col_kegiatan = ""
-    for c in df.columns:
-        if "JENIS KEGIATAN" in str(c).upper():
-            col_kegiatan = c
-            break
-
     col_ruj = ""
     for c in df.columns:
         if "RUJUKAN" in str(c).upper():
@@ -426,8 +444,8 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             col_tipe_sasaran = c
             break
     
-    if col_info and col_kegiatan:
-        df['is_info_hiv'] = df[col_info].apply(periksa_hiv) | df[col_kegiatan].apply(periksa_hiv)
+    if col_info and col_jns_kegiatan:
+        df['is_info_hiv'] = df[col_info].apply(periksa_hiv) | df[col_jns_kegiatan].apply(periksa_hiv)
     else:
         df['is_info_hiv'] = False
         
@@ -457,7 +475,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     for col in semua_kolom_logistik:
         df['tmp_log'] += df[col].apply(_safe_float)
 
-    df['kunci_klien_ref_log'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
+    df['kunci_klien_ref_log'] = df.get(col_ssr, pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
 
     aturan_kustom = st.session_state.get('aturan_kustom', [])
@@ -467,33 +485,33 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     for idx in range(start_row_idx, len(df)):
         row = df.iloc[idx]
         
-        v_ssr = str(row.get('Lembaga SSR', '')).strip().upper() if pd.notna(row.get('Lembaga SSR')) else ''
-        v_petugas = str(row.get('Kode Petugas', '')).replace("'", "").strip() if pd.notna(row.get('Kode Petugas')) else ''
-        v_kota = str(row.get('Nama Kota', '')).strip() if pd.notna(row.get('Nama Kota')) else ''
+        v_ssr = str(row.get(col_ssr, '')).strip().upper() if pd.notna(row.get(col_ssr)) else ''
+        v_petugas = str(row.get(col_petugas, '')).replace("'", "").strip() if pd.notna(row.get(col_petugas)) else ''
+        v_kota = str(row.get(col_kota, '')).strip() if pd.notna(row.get(col_kota)) else ''
         v_tanggal = str(row.get(col_tanggal, '')).split(' ')[0] if pd.notna(row.get(col_tanggal)) else ''
         
-        id_raw = str(row.get('ID Klien', '')).strip()
+        id_raw = str(row.get(col_id, '')).strip()
         id_clean = id_raw.replace("'", "").strip()
-        nik_raw = str(row.get('NIK', '')).strip()
+        nik_raw = str(row.get(col_nik, '')).strip()
         nik_clean = nik_raw.replace("'", "").replace('.0', '').strip()
 
         v_tipe_sasaran = str(row.get(col_tipe_sasaran, '')).replace('.0', '').strip()
-        umur = row.get('Umur', None)
-        jk = str(row.get('Jenis Kelamin', '')).replace('.0', '').strip()
-        jns_kontak = str(row.get('Jenis Kontak', '')).replace('.0', '').strip()
-        jns_kegiatan = str(row.get('Jenis Kegiatan', '')).strip()
-        lokasi = str(row.get('Lokasi Outreach / Jenis Sosial Media', '')).strip()
+        umur = row.get(col_umur, None)
+        jk = str(row.get(col_jk, '')).replace('.0', '').strip()
+        jns_kontak = str(row.get(col_jns_kontak, '')).replace('.0', '').strip()
+        jns_kegiatan = str(row.get(col_jns_kegiatan, '')).strip()
+        lokasi = str(row.get(col_lokasi, '')).strip()
         info_diberikan = str(row.get(col_info, '')).strip() if col_info else ''
-        rujukan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
-        no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
-        vc1 = str(row.get('Virtual & Tatap Muka', '')).replace('.0', '').strip()
+        rujakan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
+        no_hp = str(row.get(col_no_hp, '')).strip()
+        vc1 = str(row.get(col_vc1, '')).replace('.0', '').strip()
 
         log_kie = sum(_safe_float(row.get(c, 0)) for c in col_kie_list)
         log_kon = sum(_safe_float(row.get(c, 0)) for c in col_kon_list)
         log_pel = sum(_safe_float(row.get(c, 0)) for c in col_pel_list)
         log_jar = sum(_safe_float(row.get(c, 0)) for c in col_jar_list)
         log_swab = sum(_safe_float(row.get(c, 0)) for c in col_swab_list)
-        jarum_kembali = _safe_float(row.get('Jumlah Jarum Suntik Kembali', 0))
+        jarum_kembali = _safe_float(row.get(col_jarum_kembali, 0))
 
         tgl_raw = row.get(col_tanggal, None)
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce', format='%d/%m/%Y') if pd.notna(tgl_raw) and '/' in str(tgl_raw) else pd.to_datetime(tgl_raw, errors='coerce')
@@ -509,7 +527,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
             'jns_kontak': jns_kontak, 'jns_kegiatan': jns_kegiatan, 'lokasi': lokasi, 'info_diberikan': info_diberikan,
-            'rujukan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
+            'rujakan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
             'log_jar': log_jar, 'log_swab': log_swab, 'jarum_kembali': jarum_kembali, 'tgl_p': tgl_p, 'hari_ini': hari_ini,
             'tahun_sekarang': tahun_sekarang, 'is_vo': (jns_kontak == '3'), 'is_pwid': (v_tipe_sasaran in ['1401', '1403']),
             'id_counts': local_id_counts, 'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
@@ -520,7 +538,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'pattern_medsos': pattern_medsos_dinamis
         }
 
-        # LOOP ATURAN VALIDASI (Akan memeriksa semuanya secara berurutan)
+        # LOOP ATURAN VALIDASI
         for rule in SEMUA_ATURAN_AKTIF:
             nama_ind = rule["nama"]
             try:
