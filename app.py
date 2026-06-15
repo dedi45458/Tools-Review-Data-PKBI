@@ -937,13 +937,15 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
                         )
                         
-                        # Memperbesar ukuran titik (marker) agar estetik dan mudah dilihat
                         fig_mutlak.update_traces(
                             marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
-                            # 👇 TAMBAHKAN DUA BARIS INI: Mengunci teks pendek & warna di tingkat objek (trace)
-                            hoverlabel=dict(bgcolor="#1E1E24", font_color="#FFFFFF"),
+                            hoverlabel=dict(
+                                bgcolor="#0f172a",       # Ikut warna latar belakang config.toml Anda
+                                font_size=12,
+                                font_color="#f8fafc"     # Ikut warna teks config.toml Anda
+                            ),
                             hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
-                            hovertext=df_dot_mutlak['Kelompok Sasaran'] # Mengambil nama kelompok sasaran
+                            hovertext=df_dot_mutlak['Kelompok Sasaran'] # 👈 Khusus untuk data mutlak
                         )
                         
                         # Pengaturan Layout & Anti-Kotak Putih
@@ -991,10 +993,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         
                         fig_konf.update_traces(
                             marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
-                            # 👇 TAMBAHKAN DUA BARIS INI JUGA:
-                            hoverlabel=dict(bgcolor="#1E1E24", font_color="#FFFFFF"),
+                            hoverlabel=dict(
+                                bgcolor="#0f172a",       # Ikut warna latar belakang config.toml Anda
+                                font_size=12,
+                                font_color="#f8fafc"     # Ikut warna teks config.toml Anda
+                            ),
                             hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
-                            hovertext=df_dot_konf['Kelompok Sasaran']
+                            hovertext=df_dot_konf['Kelompok Sasaran'] # 👈 Khusus untuk data konfirmasi
                         )
                         
                         fig_konf.update_layout(
