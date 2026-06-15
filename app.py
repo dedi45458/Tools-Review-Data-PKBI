@@ -768,34 +768,144 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 st.info("✨ Tidak ada rekapan karena data bersih.")
 
         with tab2:
+            st.markdown("### 📈 Pusat Analisis & Wawasan Data")
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # =========================================================================
+            # 1. BAGIAN A: TOP 5 TEMUAN BERDASARKAN TIPE SASARAN (DATA PROSES SAAT INI)
+            # =========================================================================
+            if st.session_state.get('proses_selesai', False) and st.session_state.get('df_tabel_bawah') is not None:
+                df_bawah = st.session_state['df_tabel_bawah'].copy()
+                
+                if not df_bawah.empty:
+                    st.markdown("#### 📊 Top 5 Temuan Terbanyak Berdasarkan Tipe Sasaran")
+                    
+                    # Standarisasi Tipe Sasaran & Mapping Label
+                    df_bawah['Tipe Sasaran'] = df_bawah['Tipe Sasaran'].astype(str).str.replace('.0', '', regex=False).str.strip()
+                    map_sasaran = {
+                        '1304': '1304 (MSM)',
+                        '1301': '1301 (TG)',
+                        '1401': '1401 (PWID)'
+                    }
+                    df_bawah['Kelompok Sasaran'] = df_bawah['Tipe Sasaran'].map(map_sasaran).fillna(df_bawah['Tipe Sasaran'])
+                    
+                    # Pengaman Duplikat: 1 Klien di tanggal yang sama dengan indikator sama hanya dihitung 1
+                    df_bawah = df_bawah.drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien", "INDIKATOR KESALAHAN DATA"])
+                    
+                    # Memisahkan Kategori (Mutlak vs Konfirmasi)
+                    is_konfirmasi = df_bawah['INDIKATOR KESALAHAN DATA'].str.contains(r'\(konfirmasi\)', case=False, na=False)
+                    df_mutlak_all = df_bawah[~is_konfirmasi]
+                    df_konf_all = df_bawah[is_konfirmasi]
+                    
+                    kolom_sasaran_utama = ['1304 (MSM)', '1301 (TG)', '1401 (PWID)']
+                    
+                    # --- KATEGORI 1: TEMUAN MUTLAK ---
+                    st.markdown("##### 🟥 A. Temuan Mutlak (Perlu Koreksi / Non-Konfirmasi)")
+                    if not df_mutlak_all.empty:
+                        top_5_mutlak_idx = df_mutlak_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
+                        df_top_5_mutlak = df_mutlak_all[df_mutlak_all['INDIKATOR KESALAHAN DATA'].isin(top_5_mutlak_idx)]
+                        
+                        pivot_mutlak = df_top_5_mutlak.pivot_table(
+                            index='INDIKATOR KESALAHAN DATA',
+                            columns='Kelompok Sasaran',
+                            aggfunc='size',
+                            fill_value=0
+                        )
+                        
+                        for col in kolom_sasaran_utama:
+                            if col not in pivot_mutlak.columns:
+                                pivot_mutlak[col] = 0
+                                
+                        pivot_mutlak['Total Temuan'] = pivot_mutlak.sum(axis=1)
+                        pivot_mutlak = pivot_mutlak.sort_values(by='Total Temuan', ascending=False)
+                        kolom_tampil = [c for c in kolom_sasaran_utama if c in pivot_mutlak.columns] + ['Total Temuan']
+                        pivot_mutlak = pivot_mutlak[kolom_tampil].reset_index()
+                        
+                        st.dataframe(
+                            pivot_mutlak, 
+                            use_container_width=True, 
+                            hide_index=True,
+                            column_config={"INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan", width=350)}
+                        )
+                    else:
+                        st.info("✨ Bersih! Tidak ada temuan mutlak terdeteksi.")
+                        
+                    st.markdown("<br>", unsafe_allow_html=True)
+        
+                    # --- KATEGORI 2: TEMUAN BUTUH KONFIRMASI ---
+                    st.markdown("##### 🟨 B. Temuan Butuh Klarifikasi (Ada Unsur Justifikasi / Konfirmasi)")
+                    if not df_konf_all.empty:
+                        top_5_konf_idx = df_konf_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
+                        df_top_5_konf = df_konf_all[df_konf_all['INDIKATOR KESALAHAN DATA'].isin(top_5_konf_idx)]
+                        
+                        pivot_konf = df_top_5_konf.pivot_table(
+                            index='INDIKATOR KESALAHAN DATA',
+                            columns='Kelompok Sasaran',
+                            aggfunc='size',
+                            fill_value=0
+                        )
+                        
+                        for col in kolom_sasaran_utama:
+                            if col not in pivot_konf.columns:
+                                pivot_konf[col] = 0
+                                
+                        pivot_konf['Total Temuan'] = pivot_konf.sum(axis=1)
+                        pivot_konf = pivot_konf.sort_values(by='Total Temuan', ascending=False)
+                        kolom_tampil_konf = [c for c in kolom_sasaran_utama if c in pivot_konf.columns] + ['Total Temuan']
+                        pivot_konf = pivot_konf[kolom_tampil_konf].reset_index()
+                        
+                        st.dataframe(
+                            pivot_konf, 
+                            use_container_width=True, 
+                            hide_index=True,
+                            column_config={"INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan", width=350)}
+                        )
+                    else:
+                        st.info("✨ Aman! Tidak ada data yang membutuhkan konfirmasi tambahan.")
+                else:
+                    st.info("✨ Tidak ada rincian data kesalahan untuk dianalisa berdasarkan target.")
+        
+            # =========================================================================
+            # LINE BREAK / PEMBATAS ELEGAN ANTARA DATA SEKARANG VS DATA HISTORIS
+            # =========================================================================
+            st.markdown("---")
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # =========================================================================
+            # 2. BAGIAN B: ANALISIS TREN SEMESTER (DATA HISTORIS BULANAN DARI DATABASE)
+            # =========================================================================
+            st.markdown("#### 📉 Analisis Tren Kesalahan per Periode")
+            
             df_tren = ambil_rekap_tren()
             if not df_tren.empty:
                 df_tren['Tanggal'] = df_tren['periode']
-            
+                
                 col_kiri, col_kanan = st.columns([1, 2])
                 with col_kiri:
                     daftar_ssr = ["SEMUA"] + sorted(df_tren['nama_ssr'].dropna().unique().tolist())
                     pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr, key="select_ssr_tren")
-            
+                    
                 if pilihan_ssr == "SEMUA":
                     df_pivot = df_tren.groupby('Tanggal')['jumlah_kesalahan'].sum().reset_index()
                     df_pivot = df_pivot.set_index('Tanggal')
-                    st.markdown(f"<br><p>📈 Tren total kesalahan <b>seluruh SSR</b>:</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p>📈 Tren total kesalahan <b>seluruh SSR</b>:</p>", unsafe_allow_html=True)
                 else:
                     df_filtered = df_tren[df_tren['nama_ssr'] == pilihan_ssr]
                     df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', values='jumlah_kesalahan', aggfunc='sum', fill_value=0)
-                    st.markdown(f"<br><p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
-            
+                    st.markdown(f"<p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
+                    
                 if not df_pivot.empty:
                     st.area_chart(df_pivot)
                 else:
                     st.info("Data belum tersedia untuk filter ini.")
             else:
                 st.info("Belum ada data rekap tren di tabel rekap_tren_bulanan.")
-
+        
+        # Menutup Glass Card HTML Container dari Main Layout
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
+        
         # --- BARIS 3: DETAIL DATA ---
         st.markdown("### 🔍 Hasil Review Penjangkauan")
         if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
