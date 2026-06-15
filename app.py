@@ -914,11 +914,24 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             barmode='stack',
                             color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'} # Merah, Biru, Hijau modern
                         )
+                        # Cari bagian fig_mutlak.update_layout Anda, lalu sesuaikan isinya menjadi seperti ini:
                         fig_mutlak.update_layout(
+                            template="plotly_dark",  # <-- Kunci Utama: Paksa pakai tema gelap bawaan Plotly
                             margin=dict(l=10, r=10, t=10, b=10),
-                            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                            font_color='#E0E0E0', xaxis_title="Jumlah Kasus Kesalahan", yaxis_title="",
-                            legend_title_text="Sasaran", height=280, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            paper_bgcolor='rgba(0,0,0,0)', 
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            font_color='#E0E0E0', 
+                            xaxis_title="Jumlah Kasus Kesalahan", 
+                            yaxis_title="",
+                            legend_title_text="Sasaran", 
+                            height=280, 
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                            # 👇 TAMBAHKAN BLOK INI: Mengatur warna pop-up kotak hover agar menjadi gelap elegan
+                            hoverlabel=dict(
+                                bgcolor="#1E1E24",       # Warna latar kotak (gelap)
+                                font_size=12,
+                                font_color="#FFFFFF"     # Warna teks di dalam kotak (putih)
+                            )
                         )
                         fig_mutlak.update_xaxes(showgrid=True, gridcolor='#333333')
                         st.plotly_chart(fig_mutlak, use_container_width=True)
@@ -949,11 +962,24 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             barmode='stack',
                             color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
                         )
+                        # Lakukan hal yang persis sama pada fig_konf.update_layout:
                         fig_konf.update_layout(
+                            template="plotly_dark",  # <-- Kunci Utama
                             margin=dict(l=10, r=10, t=10, b=10),
-                            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                            font_color='#E0E0E0', xaxis_title="Jumlah Kasus Kesalahan", yaxis_title="",
-                            legend_title_text="Sasaran", height=280, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            paper_bgcolor='rgba(0,0,0,0)', 
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            font_color='#E0E0E0', 
+                            xaxis_title="Jumlah Kasus Kesalahan", 
+                            yaxis_title="",
+                            legend_title_text="Sasaran", 
+                            height=280, 
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                            # 👇 TAMBAHKAN BLOK INI JUGA:
+                            hoverlabel=dict(
+                                bgcolor="#1E1E24", 
+                                font_size=12,
+                                font_color="#FFFFFF"
+                            )
                         )
                         fig_konf.update_xaxes(showgrid=True, gridcolor='#333333')
                         st.plotly_chart(fig_konf, use_container_width=True)
