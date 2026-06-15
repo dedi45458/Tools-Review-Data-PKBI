@@ -87,6 +87,21 @@ def set_modern_theme():
     g.hovertext text tspan {
         fill: #FFFFFF !important;       /* Pengaman tambahan untuk sub-teks di dalam plotly */
     }
+
+    /* --- JINAKKAN KOTAK HOVER PLOTLY SECARA TOTAL --- */
+    div[data-testid="stPlotlyChart"] .hoverlayer path {
+        fill: #1e293b !important;       /* Ubah latar belakang kotak menjadi slate gelap */
+        stroke: #38bdf8 !important;     /* Beri garis tepi biru muda senada primaryColor Anda */
+        fill-opacity: 0.95 !important;  /* Menjaga kotak tetap tegas dan tidak transparan */
+    }
+    
+    div[data-testid="stPlotlyChart"] .hoverlayer text {
+        fill: #f8fafc !important;       /* Paksa warna teks utama menjadi putih cerah sesuai textColor */
+    }
+    
+    div[data-testid="stPlotlyChart"] .hoverlayer text tspan {
+        fill: #f8fafc !important;       /* Kunci warna untuk sub-teks di dalam elemen grafik */
+    }
 </style>
     """, unsafe_allow_html=True)
 
