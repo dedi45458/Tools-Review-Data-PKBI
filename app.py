@@ -963,7 +963,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         fig_mutlak.update_xaxes(showgrid=True, gridcolor='#333333')
                         fig_mutlak.update_yaxes(showgrid=True, gridcolor='#222222') # Garis pandu horizontal untuk titik
                         
-                        st.plotly_chart(fig_mutlak, use_container_width=True)
+                        st.plotly_chart(fig_mutlak, use_container_width=True, theme=None)
                     else:
                         st.info("✨ Bersih! Tidak ada temuan mutlak terdeteksi.")
                         
@@ -1013,7 +1013,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         fig_konf.update_xaxes(showgrid=True, gridcolor='#333333')
                         fig_konf.update_yaxes(showgrid=True, gridcolor='#222222')
                         
-                        st.plotly_chart(fig_konf, use_container_width=True)
+                        st.plotly_chart(fig_konf, use_container_width=True, theme=None)
                     else:
                         st.info("✨ Aman! Tidak ada data yang membutuhkan konfirmasi tambahan.")
                 else:
