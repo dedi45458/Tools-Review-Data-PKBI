@@ -771,14 +771,17 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             st.markdown("### 📈 Pusat Analisis & Wawasan Data")
             st.markdown("<br>", unsafe_allow_html=True)
             
+            # Import Plotly untuk visualisasi interaktif pengganti tabel
+            import plotly.express as px
+            
             # =========================================================================
-            # 1. BAGIAN A: TOP 5 TEMUAN BERDASARKAN TIPE SASARAN (DATA PROSES SAAT INI)
+            # 1. BAGIAN A: VISUALISASI TOP 5 TEMUAN (PENGGANTI TABEL)
             # =========================================================================
             if st.session_state.get('proses_selesai', False) and st.session_state.get('df_tabel_bawah') is not None:
                 df_bawah = st.session_state['df_tabel_bawah'].copy()
                 
                 if not df_bawah.empty:
-                    st.markdown("#### 📊 Top 5 Temuan Terbanyak Berdasarkan Tipe Sasaran")
+                    st.markdown("#### 📊 Kontribusi Kesalahan Berdasarkan Kelompok Sasaran")
                     
                     # Standarisasi Tipe Sasaran & Mapping Label
                     df_bawah['Tipe Sasaran'] = df_bawah['Tipe Sasaran'].astype(str).str.replace('.0', '', regex=False).str.strip()
@@ -789,7 +792,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     }
                     df_bawah['Kelompok Sasaran'] = df_bawah['Tipe Sasaran'].map(map_sasaran).fillna(df_bawah['Tipe Sasaran'])
                     
-                    # Pengaman Duplikat: 1 Klien di tanggal yang sama dengan indikator sama hanya dihitung 1
+                    # Pengaman Duplikat
                     df_bawah = df_bawah.drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien", "INDIKATOR KESALAHAN DATA"])
                     
                     # Memisahkan Kategori (Mutlak vs Konfirmasi)
@@ -799,67 +802,72 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     
                     kolom_sasaran_utama = ['1304 (MSM)', '1301 (TG)', '1401 (PWID)']
                     
-                    # --- KATEGORI 1: TEMUAN MUTLAK ---
-                    st.markdown("##### 🟥 A. Temuan Mutlak (Perlu Koreksi / Non-Konfirmasi)")
+                    # --- VISUALISASI KATEGORI 1: TEMUAN MUTLAK ---
+                    st.markdown("##### 🟥 A. Top 5 Temuan Mutlak (Perlu Koreksi / Non-Konfirmasi)")
                     if not df_mutlak_all.empty:
                         top_5_mutlak_idx = df_mutlak_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
                         df_top_5_mutlak = df_mutlak_all[df_mutlak_all['INDIKATOR KESALAHAN DATA'].isin(top_5_mutlak_idx)]
                         
-                        pivot_mutlak = df_top_5_mutlak.pivot_table(
-                            index='INDIKATOR KESALAHAN DATA',
-                            columns='Kelompok Sasaran',
-                            aggfunc='size',
-                            fill_value=0
-                        )
-                        
+                        pivot_mutlak = df_top_5_mutlak.pivot_table(index='INDIKATOR KESALAHAN DATA', columns='Kelompok Sasaran', aggfunc='size', fill_value=0)
                         for col in kolom_sasaran_utama:
-                            if col not in pivot_mutlak.columns:
-                                pivot_mutlak[col] = 0
-                                
-                        pivot_mutlak['Total Temuan'] = pivot_mutlak.sum(axis=1)
-                        pivot_mutlak = pivot_mutlak.sort_values(by='Total Temuan', ascending=False)
-                        kolom_tampil = [c for c in kolom_sasaran_utama if c in pivot_mutlak.columns] + ['Total Temuan']
-                        pivot_mutlak = pivot_mutlak[kolom_tampil].reset_index()
+                            if col not in pivot_mutlak.columns: pivot_mutlak[col] = 0
                         
-                        st.dataframe(
-                            pivot_mutlak, 
-                            use_container_width=True, 
-                            hide_index=True,
-                            column_config={"INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan", width=350)}
+                        pivot_mutlak['Total'] = pivot_mutlak.sum(axis=1)
+                        # Di-sort ascending=True agar saat digambar di grafik horizontal, nilai terbesar muncul di PALING ATAS
+                        pivot_mutlak = pivot_mutlak.sort_values(by='Total', ascending=True).reset_index()
+                        
+                        # Membuat Grafik Horizontal Stacked Bar
+                        fig_mutlak = px.bar(
+                            pivot_mutlak,
+                            x=kolom_sasaran_utama,
+                            y='INDIKATOR KESALAHAN DATA',
+                            orientation='h',
+                            barmode='stack',
+                            color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'} # Merah, Biru, Hijau modern
                         )
+                        fig_mutlak.update_layout(
+                            margin=dict(l=10, r=10, t=10, b=10),
+                            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                            font_color='#E0E0E0', xaxis_title="Jumlah Kasus Kesalahan", yaxis_title="",
+                            legend_title_text="Sasaran", height=280, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+                        fig_mutlak.update_xaxes(showgrid=True, gridcolor='#333333')
+                        st.plotly_chart(fig_mutlak, use_container_width=True)
                     else:
                         st.info("✨ Bersih! Tidak ada temuan mutlak terdeteksi.")
                         
                     st.markdown("<br>", unsafe_allow_html=True)
         
-                    # --- KATEGORI 2: TEMUAN BUTUH KONFIRMASI ---
-                    st.markdown("##### 🟨 B. Temuan Butuh Klarifikasi (Ada Unsur Justifikasi / Konfirmasi)")
+                    # --- VISUALISASI KATEGORI 2: TEMUAN BUTUH KONFIRMASI ---
+                    st.markdown("##### 🟨 B. Top 5 Temuan Butuh Klarifikasi (Ada Unsur Justifikasi / Konfirmasi)")
                     if not df_konf_all.empty:
                         top_5_konf_idx = df_konf_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
                         df_top_5_konf = df_konf_all[df_konf_all['INDIKATOR KESALAHAN DATA'].isin(top_5_konf_idx)]
                         
-                        pivot_konf = df_top_5_konf.pivot_table(
-                            index='INDIKATOR KESALAHAN DATA',
-                            columns='Kelompok Sasaran',
-                            aggfunc='size',
-                            fill_value=0
-                        )
-                        
+                        pivot_konf = df_top_5_konf.pivot_table(index='INDIKATOR KESALAHAN DATA', columns='Kelompok Sasaran', aggfunc='size', fill_value=0)
                         for col in kolom_sasaran_utama:
-                            if col not in pivot_konf.columns:
-                                pivot_konf[col] = 0
-                                
-                        pivot_konf['Total Temuan'] = pivot_konf.sum(axis=1)
-                        pivot_konf = pivot_konf.sort_values(by='Total Temuan', ascending=False)
-                        kolom_tampil_konf = [c for c in kolom_sasaran_utama if c in pivot_konf.columns] + ['Total Temuan']
-                        pivot_konf = pivot_konf[kolom_tampil_konf].reset_index()
+                            if col not in pivot_konf.columns: pivot_konf[col] = 0
                         
-                        st.dataframe(
-                            pivot_konf, 
-                            use_container_width=True, 
-                            hide_index=True,
-                            column_config={"INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan", width=350)}
+                        pivot_konf['Total'] = pivot_konf.sum(axis=1)
+                        pivot_konf = pivot_konf.sort_values(by='Total', ascending=True).reset_index()
+                        
+                        # Membuat Grafik Horizontal Stacked Bar
+                        fig_konf = px.bar(
+                            pivot_konf,
+                            x=kolom_sasaran_utama,
+                            y='INDIKATOR KESALAHAN DATA',
+                            orientation='h',
+                            barmode='stack',
+                            color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
                         )
+                        fig_konf.update_layout(
+                            margin=dict(l=10, r=10, t=10, b=10),
+                            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                            font_color='#E0E0E0', xaxis_title="Jumlah Kasus Kesalahan", yaxis_title="",
+                            legend_title_text="Sasaran", height=280, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+                        fig_konf.update_xaxes(showgrid=True, gridcolor='#333333')
+                        st.plotly_chart(fig_konf, use_container_width=True)
                     else:
                         st.info("✨ Aman! Tidak ada data yang membutuhkan konfirmasi tambahan.")
                 else:
@@ -872,7 +880,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             st.markdown("<br>", unsafe_allow_html=True)
             
             # =========================================================================
-            # 2. BAGIAN B: ANALISIS TREN SEMESTER (DATA HISTORIS BULANAN DARI DATABASE)
+            # 2. BAGIAN B: ANALISIS TREN SEMESTER (TETAP MENGGUNAKAN AREA CHART)
             # =========================================================================
             st.markdown("#### 📉 Analisis Tren Kesalahan per Periode")
             
