@@ -18,60 +18,42 @@ def dapatkan_koneksi_neon():
 # FITUR TAMBAHAN: MANAJEMEN KEYWORD MEDIA SOSIAL
 # ==========================================================
 
-def ambil_keyword_medsos():
-    """
-    Mengambil daftar keyword media sosial dari database Neon 
-    untuk digunakan sebagai penyaring data di app.py.
-    """
-    conn = dapatkan_koneksi_neon()
-    if conn is None:
-        return []
-        
-    try:
-        with conn.cursor() as cur:
-            # Mengambil keyword dan mengurutkannya secara alfabetis (A-Z)
-            cur.execute("SELECT keyword FROM public.keyword_medsos ORDER BY keyword ASC;")
-            rows = cur.fetchall()
-            # Mengubah hasil query [( 'grindr',), ('michat',)] menjadi list standar ['grindr', 'michat']
-            return [row[0] for row in rows]
-    except Exception as e:
-        # Jika tabel belum dibuat di awal, kembalikan list kosong agar aplikasi tidak crash
-        return []
-    finally:
-        conn.close()
+# Tambahkan ini di dalam file database.py
 
-def simpan_keyword_medsos(keyword):
-    """
-    Menyimpan keyword media sosial baru yang diinput user ke database.
-    Menggunakan klausa 'ON CONFLICT' agar jika kata tersebut sudah ada, tidak memicu error duplikat.
-    """
-    if not keyword or keyword.strip() == "":
-        st.warning("Keyword tidak boleh kosong!")
-        return False
-        
+def ambil_keyword_medsos_db():
+    """Mengambil seluruh daftar keyword medsos dari Neon DB"""
     conn = dapatkan_koneksi_neon()
-    if conn is None:
-        return False
-        
-    try:
-        with conn.cursor() as cur:
-            # Mengubah input menjadi huruf kecil semua dan menghapus spasi gaib
-            keyword_bersih = keyword.strip().lower()
-            
-            query = """
-                INSERT INTO public.keyword_medsos (keyword) 
-                VALUES (%s) 
-                ON CONFLICT (keyword) DO NOTHING;
-            """
-            cur.execute(query, (keyword_bersih,))
-            conn.commit()
-            return True
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Gagal menyimpan keyword medsos ke database: {e}")
-        return False
-    finally:
-        conn.close()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT nama_medsos FROM keyword_medsos")
+                rows = cur.fetchall()
+                # Kembalikan sebagai list of string
+                return [row[0].lower() for row in rows]
+        except Exception as e:
+            print("Error ambil medsos:", e)
+        finally:
+            conn.close()
+    return []
+
+def tambah_keyword_medsos_db(keyword):
+    """Menyimpan keyword medsos baru ke Neon DB"""
+    conn = dapatkan_koneksi_neon()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO keyword_medsos (nama_medsos) VALUES (%s) ON CONFLICT (nama_medsos) DO NOTHING",
+                    (keyword.lower().strip(),)
+                )
+                conn.commit()
+                # Jika rowcount > 0, berarti berhasil ditambah (bukan duplikat)
+                return cur.rowcount > 0 
+        except Exception as e:
+            print("Error tambah medsos:", e)
+        finally:
+            conn.close()
+    return False
 
 # ==========================================================
 # FITUR LOG & VALIDASI REVIEW
