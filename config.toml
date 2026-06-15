@@ -1,5 +1,9 @@
 [theme]
 primaryColor = "#38bdf8"
-backgroundColor = "#0f172a"
-secondaryBackgroundColor = "#1e293b"
 textColor = "#f8fafc"
+
+# Latar belakang utama aplikasi kamu
+backgroundColor = "#0f172a" 
+
+# TRIKNYA DI SINI: Diubah menjadi warna navy yang sangat gelap (hampir menyatu dengan background)
+secondaryBackgroundColor = "#131b2e"
