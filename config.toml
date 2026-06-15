@@ -2,8 +2,10 @@
 primaryColor = "#38bdf8"
 textColor = "#f8fafc"
 
-# Latar belakang utama aplikasi kamu
+# Latar belakang utama aplikasi
 backgroundColor = "#0f172a" 
 
-# TRIKNYA DI SINI: Diubah menjadi warna navy yang sangat gelap (hampir menyatu dengan background)
-secondaryBackgroundColor = "#131b2e"
+# DIUBAH DI SINI (DIBUAT SANGAT MEPET DENGAN BACKGROUND):
+# Menggunakan #111829 membuat selisih warna menjadi sangat minimal.
+# Efek hover abu-abu di tabel akan otomatis meredup drastis menjadi seperti lapisan transparan yang sangat tipis.
+secondaryBackgroundColor = "#111829"
