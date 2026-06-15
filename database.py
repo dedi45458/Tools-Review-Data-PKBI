@@ -2,6 +2,7 @@ import streamlit as st
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import pandas as pd
+from sqlalchemy import create_engine
 
 def dapatkan_koneksi_neon():
     """Membuka koneksi aman ke Neon Postgres menggunakan connection pooling."""
@@ -13,10 +14,72 @@ def dapatkan_koneksi_neon():
         st.error(f"Gagal menyambungkan ke Neon Postgres: {e}")
         return None
 
+# ==========================================================
+# FITUR TAMBAHAN: MANAJEMEN KEYWORD MEDIA SOSIAL
+# ==========================================================
+
+def ambil_keyword_medsos():
+    """
+    Mengambil daftar keyword media sosial dari database Neon 
+    untuk digunakan sebagai penyaring data di app.py.
+    """
+    conn = dapatkan_koneksi_neon()
+    if conn is None:
+        return []
+        
+    try:
+        with conn.cursor() as cur:
+            # Mengambil keyword dan mengurutkannya secara alfabetis (A-Z)
+            cur.execute("SELECT keyword FROM public.keyword_medsos ORDER BY keyword ASC;")
+            rows = cur.fetchall()
+            # Mengubah hasil query [( 'grindr',), ('michat',)] menjadi list standar ['grindr', 'michat']
+            return [row[0] for row in rows]
+    except Exception as e:
+        # Jika tabel belum dibuat di awal, kembalikan list kosong agar aplikasi tidak crash
+        return []
+    finally:
+        conn.close()
+
+def simpan_keyword_medsos(keyword):
+    """
+    Menyimpan keyword media sosial baru yang diinput user ke database.
+    Menggunakan klausa 'ON CONFLICT' agar jika kata tersebut sudah ada, tidak memicu error duplikat.
+    """
+    if not keyword or keyword.strip() == "":
+        st.warning("Keyword tidak boleh kosong!")
+        return False
+        
+    conn = dapatkan_koneksi_neon()
+    if conn is None:
+        return False
+        
+    try:
+        with conn.cursor() as cur:
+            # Mengubah input menjadi huruf kecil semua dan menghapus spasi gaib
+            keyword_bersih = keyword.strip().lower()
+            
+            query = """
+                INSERT INTO public.keyword_medsos (keyword) 
+                VALUES (%s) 
+                ON CONFLICT (keyword) DO NOTHING;
+            """
+            cur.execute(query, (keyword_bersih,))
+            conn.commit()
+            return True
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Gagal menyimpan keyword medsos ke database: {e}")
+        return False
+    finally:
+        conn.close()
+
+# ==========================================================
+# FITUR LOG & VALIDASI REVIEW
+# ==========================================================
+
 def simpan_log_ke_neon(list_data_log):
     """
     Menyimpan data hasil review secara batch ke tabel log_validasi_review.
-    Tanpa klausa ON CONFLICT untuk menghindari error jika constraint unik belum dibuat.
     """
     if not list_data_log:
         return False
@@ -27,7 +90,6 @@ def simpan_log_ke_neon(list_data_log):
         
     try:
         with conn.cursor() as cur:
-            # Menggunakan INSERT standar tanpa pengecekan konflik
             query = """
                 INSERT INTO public.log_validasi_review 
                 (Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi)
@@ -77,13 +139,10 @@ def ambil_rekap_tren():
     finally:
         conn.close()
 
-from sqlalchemy import create_engine
-
 def import_data_rujukan(df_rujukan):
-    # Bersihkan spasi gaib di awal/akhir nama kolom Excel jika ada
+    """Mengosongkan tabel rujukan lama dan mengupload ulang data dari Excel secara massal."""
     df_rujukan.columns = df_rujukan.columns.str.strip()
 
-    # Mapping: Nama di Excel (kiri) -> Nama di Database (Ubah ke HURUF KECIL semua)
     pemetaan = {
         "Lembaga SR": "lembaga_sr",
         "Lembaga SSR": "lembaga_ssr",
@@ -105,19 +164,15 @@ def import_data_rujukan(df_rujukan):
         "Hasil Tes HIV": "hasil_tes_hiv"
     }
 
-    # 1. Rename kolom di dataframe agar cocok dengan database (versi lowercase)
     df_rujukan.rename(columns=pemetaan, inplace=True)
     
-    # 2. Antisipasi: Jika ada kolom rujukan yang absen di Excel, isi otomatis dengan Kosong/None
     kolom_db = list(pemetaan.values())
     for col in kolom_db:
         if col not in df_rujukan.columns:
             df_rujukan[col] = None 
             
-    # Saring dataframe hanya berisi kolom yang terdaftar di DB
     df_rujukan = df_rujukan[kolom_db]
 
-    # 3. Proses pengosongan tabel lama & upload ulang
     conn = dapatkan_koneksi_neon()
     if conn is None: 
         return False
@@ -127,18 +182,17 @@ def import_data_rujukan(df_rujukan):
             cur.execute("TRUNCATE TABLE public.data_rujukan_hiv_positif;")
             conn.commit()
         
-        # Buka engine SQLAlchemy untuk upload data secara massal
+        # Peningkatan: Membuka engine dengan context manager agar otomatis tertutup setelah selesai
         engine = create_engine(st.secrets["neon_db"]["connection_string"])
-        
-        # Kirim data ke database
-        df_rujukan.to_sql(
-            'data_rujukan_hiv_positif', 
-            engine, 
-            if_exists='append', 
-            index=False, 
-            method='multi', 
-            chunksize=500
-        )
+        with engine.connect() as sql_conn:
+            df_rujukan.to_sql(
+                'data_rujukan_hiv_positif', 
+                sql_conn, 
+                if_exists='append', 
+                index=False, 
+                method='multi', 
+                chunksize=500
+            )
         return True
     except Exception as e:
         st.error(f"Gagal melakukan sinkronisasi ke database Neon: {e}")
@@ -147,10 +201,7 @@ def import_data_rujukan(df_rujukan):
         conn.close()
 
 def hitung_dan_ambil_log_db():
-    """
-    Mengambil riwayat log validasi dari Neon Postgres 
-    untuk mengecek status revisi dan justifikasi.
-    """
+    """Mengambil riwayat log validasi untuk mengecek status revisi dan justifikasi."""
     conn = dapatkan_koneksi_neon()
     dict_revisi = {}
     dict_justifikasi = {}
@@ -159,7 +210,6 @@ def hitung_dan_ambil_log_db():
         return dict_revisi, dict_justifikasi
         
     try:
-        # Menggunakan RealDictCursor agar hasil query bisa diakses dengan nama kolom
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             query = """
                 SELECT lembaga_ssr, tanggal, id_klien, indikator_kesalahan_data, is_revisi, justifikasi 
@@ -169,13 +219,11 @@ def hitung_dan_ambil_log_db():
             rows = cur.fetchall()
             
             for row in rows:
-                # Membuat format kunci: SSR_Tanggal_IDKlien_Indikator
                 key_db = f"{row['lembaga_ssr']}_{row['tanggal']}_{row['id_klien']}_{row['indikator_kesalahan_data']}"
                 dict_revisi[key_db] = row['is_revisi']
                 dict_justifikasi[key_db] = row['justifikasi'] if row['justifikasi'] else ""
                 
     except Exception as e:
-        # Kita biarkan lewat jika tabel belum ada agar aplikasi tidak mati total
         pass
     finally:
         conn.close()
