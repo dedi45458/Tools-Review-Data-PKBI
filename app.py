@@ -317,7 +317,7 @@ with st.sidebar:
         tombol_proses = st.button("🚀 Jalankan Penelaahan", type="primary", use_container_width=True)
 
 # ==========================================================
-# 3. ENGINE VALIDASI UTAMA
+# 3. ENGINE VALIDASI UTAMA (VERSI SEMPURNA & DINAMIS)
 # ==========================================================
 def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
@@ -472,6 +472,13 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         if "TIPE SASARAN" in str(c).upper() or "TIPE KLIEN" in str(c).upper():
             col_tipe_sasaran = c
             break
+
+    # 🌟 REVISI BARU: Deteksi otomatis kolom Virtual & Tatap Muka (VC1) secara dinamis
+    col_vc1 = ""
+    for c in df.columns:
+        if "VIRTUAL" in str(c).upper() or "VC1" in str(c).upper() or "TATAP MUKA" in str(c).upper():
+            col_vc1 = c
+            break
     
     # Perhitungan akumulatif menggunakan kolom hasil deteksi dinamis
     if col_info and col_kegiatan:
@@ -530,7 +537,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         jk = str(row.get('Jenis Kelamin', '')).replace('.0', '').strip()
         
         # ==========================================================
-        # 🛠️ PERBAIKAN UTAMA: SINKRONISASI KOLOM DINAMIS & PENGAMAN FLOAT
+        # 🛠️ SINKRONISASI KOLOM DINAMIS & PENGAMAN FLOAT
         # ==========================================================
         jns_kontak = str(row.get(col_kontak, row.get('Jenis Kontak', ''))).replace('.0', '').strip()
         jns_kegiatan = str(row.get(col_kegiatan, row.get('Jenis Kegiatan', ''))).replace('.0', '').strip()
@@ -539,7 +546,9 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         info_diberikan = str(row.get(col_info, '')).strip() if col_info else ''
         rujukan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
-        vc1 = str(row.get('Virtual & Tatap Muka', '')).replace('.0', '').strip()
+        
+        # 🌟 REVISI BARU: Sekarang dinamis menggunakan col_vc1 dengan fallback aman ke nama string bawaan
+        vc1 = str(row.get(col_vc1, row.get('Virtual & Tatap Muka', ''))).replace('.0', '').strip()
 
         log_kie = sum(_safe_float(row.get(c, 0)) for c in col_kie_list)
         log_kon = sum(_safe_float(row.get(c, 0)) for c in col_kon_list)
