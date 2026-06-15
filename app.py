@@ -842,6 +842,20 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             else:
                                 st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
 
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("---")
+            
+            st.markdown("### ⚙️ Manajemen Akhir Periode")
+            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
+            
+            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
+                with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
+                    if jalankan_agregasi_tren():
+                        st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
+                        st.balloons()
+                    else:
+                        st.error("Gagal memproses arsip ke database.")
+
         with tab2:
             st.markdown("### 📈 Pusat Analisis & Wawasan Data")
             st.markdown("<br>", unsafe_allow_html=True)
@@ -988,20 +1002,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
-            
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("---")
-        
-        st.markdown("### ⚙️ Manajemen Akhir Periode")
-        st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
-        
-        if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-            with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
-                if jalankan_agregasi_tren():
-                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
-                    st.balloons()
-                else:
-                    st.error("Gagal memproses arsip ke database.")
 
 # ----------------------------------------------------------
 # MENU 2: PENGATURAN MEDSOS 
