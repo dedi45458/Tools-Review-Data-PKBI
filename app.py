@@ -321,7 +321,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     # PENGAMAN REGEX: Jika kosong, gunakan pola dummy yang tidak akan pernah cocok
     keywords_aktif = st.session_state.get('medsoc_keywords', [])
     if keywords_aktif:
-        pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(str(k)) for k in keywords_aktif]) + r')\b'
+        pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
     else:
         pattern_medsos_dinamis = r'\b(TIDAK_ADA_MEDSOS_TERDAFTAR_DI_SISTEM)\b'
 
@@ -475,7 +475,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         jns_kegiatan = str(row.get('Jenis Kegiatan', '')).strip()
         lokasi = str(row.get('Lokasi Outreach / Jenis Sosial Media', '')).strip()
         info_diberikan = str(row.get(col_info, '')).strip() if col_info else ''
-        rujakan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
+        rujukan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         vc1 = str(row.get('Virtual & Tatap Muka', '')).replace('.0', '').strip()
 
@@ -528,7 +528,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                     justif_val = dict_justifikasi.get(key_db, "") if is_butuh_konfirmasi else ""
                     
                     if key_db in dict_revisi:
-                        status_validasi = "kesalahan pada ID yang berulang (belum dilakukan resmi)"
+                        status_validasi = "kesalahan pada ID yang berulang (belum dilakukan revisi)"
                         checked_state = True
 
                     list_kesalahan.append({
@@ -547,61 +547,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             except Exception as e: 
                 pass
 
-    # ==========================================================
-    # PENYEMPURNAAN: SORTING BERDASARKAN URUTAN KOLOM EXCEL (KIRI KE KANAN)
-    # ==========================================================
-    res_df = pd.DataFrame(list_kesalahan)
-    
-    if not res_df.empty:
-        # Peta bobot urutan indikator berdasarkan posisi kolom struktural di Excel
-        prioritas_kolom = {
-            # Kolom Kelompok 1: Administrasi Atas / Identitas Petugas
-            "Lembaga SSR tidak sesuai": 1,
-            "Kode Petugas kosong atau salah": 1,
-            "Nama Kota tidak sesuai": 1,
-            
-            # Kolom Kelompok 2: Tanggal Outreach
-            "Tanggal melewati hari ini": 2,
-            "Format tanggal salah": 2,
-            
-            # Kolom Kelompok 3: ID Klien
-            "ID Klien tidak sesuai format": 3,
-            "ID Klien ganda": 3,
-            
-            # Kolom Kelompok 4: NIK
-            "NIK harus 16 digit": 4,
-            "NIK tidak sesuai kode wilayah": 4,
-            
-            # Kolom Kelompok 5: Tipe Sasaran
-            "Tipe Sasaran tidak valid": 5,
-            
-            # Kolom Kelompok 6: Jenis Kontak / Jenis Kegiatan
-            "Jenis kontak atau kegiatan tidak sinkron": 6,
-            
-            # Kolom Kelompok 7: Lokasi Outreach & Media Sosial
-            "Penjangkauan tatap muka tapi lokasi outreach diindikasi ada nama medsos": 7,
-            "Lokasi outreach diindikasi kurang spesifik atau kurang detil (konfirmasi)": 8,
-            
-            # Kolom Kelompok 8: Logistik Terdistribusi (Paling Kanan)
-            "Tipe klien PWID tapi tidak menerima jarum (konfirmasi)": 9,
-            "Tipe klien PWID tapi tidak menerima alkohol SWAB (konfirmasi)": 9,
-            "Jumlah logistik tidak sesuai": 9
-        }
-        
-        # Petakan indikator ke nilai urutan (jika indikator baru belum terdaftar, otomatis ditaruh paling belakang/99)
-        res_df['urutan_prioritas'] = res_df['INDIKATOR KESALAHAN DATA'].map(prioritas_kolom).fillna(99)
-        
-        # Sortir: Kelompokkan berdasarkan data baris (SSR -> Tanggal -> ID Klien), lalu susun kesalahan dari kolom kiri ke kanan
-        res_df = res_df.sort_values(
-            by=['Lembaga SSR', 'Tanggal', 'ID Klien', 'urutan_prioritas'], 
-            ascending=[True, True, True, True]
-        ).reset_index(drop=True)
-        
-        # Hapus kolom pembantu prioritas agar tabel kembali bersih
-        res_df = res_df.drop(columns=['urutan_prioritas'])
-        
-    return res_df
-    
+    return pd.DataFrame(list_kesalahan)
 # ==========================================================
 # 4. LOGIKA TOMBOL EKSEKUSI
 # ==========================================================
