@@ -379,7 +379,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         return '2' in s.split(',')
 
     # ==========================================================
-    # PERBAIKAN: DETEKSI KOLOM INFO, KEGIATAN, RUJUKAN (ANTI TYPO/MERGED)
+    # PERBAIKAN: DETEKSI KOLOM INFO, KEGIATAN, RUJUKAN, TANGGAL, TIPE SASARAN
     # ==========================================================
     col_info = ""
     for c in df.columns:
@@ -397,6 +397,18 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     for c in df.columns:
         if "RUJUKAN" in str(c).upper():
             col_ruj = c
+            break
+            
+    col_tanggal = "Tanggal"
+    for c in df.columns:
+        if "TANGGAL" in str(c).upper():
+            col_tanggal = c
+            break
+
+    col_tipe_sasaran = "Tipe Sasaran"
+    for c in df.columns:
+        if "TIPE SASARAN" in str(c).upper() or "TIPE KLIEN" in str(c).upper():
+            col_tipe_sasaran = c
             break
     # ==========================================================
     
@@ -444,14 +456,18 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         v_ssr = str(row.get('Lembaga SSR', '')).strip().upper() if pd.notna(row.get('Lembaga SSR')) else ''
         v_petugas = str(row.get('Kode Petugas', '')).replace("'", "").strip() if pd.notna(row.get('Kode Petugas')) else ''
         v_kota = str(row.get('Nama Kota', '')).strip() if pd.notna(row.get('Nama Kota')) else ''
-        v_tanggal = str(row.get('Tanggal', '')).split(' ')[0] if pd.notna(row.get('Tanggal')) else ''
+        
+        # PENGAMBILAN TANGGAL DINAMIS
+        v_tanggal = str(row.get(col_tanggal, '')).split(' ')[0] if pd.notna(row.get(col_tanggal)) else ''
         
         id_raw = str(row.get('ID Klien', '')).strip()
         id_clean = id_raw.replace("'", "").strip()
         nik_raw = str(row.get('NIK', '')).strip()
         nik_clean = nik_raw.replace("'", "").replace('.0', '').strip()
 
-        v_tipe_sasaran = str(row.get('Tipe Sasaran', row.get('Tipe Klien', ''))).replace('.0', '').strip()
+        # PENGAMBILAN TIPE SASARAN DINAMIS
+        v_tipe_sasaran = str(row.get(col_tipe_sasaran, '')).replace('.0', '').strip()
+        
         umur = row.get('Umur', None)
         jk = str(row.get('Jenis Kelamin', '')).replace('.0', '').strip()
         jns_kontak = str(row.get('Jenis Kontak', '')).replace('.0', '').strip()
@@ -469,7 +485,8 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         log_swab = sum(_safe_float(row.get(c, 0)) for c in col_swab_list)
         jarum_kembali = _safe_float(row.get('Jumlah Jarum Suntik Kembali', 0))
 
-        tgl_raw = row.get('Tanggal', None)
+        # PENGAMBILAN TGL RAW DINAMIS
+        tgl_raw = row.get(col_tanggal, None)
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce', format='%d/%m/%Y') if pd.notna(tgl_raw) and '/' in str(tgl_raw) else pd.to_datetime(tgl_raw, errors='coerce')
 
         kunci_klien_ref = f"{v_ssr}_{id_clean}"
