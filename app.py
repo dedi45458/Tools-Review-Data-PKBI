@@ -686,14 +686,25 @@ if tombol_proses:
 # ==========================================================
 
 # ----------------------------------------------------------
-# MENU 1: DASHBOARD REVIEW DATA
+# MENU 1: DASHBOARD REVIEW DATA (VERSI REVISI AKURASI BARIS)
 # ----------------------------------------------------------
 if menu_pilihan == "🎯 Dashboard Review Data":
     
     if st.session_state.get('proses_selesai', False):
         
         tot_data = st.session_state.get('total_entri', 0)
-        tot_err = len(st.session_state['df_tabel_bawah']) if st.session_state.get('df_tabel_bawah') is not None else 0
+        
+        # ==========================================================
+        # 🛠️ PERBAIKAN UTAMA: Hitung baris fisik yang unik (bukan total indikator)
+        # ==========================================================
+        if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
+            # Mengeliminasi duplikasi jika 1 baris klien memiliki lebih dari 1 temuan kesalahan
+            df_baris_unik = st.session_state['df_tabel_bawah'].drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien"])
+            tot_err = len(df_baris_unik)
+        else:
+            tot_err = 0
+            
+        # Nilai akurasi sekarang dijamin akurat dan tidak akan minus/drop berlebihan
         akurasi = 100.0 if tot_data == 0 else max(0, 100 - (tot_err / tot_data * 100))
         
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
@@ -709,7 +720,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         with col1:
             st.metric(label="Total Data Diproses", value=f"{tot_data:,}")
         with col2:
-            st.metric(label="Total Temuan Log Geser", value=f"{tot_err:,}", delta="Data Perlu Perhatian", delta_color="inverse")
+            # Mengubah label sedikit menjadi "Total Baris Temuan" agar informasinya sinkron
+            st.metric(label="Total Baris Temuan", value=f"{tot_err:,}", delta="Data Perlu Perhatian", delta_color="inverse")
         with col3:
             st.metric(label="Tingkat Akurasi", value=f"{akurasi:.1f}%", delta="Berdasarkan Validasi")
 
