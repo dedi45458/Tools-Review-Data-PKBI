@@ -858,9 +858,10 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_kanan:
-        # Mengambil daftar medsos dari database.py
-        list_medsos = ambil_keyword_medsos()
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
+        # Mengambil daftar medsos
+        list_medsos = ambil_keyword_medsos()
         st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
         
         if list_medsos:
@@ -878,7 +879,7 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
                     font-size: 0.85rem;
                     font-weight: 500;
                     white-space: nowrap; /* Mencegah 1 badge terbelah jadi 2 baris */
-                    display: inline-flex; /* Diubah ke inline-flex agar badge tidak melebar penuh ke kanan */
+                    display: flex;
                     align-items: center;
                     gap: 5px;
                 ">
@@ -886,25 +887,21 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
                 </span>
                 """
             
-            # Tampilkan Glass Card dan Flexbox Container secara utuh sekaligus dalam 1 fungsi st.markdown
+            # Tampilkan semua badge di dalam satu box container yang rapi menggunakan Flexbox
             st.markdown(f"""
-                <div class="glass-card" style="padding: 2rem; margin-bottom: 20px;">
-                    <div style="
-                        display: flex;
-                        flex-wrap: wrap; /* Otomatis turun ke bawah jika mentok ke kanan */
-                        gap: 10px; /* Jarak rapi antar badge */
-                        padding: 15px; 
-                        border: 1px solid rgba(255,255,255,0.1); 
-                        border-radius: 8px; 
-                        background-color: rgba(0,0,0,0.2);
-                    ">
-                        {html_badges}
-                    </div>
+                <div style="
+                    display: flex;
+                    flex-wrap: wrap; /* Otomatis turun ke bawah jika mentok ke kanan */
+                    gap: 10px; /* Jarak rapi antar badge */
+                    padding: 15px; 
+                    border: 1px solid rgba(255,255,255,0.1); 
+                    border-radius: 8px; 
+                    background-color: rgba(0,0,0,0.2);
+                ">
+                    {html_badges}
                 </div>
             """, unsafe_allow_html=True)
-            
         else:
-            # Jika data kosong, tampilkan info di dalam Glass Card yang rapi
-            st.markdown('<div class="glass-card" style="padding: 2rem; margin-bottom: 20px;">', unsafe_allow_html=True)
             st.info("Belum ada data medsos di database.")
-            st.markdown('</div>', unsafe_allow_html=True)
+            
+        st.markdown('</div>', unsafe_allow_html=True)
