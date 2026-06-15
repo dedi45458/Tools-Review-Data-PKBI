@@ -428,7 +428,9 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             s = s.replace('.', ',')
         return '2' in s.split(',')
 
-    # DETEKSI KOLOM DINAMIS
+    # ==========================================================
+    # DETEKSI KOLOM DINAMIS (DIOPTIMALKAN & DISEMPURNAKAN)
+    # ==========================================================
     col_info = ""
     for c in df.columns:
         if "INFORMASI" in str(c).upper() and "DIBERIKAN" in str(c).upper():
@@ -439,6 +441,18 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     for c in df.columns:
         if "JENIS KEGIATAN" in str(c).upper():
             col_kegiatan = c
+            break
+
+    col_kontak = ""
+    for c in df.columns:
+        if "JENIS KONTAK" in str(c).upper() or "JNS KONTAK" in str(c).upper():
+            col_kontak = c
+            break
+
+    col_lokasi = ""
+    for c in df.columns:
+        if "LOKASI" in str(c).upper():
+            col_lokasi = c
             break
 
     col_ruj = ""
@@ -459,6 +473,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             col_tipe_sasaran = c
             break
     
+    # Perhitungan akumulatif menggunakan kolom hasil deteksi dinamis
     if col_info and col_kegiatan:
         df['is_info_hiv'] = df[col_info].apply(periksa_hiv) | df[col_kegiatan].apply(periksa_hiv)
     else:
@@ -513,9 +528,14 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         v_tipe_sasaran = str(row.get(col_tipe_sasaran, '')).replace('.0', '').strip()
         umur = row.get('Umur', None)
         jk = str(row.get('Jenis Kelamin', '')).replace('.0', '').strip()
-        jns_kontak = str(row.get('Jenis Kontak', '')).replace('.0', '').strip()
-        jns_kegiatan = str(row.get('Jenis Kegiatan', '')).strip()
-        lokasi = str(row.get('Lokasi Outreach / Jenis Sosial Media', '')).strip()
+        
+        # ==========================================================
+        # 🛠️ PERBAIKAN UTAMA: SINKRONISASI KOLOM DINAMIS & PENGAMAN FLOAT
+        # ==========================================================
+        jns_kontak = str(row.get(col_kontak, row.get('Jenis Kontak', ''))).replace('.0', '').strip()
+        jns_kegiatan = str(row.get(col_kegiatan, row.get('Jenis Kegiatan', ''))).replace('.0', '').strip()
+        lokasi = str(row.get(col_lokasi, row.get('Lokasi Outreach / Jenis Sosial Media', ''))).strip()
+        
         info_diberikan = str(row.get(col_info, '')).strip() if col_info else ''
         rujukan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
@@ -553,7 +573,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'pattern_medsos': pattern_medsos_dinamis
         }
 
-        # LOOP ATURAN VALIDASI (Akan memeriksa semuanya secara berurutan)
+        # LOOP ATURAN VALIDASI
         for rule in SEMUA_ATURAN_AKTIF:
             nama_ind = rule["nama"]
             try:
