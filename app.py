@@ -106,6 +106,22 @@ if 'df_tabel_atas' not in st.session_state or st.session_state['df_tabel_atas'] 
         # Pengaman jika database offline agar aplikasi utama tidak macet
         st.session_state['df_tabel_atas'] = pd.DataFrame()
         st.session_state['tanggal_terakhir_review'] = None
+        
+# 👇 TAMBAHKAN BLOK INI DI BAWAHNYA (Untuk otomatisasi Tabel Detil Bawah) 👇
+if 'df_tabel_bawah' not in st.session_state or st.session_state['df_tabel_bawah'] is None:
+    try:
+        # Panggil fungsi penarik detil dari database.py
+        df_detil_db, max_ts_bawah = ambil_detil_terakhir_dari_neon()
+        
+        if df_detil_db is not None and not df_detil_db.empty:
+            st.session_state['df_tabel_bawah'] = df_detil_db
+            st.session_state['tanggal_terakhir_bawah'] = max_ts_bawah
+        else:
+            st.session_state['df_tabel_bawah'] = pd.DataFrame()
+            st.session_state['tanggal_terakhir_bawah'] = None
+    except Exception as e:
+        st.session_state['df_tabel_bawah'] = pd.DataFrame()
+        st.session_state['tanggal_terakhir_bawah'] = None
 
 # --- B. INISIALISASI KEYWORD MEDSOS ---
 if 'medsoc_keywords' not in st.session_state:
@@ -651,7 +667,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     
 # ==========================================================
-# 4. LOGIKA TOMBOL EKSEKUSI (VERSI TERINTEGRASI NEON DB)
+# 4. LOGIKA TOMBOL EKSEKUSI (VERSI TERINTEGRASI PENUH NEON DB)
 # ==========================================================
 if tombol_proses:
     if not files_review:
@@ -702,29 +718,56 @@ if tombol_proses:
                 df_atas = pd.DataFrame(matrix_rows)
                 df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
                 
-                # Biarkan UI memilikinya sebagai Index
+                # Biarkan UI memilikinya sebagai Index secara lokal sementara
                 df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
-                st.session_state['df_tabel_atas'] = df_atas
-                st.session_state['df_tabel_bawah'] = df_bawah
                 
-                # 🔥 INTEGRASI ALUR A: PENYIMPANAN OTOMATIS KE TABEL agregasi_hasil_review_penjangkauan 🔥
+                # -----------------------------------------------------------------
+                # 🔥 INTEGRASI SEKALIGUS: SIMPAN AGREGASI & DETIL KE NEON DB 🔥
+                # -----------------------------------------------------------------
                 try:
-                    from database import simpan_agregasi_ke_neon
+                    # Import seluruh fungsi penanganan terpusat Neon DB
+                    from database import (
+                        simpan_agregasi_ke_neon, 
+                        simpan_detil_review_ke_neon,
+                        ambil_agregasi_terakhir_dari_neon,
+                        ambil_detil_terakhir_dari_neon
+                    )
                     
-                    # 1. PENTING: Reset index & copy agar "INDIKATOR KESALAHAN DATA" bisa dibaca DB sebagai kolom
-                    df_to_db = df_atas.copy().reset_index()
+                    # 1. Kirim Tabel Atas (Agregasi Tren)
+                    df_to_db_atas = df_atas.copy().reset_index()
+                    sukses_simpan_atas = simpan_agregasi_ke_neon(df_to_db_atas)
                     
-                    # 2. Eksekusi pengiriman tanpa perlu menyisipkan nama_file_gabungan
-                    # Ini akan membuat fungsi otomatis menggunakan datetime.now().date()
-                    sukses_simpan = simpan_agregasi_ke_neon(df_to_db)
+                    # 2. Kirim Tabel Bawah (Detil Mentah Per Baris) -> Menjawab Soal No. 1
+                    sukses_simpan_bawah = simpan_detil_review_ke_neon(df_bawah)
                     
-                    if sukses_simpan:
-                        st.toast("💾 Hasil agregasi berhasil disimpan ke database Neon!", icon="✅")
+                    if sukses_simpan_atas and sukses_simpan_bawah:
+                        st.toast("💾 Seluruh data review (Agregasi & Detil) berhasil diamankan ke Neon DB!", icon="✅")
+                        
+                        # 3. Ambil ulang langsung data resmi terupdate dari Neon DB 
+                        # Supaya data sinkron dengan timestamp Jakarta yang digenerate oleh server Neon -> Menjawab Soal No. 2 & 3
+                        df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
+                        df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
+                        
+                        if not df_atas_db.empty:
+                            st.session_state['df_tabel_atas'] = df_atas_db
+                            st.session_state['tanggal_terakhir_review'] = ts_atas_db
+                            
+                        if not df_bawah_db.empty:
+                            st.session_state['df_tabel_bawah'] = df_bawah_db
+                            st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
                     else:
-                        st.error("⚠️ Proses simpan me-return False. Cek log terminal untuk detail error database.")
-                
+                        # Fallback jika koneksi DB bermasalah tengah jalan (tetap simpan ke memori lokal aplikasi)
+                        st.session_state['df_tabel_atas'] = df_atas
+                        st.session_state['df_tabel_bawah'] = df_bawah
+                        st.session_state['tanggal_terakhir_review'] = dt.datetime.now()
+                        st.session_state['tanggal_terakhir_bawah'] = dt.datetime.now()
+                        st.warning("⚠️ Data gagal masuk ke salah satu tabel cloud Neon, namun tersimpan sementara di lokal.")
+                        
                 except Exception as e:
-                    st.error(f"⚠️ Gagal mengeksekusi script database: {str(e)}")
+                    st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database: {str(e)}")
+                    # Jalur darurat agar aplikasi tidak crash jika db offline
+                    st.session_state['df_tabel_atas'] = df_atas
+                    st.session_state['df_tabel_bawah'] = df_bawah
                     
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
@@ -733,7 +776,7 @@ if tombol_proses:
             # Memicu perubahan state pemrosesan selesai
             st.session_state['proses_selesai'] = True
             
-            # (Opsional) Jika ingin pesan sukses/gagal terbaca, berikan jeda sedikit sebelum rerun
+            # Memberikan jeda sedikit agar st.toast/pesan sukses sempat terbaca user
             import time
             time.sleep(1.5) 
             st.rerun()
@@ -880,13 +923,41 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # TABEL HASIL REVIEW PENJANGKAUAN DETIL PER BARIS
             # =========================================================================
             st.markdown("### 🔍 Hasil Review Penjangkauan")
+            
+            tanggal_terakhir_bawah = st.session_state.get('tanggal_terakhir_bawah', None)
+            if tanggal_terakhir_bawah and st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
+                if hasattr(tanggal_terakhir_bawah, 'strftime'):
+                    tgl_format_bawah = tanggal_terakhir_bawah.strftime("%d-%m-%Y pukul %H:%M WIB")
+                else:
+                    tgl_format_bawah = str(tanggal_terakhir_bawah)
+                    
+                badge_bawah_html = f"""
+                <div style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    background-color: rgba(28, 131, 225, 0.12);
+                    color: #1c83e1;
+                    padding: 6px 14px;
+                    border-radius: 20px;
+                    border: 1px solid rgba(28, 131, 225, 0.25);
+                    font-size: 0.88rem;
+                    font-weight: 500;
+                    margin-bottom: 18px;
+                ">
+                    ℹ️ Hasil Review Data Penjangkauan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_format_bawah}</span>
+                </div>
+                """
+                st.markdown(badge_bawah_html, unsafe_allow_html=True)
+        
+            # Render data editor jika data tersedia
             if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
                 kolom_susunan = [
                     "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
                     "NIK", "Tipe Sasaran", "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
                 ]
                 df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
-    
+        
                 df_hasil_edit = st.data_editor(
                     df_bawah_view,
                     use_container_width=True,
@@ -906,13 +977,14 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 st.markdown("<br>", unsafe_allow_html=True)
                 col_save, _ = st.columns([1, 2])
                 with col_save:
+                    # --- MENJAWAB SOAL NO 4: PROSES SIMPAN OTOMATIS KE LOG VALIDASI REVIEW ---
                     if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
                         
                         with st.spinner("Menyimpan progres validasi..."):
                             list_log_db = []
                             indeks_baris_terpilih = []
                             peringatan_justifikasi = False
-    
+        
                             for idx, row_edit in df_hasil_edit.iterrows():
                                 ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
                                 text_justifikasi = str(row_edit['Justifikasi']).strip()
@@ -922,6 +994,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                     peringatan_justifikasi = True
                                     text_justifikasi = "" 
                                 
+                                # Aturan pemicu simpan: di-ceklis ATAU merupakan baris konfirmasi yang sudah diisi alasannya
                                 if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi not in ["", "None"]):
                                     list_log_db.append((
                                         str(row_edit['Lembaga SSR']),
@@ -932,23 +1005,24 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                         text_justifikasi
                                     ))
                                     indeks_baris_terpilih.append(idx)
-    
+                    
                             if len(list_log_db) > 0:
+                                # Dikirim ke fungsi bawaan Neon di database.py Anda
                                 if simpan_log_ke_neon(list_log_db):
                                     df_sekarang = st.session_state['df_tabel_bawah']
                                     df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
                                     st.session_state['df_tabel_bawah'] = df_sisa
                                     
-                                    st.success(f"🎉 Berhasil menyimpan {len(list_log_db)} baris secara kolektif! Data yang selesai otomatis disembunyikan.")
+                                    st.success(f"🎉 Berhasil menyimpan {len(list_log_db)} baris ke tabel 'log_validasi_review' di Neon DB! Data selesai otomatis disembunyikan.")
                                     
                                     if peringatan_justifikasi:
-                                        st.warning("⚠️ Beberapa teks Justifikasi diabaikan/dikosongkan karena baris tersebut BUKAN indikator konfirmasi.")
+                                        st.warning("⚠️ Beberapa teks Justifikasi diabaikan karena baris tersebut bukan indikator (konfirmasi).")
                                     
                                     import time
                                     time.sleep(1.5)
                                     st.rerun()
                                 else:
-                                    st.error("Gagal menyimpan data ke Neon Database. Periksa pengaturan koneksi.")
+                                    st.error("Gagal menyimpan log ke Neon Database. Periksa konfigurasi.")
                             else:
                                 st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
 
