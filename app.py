@@ -104,6 +104,48 @@ def ambil_keyword_medsos():
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu (Neon DB)</div>', unsafe_allow_html=True)
 
+
+# ==========================================================
+# 🆕 SEGERA SETELAH JUDUL: INISIALISASI DATA AGREGASI DARI NEON
+# ==========================================================
+from database import ambil_agregasi_terakhir_dari_neon
+
+# Pastikan key session state sudah terdefinisi agar tidak error saat aplikasi dimuat pertama kali
+if 'df_tabel_atas' not in st.session_state:
+    st.session_state['df_tabel_atas'] = None
+if 'tanggal_laporan' not in st.session_state:
+    st.session_state['tanggal_laporan'] = None
+
+# Jika session state masih kosong (efek refresh halaman / user baru buka app), otomatis tarik dari Neon DB
+if st.session_state['df_tabel_atas'] is None:
+    with st.spinner("Mengambil data rekapitulasi terakhir dari database..."):
+        df_historis, max_date = ambil_agregasi_terakhir_dari_neon()
+        
+        if not df_historis.empty:
+            st.session_state['df_tabel_atas'] = df_historis
+            # Menyimpan tanggal review terakhir ke session state
+            st.session_state['tanggal_laporan'] = max_date
+
+
+# ==========================================================
+# 🆕 MENAMPILKAN TABEL REKAP & TANGGAL REVIEW DI UI
+# ==========================================================
+st.write("---") # Garis pembatas visual
+st.subheader("📋 Rekap Hasil Review Data per SSR")
+
+# Menampilkan kalimat "Tanggal review terakhir" jika data tanggal berhasil ditemukan di database
+if st.session_state.get('tanggal_laporan'):
+    # Menggunakan st.success atau format teks tebal agar terlihat kontras dan rapi
+    st.markdown(f"🔹 **Tanggal review terakhir:** `{st.session_state['tanggal_laporan']}`")
+else:
+    st.markdown("🔹 **Tanggal review terakhir:** _Belum ada data review yang tersimpan_")
+
+# Render tabel jika data berhasil ditarik dari database atau setelah klik tombol proses
+if st.session_state['df_tabel_atas'] is not None and not st.session_state['df_tabel_atas'].empty:
+    st.dataframe(st.session_state['df_tabel_atas'], use_container_width=True)
+else:
+    st.info("💡 Belum ada data agregasi yang terekam. Silakan unggah berkas Raw Data dan klik 'Jalankan Validasi' pada sidebar.")
+
 # ==========================================================
 # FUNGSI HELPER
 # ==========================================================
