@@ -207,28 +207,30 @@ def hitung_dan_ambil_log_db():
                 dict_justifikasi[key_db] = row['justifikasi'] if row['justifikasi'] else ""
                 
     except Exception as e:
-        pass
+        # 🚨 PERBAIKAN 4: Ganti `pass` dengan pemberitahuan
+        st.error(f"Gagal mengambil riwayat Log Review. Apakah tabel 'log_validasi_review' terhapus? : {e}")
     finally:
         conn.close()
         
     return dict_revisi, dict_justifikasi
 
 def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
-    """
-    Menyimpan otomatis hasil rekap data per SSR ke database Neon.
-    Dilengkapi pengaman deteksi Indeks otomatis agar sinkron dengan UI Streamlit.
-    """
+    """Menyimpan otomatis hasil rekap data per SSR ke database Neon dengan sistem pengaman."""
     if df_tabel_atas is None or df_tabel_atas.empty:
         return False
 
-    # 🛠️ PENGAMAN UTAMA: Deteksi jika 'INDIKATOR KESALAHAN DATA' berada di posisi INDEX
     df_lokal = df_tabel_atas.copy()
-    if 'INDIKATOR KESALAHAN DATA' not in df_lokal.columns:
-        # Jika nama indeks sesuai atau indeks berada di kolom pertama, kembalikan jadi kolom biasa
-        if df_lokal.index.name == 'INDIKATOR KESALAHAN DATA' or df_lokal.index.name is None:
-            df_lokal = df_lokal.reset_index()
-            # Pastikan nama kolom pertamanya seragam
-            df_lokal.rename(columns={df_lokal.columns[0]: 'INDIKATOR KESALAHAN DATA'}, inplace=True)
+    
+    # 🛠️ PERBAIKAN 1: Deteksi nama kolom secara dinamis (anti typo / case-insensitive)
+    kolom_indikator_ada = [c for c in df_lokal.columns if 'INDIKATOR' in str(c).upper()]
+    
+    if kolom_indikator_ada:
+        # Jika kolom ditemukan, seragamkan namanya
+        df_lokal.rename(columns={kolom_indikator_ada[0]: 'INDIKATOR KESALAHAN DATA'}, inplace=True)
+    else:
+        # Jika benar-benar tidak ada di kolom, reset index secara aman
+        df_lokal = df_lokal.reset_index()
+        df_lokal.rename(columns={df_lokal.columns[0]: 'INDIKATOR KESALAHAN DATA'}, inplace=True)
         
     if tanggal_review is None:
         tanggal_review = dt.datetime.now().date()
@@ -239,17 +241,14 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
         
     try:
         with conn.cursor() as cur:
-            # 1. Bersihkan data lama pada tanggal yang sama agar tidak menumpuk/duplikat
             cur.execute(
                 "DELETE FROM agregasi_hasil_review_penjangkauan WHERE tanggal_review = %s", 
                 (tanggal_review,)
             )
             
             kolom_indikator = 'INDIKATOR KESALAHAN DATA'
-            # Ambil hanya nama-nama SSR (kecuali kolom indikator, total, dan persen)
             kolom_ssr = [c for c in df_lokal.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
             
-            # 2. Iterasi baris dan kolom (Logika Unpivot/Melt manual)
             for _, row in df_lokal.iterrows():
                 indikator = str(row[kolom_indikator]).strip()
                 for ssr in kolom_ssr:
@@ -258,7 +257,6 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
                     except:
                         jumlah = 0
                     
-                    # Simpan hanya jika jumlah kesalahan lebih dari 0 demi efisiensi storage Neon
                     if jumlah > 0:
                         cur.execute("""
                             INSERT INTO agregasi_hasil_review_penjangkauan 
@@ -269,7 +267,8 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
             conn.commit()
             return True
     except Exception as e:
-        print("Error simpan agregasi ke Neon:", e)
+        # 🚨 PERBAIKAN 2: Tampilkan error ke layar agar kita tahu jika tabel hilang!
+        st.error(f"Gagal simpan agregasi ke Neon (Apakah tabel ikut terhapus?): {e}")
         return False
     finally:
         conn.close()
@@ -330,7 +329,8 @@ def ambil_agregasi_terakhir_dari_neon():
                 
             return df_wide, max_date
     except Exception as e:
-        print("Error ambil agregasi terakhir:", e)
+        # 🚨 PERBAIKAN 3: Jangan disembunyikan pakai print, tampilkan di UI Streamlit
+        st.error(f"Gagal memuat agregasi terakhir dari Neon DB: {e}")
         return pd.DataFrame(), None
     finally:
         conn.close()
