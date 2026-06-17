@@ -3,7 +3,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import pandas as pd
 from sqlalchemy import create_engine
-import datetime
+import datetime as dt
 
 def dapatkan_koneksi_neon():
     """Membuka koneksi aman ke Neon Postgres menggunakan connection pooling."""
