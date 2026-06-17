@@ -773,58 +773,81 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         with tab1:
             st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
             
+            # Ambil data lama dan tanggal dari session state (jika sudah ada dari proses upload)
             df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame()).copy()
+            tanggal_terakhir = st.session_state.get('tanggal_terakhir_review', None)
             
             # =========================================================================
-            # 🔥 INTEGRASI ALUR B: OTOMATIS TARIK DATA DARI NEON SAAT APLIKASI DI-LAUNCH
+            # 🔥 INTEGRASI ALUR B: OTOMATIS TARIK DATA DARI NEON SAAT APLIKASI DI-LAUNCH / REFRESH
             # =========================================================================
             if df_atas_view.empty and not st.session_state.get('proses_selesai', False):
                 try:
-                    # Panggil fungsi penarik data agregasi terakhir dari database.py Anda
-                    from database import ambil_agregasi_terakhir_neon
+                    # 1. Impor nama fungsi yang sesuai dengan database.py Anda
+                    from database import ambil_agregasi_terakhir_dari_neon
                     
-                    df_dari_db = ambil_agregasi_terakhir_neon()
+                    # 2. Tangkap 2 nilai sekaligus dari database
+                    df_dari_db, max_date = ambil_agregasi_terakhir_dari_neon()
+                    
                     if df_dari_db is not None and not df_dari_db.empty:
                         df_atas_view = df_dari_db.copy()
-                        # Simpan ke session state agar komponen UI lain ikut tersinkronisasi
+                        tanggal_terakhir = max_date
+                        
+                        # Simpan ke session state agar tetap tersimpan saat pindah antar-tab
                         st.session_state['df_tabel_atas'] = df_dari_db
+                        st.session_state['tanggal_terakhir_review'] = max_date
                 except Exception as e:
-                    # Jika database offline/gagal, dibiarkan lolos agar aplikasi tidak macet
+                    # Jika database offline, dilewati agar aplikasi utama tidak macet total
                     pass
-            
-            # 🛠️ PENGAMAN INDEKS DATA:
-            # Karena pada Alur A 'INDIKATOR KESALAHAN DATA' dijadikan indeks (set_index), 
-            # kita kembalikan menjadi kolom biasa agar logika ekstraksi string di bawah berjalan lancar.
+                    
+            # =========================================================================
+            # 📅 PERSYARATAN 2: TAMPILKAN TEKS TANGGAL REVIEW TERAKHIR DI ATAS TABEL
+            # =========================================================================
+            if tanggal_terakhir:
+                # Memformat tampilan objek tanggal dari database menjadi format DD-MM-YYYY
+                if hasattr(tanggal_terakhir, 'strftime'):
+                    tgl_format = tanggal_terakhir.strftime("%d-%m-%Y")
+                else:
+                    tgl_format = str(tanggal_terakhir)
+                    
+                st.markdown(f"Review Data Penjangkauan SR terakhir tanggal : **{tgl_format}**")
+                st.markdown("<br>", unsafe_allow_html=True) # Jarak pembatas teks dan tabel
+                
+            # =========================================================================
+            # 🛠️ PERSYARATAN 1: PROSES RENDER AUTOMATIC TAMPILAN MATRIKS UI
+            # =========================================================================
             if not df_atas_view.empty:
+                # PENGAMAN INDEKS DATA: Kembalikan indeks dari database menjadi kolom biasa
                 if df_atas_view.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_atas_view.columns:
                     df_atas_view = df_atas_view.reset_index()
-            
-                # =========================================================================
-                # PROSES RENDER TAMPILAN MATRIKS UI
-                # =========================================================================
+                    
                 kolom_indikator = 'INDIKATOR KESALAHAN DATA'
                 kolom_ssr = [c for c in df_atas_view.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
                 
+                # Pastikan data SSR dikonversi ke numerik terlebih dahulu
                 for col in kolom_ssr:
                     df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
                 
+                # Filter hanya SSR yang memiliki temuan data
                 ssr_aktif = [col for col in kolom_ssr if df_atas_view[col].sum() > 0]
                 kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
-                df_final = df_atas_view[[c for c in kolom_final if c in df_atas_view.columns]]
+                df_final = df_atas_view[[c for c in kolom_final if c in df_atas_view.columns]].copy()
                 
-                df_display = df_final.astype(str)
+                # OPTIMASI FORMATTING: Hanya ubah kolom SSR menjadi string untuk mengganti angka 0 menjadi '-'
+                df_display = df_final.copy()
                 for col in ssr_aktif:
                     if col in df_display.columns:
-                        df_display.loc[df_display[col] == '0', col] = '-'
+                        df_display[col] = df_display[col].astype(str).replace({'0': '-', '0.0': '-'})
                 
+                # Konfigurasi kolom Streamlit (Menggunakan ProgressColumn agar indikator % tampak profesional)
                 column_config = {
-                    kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=300),
-                    "Jumlah per indicator": st.column_config.NumberColumn("Total", width="small"),
-                    "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
+                    kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
+                    "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
+                    "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
                 }
                 for col in ssr_aktif:
                     column_config[col] = st.column_config.TextColumn(col, width="small")
             
+                # Render Tabel Ke Layar Aplikasi
                 st.dataframe(
                     df_display, 
                     use_container_width=True, 
@@ -832,8 +855,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     hide_index=True
                 )
             else:
-                # Menggunakan st.caption/info yang netral agar estetik saat data benar-benar nihil
-                st.info("✨ Belum ada data review. Silakan jalankan validasi di sidebar atau pastikan database terisi.")
+                st.info("✨ Belum ada data review dalam sesi ini. Silakan unggah file Excel di sidebar untuk memulai validasi baru.")
 
 
             # --- BARIS 3: DETAIL DATA ---
