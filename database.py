@@ -215,8 +215,20 @@ def hitung_dan_ambil_log_db():
 def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
     """
     Menyimpan otomatis hasil rekap data per SSR ke database Neon.
-    Menghapus data lama pada tanggal yang sama terlebih dahulu untuk menghindari duplikasi.
+    Dilengkapi pengaman deteksi Indeks otomatis agar sinkron dengan UI Streamlit.
     """
+    if df_tabel_atas is None or df_tabel_atas.empty:
+        return False
+
+    # 🛠️ PENGAMAN UTAMA: Deteksi jika 'INDIKATOR KESALAHAN DATA' berada di posisi INDEX
+    df_lokal = df_tabel_atas.copy()
+    if 'INDIKATOR KESALAHAN DATA' not in df_lokal.columns:
+        # Jika nama indeks sesuai atau indeks berada di kolom pertama, kembalikan jadi kolom biasa
+        if df_lokal.index.name == 'INDIKATOR KESALAHAN DATA' or df_lokal.index.name is None:
+            df_lokal = df_lokal.reset_index()
+            # Pastikan nama kolom pertamanya seragam
+            df_lokal.rename(columns={df_lokal.columns[0]: 'INDIKATOR KESALAHAN DATA'}, inplace=True)
+        
     if tanggal_review is None:
         tanggal_review = datetime.now().date()
         
@@ -234,11 +246,11 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
             
             kolom_indikator = 'INDIKATOR KESALAHAN DATA'
             # Ambil hanya nama-nama SSR (kecuali kolom indikator, total, dan persen)
-            kolom_ssr = [c for c in df_tabel_atas.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
+            kolom_ssr = [c for c in df_lokal.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
             
-            # 2. Iterasi baris dan kolom untuk dimasukkan ke DB
-            for _, row in df_tabel_atas.iterrows():
-                indikator = row[kolom_indikator]
+            # 2. Iterasi baris dan kolom (Logika Unpivot/Melt manual)
+            for _, row in df_lokal.iterrows():
+                indikator = str(row[kolom_indikator]).strip()
                 for ssr in kolom_ssr:
                     try:
                         jumlah = int(float(row[ssr]))
@@ -251,7 +263,7 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
                             INSERT INTO agregasi_hasil_review_penjangkauan 
                             (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
                             VALUES (%s, %s, %s, %s)
-                        """, (tanggal_review, ssr, indikator, jumlah))
+                        """, (tanggal_review, str(ssr).strip(), indikator, jumlah))
                         
             conn.commit()
             return True
@@ -297,20 +309,23 @@ def ambil_agregasi_terakhir_dari_neon():
                 values='jumlah_kesalahan'
             ).fillna(0).astype(int)
             
-            # Kembalikan kolom indeks menjadi kolom biasa
+            # Kembalikan kolom indeks menjadi kolom biasa untuk kebutuhan manipulasi data
             df_wide = df_wide.reset_index()
             df_wide.rename(columns={'indikator_kesalahan': 'INDIKATOR KESALAHAN DATA'}, inplace=True)
             
-            # Hitung ulang kolom 'Jumlah per indikator'
+            # Hitung ulang kolom 'Jumlah per indikator' secara dinamis
             kolom_ssr = [c for c in df_wide.columns if c != 'INDIKATOR KESALAHAN DATA']
             df_wide['Jumlah per indikator'] = df_wide[kolom_ssr].sum(axis=1)
             
             # Hitung ulang kolom presentase (%)
             total_semua = df_wide['Jumlah per indikator'].sum()
             if total_semua > 0:
-                df_wide['%'] = ((df_wide['Jumlah per indikator'] / total_semua) * 100).round().astype(int)
+                df_wide['%'] = ((df_wide['Jumlah per indikator'] / total_semua) * 100).round(1)
             else:
-                df_wide['%'] = 0
+                df_wide['%'] = 0.0
+                
+            # Kembalikan ke format UI aslinya (Indikator Kesalahan diatur sebagai Indeks kembali)
+            df_wide.set_index('INDIKATOR KESALAHAN DATA', inplace=True)
                 
             return df_wide, max_date
     except Exception as e:
