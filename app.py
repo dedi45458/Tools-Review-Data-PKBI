@@ -80,48 +80,43 @@ def set_modern_theme():
 
 set_modern_theme()
 
-# Manajemen Default State
+# ==========================================================
+# 0. MANAGEMENT DEFAULT STATE & INIT DATA (Tersinkron Neon DB)
+# ==========================================================
 if 'total_entri' not in st.session_state: st.session_state['total_entri'] = 0
 if 'proses_selesai' not in st.session_state: st.session_state['proses_selesai'] = False
 if 'df_tabel_bawah' not in st.session_state: st.session_state['df_tabel_bawah'] = None
-if 'df_tabel_atas' not in st.session_state: st.session_state['df_tabel_atas'] = None
 if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = []
 
-# ==========================================================
-# 1. GLOBAL STATE INISIALISASI (Tersinkron Neon DB)
-# ==========================================================
-
-# --- A. Inisialisasi Keyword Medsos ---
-if 'medsoc_keywords' not in st.session_state:
-    # Memanggil fungsi dari database.py yang mengambil data dari tabel 'keyword_medsos'
-    st.session_state['medsoc_keywords'] = ambil_keyword_medsos_db()
-
-def ambil_keyword_medsos():
-    """Mengambil daftar keyword medsos aktif dari session state secara aman"""
-    keywords = st.session_state.get('medsoc_keywords', [])
-    return sorted(keywords) if keywords else []
-
-
-# --- B. OPTIMASI ALUR B: Tarik Data Agregasi Terakhir Langsung di Awal Skrip ---
-# Ini memastikan data rekap dari database Neon SUDAH SIAP sebelum layout Tab 1 dibangun!
-if 'df_tabel_atas' not in st.session_state or 'tanggal_terakhir_review' not in st.session_state:
+# --- A. INISIALISASI OTOMATIS AMBIL DATA AGREGASI TERAKHIR DARI NEON DB ---
+# Kondisi diperketat: Jika key belum ada ATAU nilainya masih None/kosong, paksa tarik dari Neon DB
+if 'df_tabel_atas' not in st.session_state or st.session_state['df_tabel_atas'] is None:
     try:
-        # Panggil fungsi penarik data agregasi terakhir dari database.py
+        # Panggil fungsi penarik data dari database.py
         df_dari_db, max_date = ambil_agregasi_terakhir_dari_neon()
         
         if df_dari_db is not None and not df_dari_db.empty:
             st.session_state['df_tabel_atas'] = df_dari_db
             st.session_state['tanggal_terakhir_review'] = max_date
         else:
+            # Jika tabel di database ternyata masih kosong
             st.session_state['df_tabel_atas'] = pd.DataFrame()
             st.session_state['tanggal_terakhir_review'] = None
     except Exception as e:
-        # Menghindari crash jika database bermasalah, di-set kosong secara aman
+        # Pengaman jika database offline agar aplikasi utama tidak macet
         st.session_state['df_tabel_atas'] = pd.DataFrame()
         st.session_state['tanggal_terakhir_review'] = None
 
+# --- B. INISIALISASI KEYWORD MEDSOS ---
+if 'medsoc_keywords' not in st.session_state:
+    st.session_state['medsoc_keywords'] = ambil_keyword_medsos_db()
 
-# --- C. Desain Judul Utama ---
+def ambil_keyword_medsos():
+    """Mengambil daftar keyword medsos aktif dari session state"""
+    keywords = st.session_state.get('medsoc_keywords', [])
+    return sorted(keywords) if keywords else []
+
+# --- C. TAMPILAN JUDUL UTAMA ---
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu (Neon DB)</div>', unsafe_allow_html=True)
 
