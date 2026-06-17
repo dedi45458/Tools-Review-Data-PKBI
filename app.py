@@ -807,25 +807,36 @@ if tombol_proses:
 # ----------------------------------------------------------
 if menu_pilihan == "🎯 Dashboard Review Data":
     
+    # =========================================================================
+    # 🔥 INTEGRASI ALUR B: OTOMATIS TARIK DATA DARI NEON SAAT APLIKASI DI-LAUNCH/REFRESH
+    # (Dikeluarkan dari jebakan logika proses_selesai)
+    # =========================================================================
+    if st.session_state.get('df_tabel_atas') is None:
+        try:
+            from database import ambil_agregasi_terakhir_neon
+            df_dari_db = ambil_agregasi_terakhir_neon()
+            if df_dari_db is not None and not df_dari_db.empty:
+                st.session_state['df_tabel_atas'] = df_dari_db
+        except Exception:
+            pass
+
+    # =========================================================================
+    # TAMPILAN METRIK ATAS (Hanya dihitung jika baru saja klik tombol proses)
+    # =========================================================================
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    
     if st.session_state.get('proses_selesai', False):
-        
         tot_data = st.session_state.get('total_entri', 0)
         
-        # ==========================================================
-        # 🛠️ PERBAIKAN UTAMA: Hitung baris fisik yang unik (bukan total indikator)
-        # ==========================================================
+        # Hitung baris fisik yang unik
         if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-            # Mengeliminasi duplikasi jika 1 baris klien memiliki lebih dari 1 temuan kesalahan
             df_baris_unik = st.session_state['df_tabel_bawah'].drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien"])
             tot_err = len(df_baris_unik)
         else:
             tot_err = 0
             
-        # Nilai akurasi sekarang dijamin akurat dan tidak akan minus/drop berlebihan
         akurasi = 100.0 if tot_data == 0 else max(0, 100 - (tot_err / tot_data * 100))
         
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-
         tanggal_hari_ini = datetime.now().strftime('%d %B %Y')
         st.markdown(f"""
             <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
@@ -837,347 +848,348 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         with col1:
             st.metric(label="Total Data Diproses", value=f"{tot_data:,}")
         with col2:
-            # Mengubah label sedikit menjadi "Total Baris Temuan" agar informasinya sinkron
             st.metric(label="Total Baris Temuan", value=f"{tot_err:,}", delta="Data Perlu Perhatian", delta_color="inverse")
         with col3:
             st.metric(label="Tingkat Akurasi", value=f"{akurasi:.1f}%", delta="Berdasarkan Validasi")
+    else:
+        # Tampilan ringan jika user hanya refresh (tidak memproses file baru)
+        st.markdown("### 🗄️ Mode Arsip: Menampilkan Data Review Terakhir")
+        st.caption("Unggah berkas baru di sidebar jika ingin menjalankan validasi data.")
+        
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
 
-        tab1, tab2 = st.tabs(["📋 Rekap Kesalahan (Matriks)", "📈 Analisis Tren Semester"])
+    # =========================================================================
+    # TAMPILAN TABS
+    # =========================================================================
+    tab1, tab2 = st.tabs(["📋 Rekap Kesalahan (Matriks)", "📈 Analisis Tren Semester"])
 
-        with tab1:
-            st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
+    with tab1:
+        st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
+        
+        df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame()).copy()
+        
+        # 🛠️ PENGAMAN INDEKS DATA TABEL ATAS
+        if not df_atas_view.empty:
+            if df_atas_view.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_atas_view.columns:
+                df_atas_view = df_atas_view.reset_index()
+        
+            # PROSES RENDER TAMPILAN MATRIKS UI
+            kolom_indikator = 'INDIKATOR KESALAHAN DATA'
+            kolom_ssr = [c for c in df_atas_view.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
             
-            df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame()).copy()
+            for col in kolom_ssr:
+                df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
             
-            # =========================================================================
-            # 🔥 INTEGRASI ALUR B: OTOMATIS TARIK DATA DARI NEON SAAT APLIKASI DI-LAUNCH
-            # =========================================================================
-            if df_atas_view.empty and not st.session_state.get('proses_selesai', False):
-                try:
-                    # Panggil fungsi penarik data agregasi terakhir dari database.py Anda
-                    from database import ambil_agregasi_terakhir_neon
-                    
-                    df_dari_db = ambil_agregasi_terakhir_neon()
-                    if df_dari_db is not None and not df_dari_db.empty:
-                        df_atas_view = df_dari_db.copy()
-                        # Simpan ke session state agar komponen UI lain ikut tersinkronisasi
-                        st.session_state['df_tabel_atas'] = df_dari_db
-                except Exception as e:
-                    # Jika database offline/gagal, dibiarkan lolos agar aplikasi tidak macet
-                    pass
+            ssr_aktif = [col for col in kolom_ssr if df_atas_view[col].sum() > 0]
+            kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
+            df_final = df_atas_view[[c for c in kolom_final if c in df_atas_view.columns]]
             
-            # 🛠️ PENGAMAN INDEKS DATA:
-            # Karena pada Alur A 'INDIKATOR KESALAHAN DATA' dijadikan indeks (set_index), 
-            # kita kembalikan menjadi kolom biasa agar logika ekstraksi string di bawah berjalan lancar.
-            if not df_atas_view.empty:
-                if df_atas_view.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_atas_view.columns:
-                    df_atas_view = df_atas_view.reset_index()
+            df_display = df_final.astype(str)
+            for col in ssr_aktif:
+                if col in df_display.columns:
+                    df_display.loc[df_display[col] == '0', col] = '-'
             
-                # =========================================================================
-                # PROSES RENDER TAMPILAN MATRIKS UI
-                # =========================================================================
-                kolom_indikator = 'INDIKATOR KESALAHAN DATA'
-                kolom_ssr = [c for c in df_atas_view.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
+            column_config = {
+                kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=300),
+                "Jumlah per indicator": st.column_config.NumberColumn("Total", width="small"),
+                "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
+            }
+            for col in ssr_aktif:
+                column_config[col] = st.column_config.TextColumn(col, width="small")
+        
+            st.dataframe(
+                df_display, 
+                use_container_width=True, 
+                column_config=column_config, 
+                hide_index=True
+            )
+        else:
+            st.info("✨ Belum ada data review. Silakan jalankan validasi di sidebar atau pastikan database terisi.")
+
+
+        # --- BARIS 3: DETAIL DATA (TABEL BAWAH) ---
+        st.markdown("### 🔍 Hasil Review Penjangkauan")
+        
+        if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
+            
+            # 🛠️ PERBAIKAN UTAMA: Cegah error dengan membuat kolom jika tidak ada
+            if 'Pilih' not in st.session_state['df_tabel_bawah'].columns:
+                st.session_state['df_tabel_bawah']['Pilih'] = False
+            if 'Justifikasi' not in st.session_state['df_tabel_bawah'].columns:
+                st.session_state['df_tabel_bawah']['Justifikasi'] = ""
                 
-                for col in kolom_ssr:
-                    df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
-                
-                ssr_aktif = [col for col in kolom_ssr if df_atas_view[col].sum() > 0]
-                kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
-                df_final = df_atas_view[[c for c in kolom_final if c in df_atas_view.columns]]
-                
-                df_display = df_final.astype(str)
-                for col in ssr_aktif:
-                    if col in df_display.columns:
-                        df_display.loc[df_display[col] == '0', col] = '-'
-                
-                column_config = {
-                    kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=300),
-                    "Jumlah per indicator": st.column_config.NumberColumn("Total", width="small"),
-                    "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
-                }
-                for col in ssr_aktif:
-                    column_config[col] = st.column_config.TextColumn(col, width="small")
+            kolom_susunan = [
+                "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
+                "NIK", "Tipe Sasaran", "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
+            ]
             
-                st.dataframe(
-                    df_display, 
-                    use_container_width=True, 
-                    column_config=column_config, 
-                    hide_index=True
-                )
-            else:
-                # Menggunakan st.caption/info yang netral agar estetik saat data benar-benar nihil
-                st.info("✨ Belum ada data review. Silakan jalankan validasi di sidebar atau pastikan database terisi.")
-
-
-            # --- BARIS 3: DETAIL DATA ---
-            st.markdown("### 🔍 Hasil Review Penjangkauan")
-            if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-                kolom_susunan = [
-                    "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
-                    "NIK", "Tipe Sasaran", "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
-                ]
-                df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
+            # Hanya ambil kolom yang benar-benar tersedia untuk mencegah KeyError
+            kolom_tersedia = [c for c in kolom_susunan if c in st.session_state['df_tabel_bawah'].columns]
+            df_bawah_view = st.session_state['df_tabel_bawah'][kolom_tersedia].copy()
     
-                df_hasil_edit = st.data_editor(
-                    df_bawah_view,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika telah direvisi", default=False),
-                        "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
-                        "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
-                        "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
-                        "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
-                        "validasi hasil review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
-                        "Justifikasi": st.column_config.TextColumn("Justifikasi (HANYA untuk baris yg ada teks 'konfirmasi')", width=280),
-                    },
-                    disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
-                )
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                col_save, _ = st.columns([1, 2])
-                with col_save:
-                    if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
-                        
-                        with st.spinner("Menyimpan progres validasi..."):
-                            list_log_db = []
-                            indeks_baris_terpilih = []
-                            peringatan_justifikasi = False
+            df_hasil_edit = st.data_editor(
+                df_bawah_view,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika direvisi", default=False),
+                    "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
+                    "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
+                    "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
+                    "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
+                    "validasi hasil review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
+                    "Justifikasi": st.column_config.TextColumn("Justifikasi (Khusus Konfirmasi)", width=280),
+                },
+                disabled=[c for c in kolom_tersedia if c not in ["Pilih", "Justifikasi"]]
+            )
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_save, _ = st.columns([1, 2])
+            with col_save:
+                if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
+                    with st.spinner("Menyimpan progres validasi..."):
+                        list_log_db = []
+                        indeks_baris_terpilih = []
+                        peringatan_justifikasi = False
     
-                            for idx, row_edit in df_hasil_edit.iterrows():
-                                ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
-                                text_justifikasi = str(row_edit['Justifikasi']).strip()
+                        for idx, row_edit in df_hasil_edit.iterrows():
+                            ind_text = str(row_edit.get('INDIKATOR KESALAHAN DATA', ''))
+                            text_justifikasi = str(row_edit.get('Justifikasi', '')).strip()
+                            
+                            is_konfirmasi = "konfirmasi" in ind_text.lower()
+                            if not is_konfirmasi and text_justifikasi not in ["", "None"]:
+                                peringatan_justifikasi = True
+                                text_justifikasi = "" 
+                            
+                            if bool(row_edit.get('Pilih', False)) or (is_konfirmasi and text_justifikasi not in ["", "None"]):
+                                list_log_db.append((
+                                    str(row_edit.get('Lembaga SSR', '')),
+                                    str(row_edit.get('Tanggal', '')),
+                                    str(row_edit.get('ID Klien', '')),
+                                    ind_text,
+                                    bool(row_edit.get('Pilih', False)),
+                                    text_justifikasi
+                                ))
+                                indeks_baris_terpilih.append(idx)
+    
+                        if len(list_log_db) > 0:
+                            if simpan_log_ke_neon(list_log_db):
+                                df_sekarang = st.session_state['df_tabel_bawah']
+                                df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
+                                st.session_state['df_tabel_bawah'] = df_sisa
                                 
-                                is_konfirmasi = "konfirmasi" in ind_text.lower()
-                                if not is_konfirmasi and text_justifikasi not in ["", "None"]:
-                                    peringatan_justifikasi = True
-                                    text_justifikasi = "" 
+                                st.success(f"🎉 Berhasil menyimpan {len(list_log_db)} baris secara kolektif! Data disembunyikan.")
+                                if peringatan_justifikasi:
+                                    st.warning("⚠️ Teks Justifikasi diabaikan karena baris BUKAN indikator konfirmasi.")
                                 
-                                if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi not in ["", "None"]):
-                                    list_log_db.append((
-                                        str(row_edit['Lembaga SSR']),
-                                        str(row_edit['Tanggal']),
-                                        str(row_edit['ID Klien']),
-                                        ind_text,
-                                        bool(row_edit['Pilih']),
-                                        text_justifikasi
-                                    ))
-                                    indeks_baris_terpilih.append(idx)
-    
-                            if len(list_log_db) > 0:
-                                if simpan_log_ke_neon(list_log_db):
-                                    df_sekarang = st.session_state['df_tabel_bawah']
-                                    df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
-                                    st.session_state['df_tabel_bawah'] = df_sisa
-                                    
-                                    st.success(f"🎉 Berhasil menyimpan {len(list_log_db)} baris secara kolektif! Data yang selesai otomatis disembunyikan.")
-                                    
-                                    if peringatan_justifikasi:
-                                        st.warning("⚠️ Beberapa teks Justifikasi diabaikan/dikosongkan karena baris tersebut BUKAN indikator konfirmasi.")
-                                    
-                                    import time
-                                    time.sleep(1.5)
-                                    st.rerun()
-                                else:
-                                    st.error("Gagal menyimpan data ke Neon Database. Periksa pengaturan koneksi.")
+                                import time
+                                time.sleep(1.5)
+                                st.rerun()
                             else:
-                                st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
+                                st.error("Gagal menyimpan data ke Neon Database.")
+                        else:
+                            st.info("ℹ️ Tidak ada data yang dipilih.")
+                            
+        # 💡 Kondisi khusus saat refresh: tabel bawah tidak ditarik dari database untuk menghemat memori
+        elif not st.session_state.get('proses_selesai', False):
+             st.info("💡 Data rincian (tabel bawah) tidak ditampilkan dalam Mode Arsip. Silakan unggah berkas Raw Data jika ingin memunculkan detail kesalahan.")
+        else:
+             st.success("✨ Sempurna! Tidak ada temuan data yang salah pada berkas ini.")
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("---")
-            
-            st.markdown("### ⚙️ Manajemen Akhir Periode")
-            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
-            
-            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-                with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
-                    if jalankan_agregasi_tren():
-                        st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
-                        st.balloons()
-                    else:
-                        st.error("Gagal memproses arsip ke database.")
 
-        with tab2:
-            st.markdown("### 📈 Pusat Analisis & Wawasan Data")
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            import plotly.express as px
-            
-            # =========================================================================
-            # 1. BAGIAN A: VISUALISASI CLEVELAND DOT PLOT (PENGGANTI TOTAL BAR)
-            # =========================================================================
-            if st.session_state.get('proses_selesai', False) and st.session_state.get('df_tabel_bawah') is not None:
-                df_bawah = st.session_state['df_tabel_bawah'].copy()
-                
-                if not df_bawah.empty:
-                    st.markdown("#### 📊 Sebaran Titik Kesalahan Berdasarkan Kelompok Sasaran")
-                    
-                    # Standarisasi Tipe Sasaran & Mapping Label
-                    df_bawah['Tipe Sasaran'] = df_bawah['Tipe Sasaran'].astype(str).str.replace('.0', '', regex=False).str.strip()
-                    map_sasaran = {
-                        '1304': '1304 (MSM)',
-                        '1301': '1301 (TG)',
-                        '1401': '1401 (PWID)'
-                    }
-                    df_bawah['Kelompok Sasaran'] = df_bawah['Tipe Sasaran'].map(map_sasaran).fillna(df_bawah['Tipe Sasaran'])
-                    
-                    # Pengaman Duplikat
-                    df_bawah = df_bawah.drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien", "INDIKATOR KESALAHAN DATA"])
-                    
-                    # Memisahkan Kategori (Mutlak vs Konfirmasi)
-                    is_konfirmasi = df_bawah['INDIKATOR KESALAHAN DATA'].str.contains(r'\(konfirmasi\)', case=False, na=False)
-                    df_mutlak_all = df_bawah[~is_konfirmasi]
-                    df_konf_all = df_bawah[is_konfirmasi]
-                    
-                    # --- VISUALISASI KATEGORI 1: TEMUAN MUTLAK (DOT PLOT) ---
-                    st.markdown("##### 🟥 A. Top 5 Temuan Mutlak (Perlu Koreksi / Non-Konfirmasi)")
-                    if not df_mutlak_all.empty:
-                        # Ambil top 5 indikator
-                        top_5_mutlak_idx = df_mutlak_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
-                        df_top_5_mutlak = df_mutlak_all[df_mutlak_all['INDIKATOR KESALAHAN DATA'].isin(top_5_mutlak_idx)]
-                        
-                        # Hitung jumlah per kombinasi Indikator + Kelompok Sasaran (Format Panjang/Long-form untuk Scatter)
-                        df_dot_mutlak = df_top_5_mutlak.groupby(['INDIKATOR KESALAHAN DATA', 'Kelompok Sasaran']).size().reset_index(name='Jumlah Kasus')
-                        
-                        # Membuat Cleveland Dot Plot menggunakan px.scatter
-                        fig_mutlak = px.scatter(
-                            df_dot_mutlak,
-                            x='Jumlah Kasus',
-                            y='INDIKATOR KESALAHAN DATA',
-                            color='Kelompok Sasaran',
-                            template="plotly_dark", # Memaksa tema gelap resmi Plotly
-                            color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
-                        )
-                        
-                        fig_mutlak.update_traces(
-                            marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
-                            hoverlabel=dict(
-                                bgcolor="#0f172a",       # Ikut warna latar belakang config.toml Anda
-                                font_size=12,
-                                font_color="#f8fafc"     # Ikut warna teks config.toml Anda
-                            ),
-                            hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
-                            hovertext=df_dot_mutlak['Kelompok Sasaran'] # 👈 Khusus untuk data mutlak
-                        )
-                        
-                        # Pengaturan Layout & Anti-Kotak Putih
-                        fig_mutlak.update_layout(
-                            margin=dict(l=10, r=10, t=10, b=10),
-                            paper_bgcolor='rgba(0,0,0,0)', 
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            font_color='#E0E0E0', 
-                            xaxis_title="Jumlah Kasus Kesalahan", 
-                            yaxis_title="",
-                            legend_title_text="Sasaran", 
-                            height=280, 
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                            yaxis={'categoryorder':'total ascending'}, # Otomatis urut dari yang terbesar di paling atas
-                            hoverlabel=dict(bgcolor="#1E1E24", font_size=12, font_color="#FFFFFF") # Fix kotak putih
-                        )
-                        fig_mutlak.update_xaxes(showgrid=True, gridcolor='#333333')
-                        fig_mutlak.update_yaxes(showgrid=True, gridcolor='#222222') # Garis pandu horizontal untuk titik
-                        
-                        st.plotly_chart(fig_mutlak, use_container_width=True, theme=None)
-                    else:
-                        st.info("✨ Bersih! Tidak ada temuan mutlak terdeteksi.")
-                        
-                    st.markdown("<br>", unsafe_allow_html=True)
-        
-                    # --- VISUALISASI KATEGORI 2: TEMUAN BUTUH KONFIRMASI (DOT PLOT) ---
-                    st.markdown("##### 🟨 B. Top 5 Temuan Butuh Klarifikasi (Ada Unsur Justifikasi / Konfirmasi)")
-                    if not df_konf_all.empty:
-                        # Ambil top 5 indikator
-                        top_5_konf_idx = df_konf_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
-                        df_top_5_konf = df_konf_all[df_konf_all['INDIKATOR KESALAHAN DATA'].isin(top_5_konf_idx)]
-                        
-                        # Hitung jumlah per kombinasi
-                        df_dot_konf = df_top_5_konf.groupby(['INDIKATOR KESALAHAN DATA', 'Kelompok Sasaran']).size().reset_index(name='Jumlah Kasus')
-                        
-                        # Membuat Cleveland Dot Plot
-                        fig_konf = px.scatter(
-                            df_dot_konf,
-                            x='Jumlah Kasus',
-                            y='INDIKATOR KESALAHAN DATA',
-                            color='Kelompok Sasaran',
-                            template="plotly_dark",
-                            color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
-                        )
-                        
-                        fig_konf.update_traces(
-                            marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
-                            hoverlabel=dict(
-                                bgcolor="#0f172a",       # Ikut warna latar belakang config.toml Anda
-                                font_size=12,
-                                font_color="#f8fafc"     # Ikut warna teks config.toml Anda
-                            ),
-                            hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
-                            hovertext=df_dot_konf['Kelompok Sasaran'] # 👈 Khusus untuk data konfirmasi
-                        )
-                        
-                        fig_konf.update_layout(
-                            margin=dict(l=10, r=10, t=10, b=10),
-                            paper_bgcolor='rgba(0,0,0,0)', 
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            font_color='#E0E0E0', 
-                            xaxis_title="Jumlah Kasus Kesalahan", 
-                            yaxis_title="",
-                            legend_title_text="Sasaran", 
-                            height=280, 
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                            yaxis={'categoryorder':'total ascending'},
-                            hoverlabel=dict(bgcolor="#1E1E24", font_size=12, font_color="#FFFFFF") # Fix kotak putih
-                        )
-                        fig_konf.update_xaxes(showgrid=True, gridcolor='#333333')
-                        fig_konf.update_yaxes(showgrid=True, gridcolor='#222222')
-                        
-                        st.plotly_chart(fig_konf, use_container_width=True, theme=None)
-                    else:
-                        st.info("✨ Aman! Tidak ada data yang membutuhkan konfirmasi tambahan.")
-                else:
-                    st.info("✨ Tidak ada rincian data kesalahan untuk dianalisa berdasarkan target.")
-        
-            # =========================================================================
-            # LINE BREAK / PEMBATAS ELEGAN ANTARA DATA SEKARANG VS DATA HISTORIS
-            # =========================================================================
-            st.markdown("---")
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            # =========================================================================
-            # 2. BAGIAN B: ANALISIS TREN SEMESTER (AREA CHART)
-            # =========================================================================
-            st.markdown("#### 📉 Analisis Tren Kesalahan per Periode")
-            
-            df_tren = ambil_rekap_tren()
-            if not df_tren.empty:
-                df_tren['Tanggal'] = df_tren['periode']
-                
-                col_kiri, col_kanan = st.columns([1, 2])
-                with col_kiri:
-                    daftar_ssr = ["SEMUA"] + sorted(df_tren['nama_ssr'].dropna().unique().tolist())
-                    pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr, key="select_ssr_tren")
-                    
-                if pilihan_ssr == "SEMUA":
-                    df_pivot = df_tren.groupby('Tanggal')['jumlah_kesalahan'].sum().reset_index()
-                    df_pivot = df_pivot.set_index('Tanggal')
-                    st.markdown(f"<p>📈 Tren total kesalahan <b>seluruh SSR</b>:</p>", unsafe_allow_html=True)
-                else:
-                    df_filtered = df_tren[df_tren['nama_ssr'] == pilihan_ssr]
-                    df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', values='jumlah_kesalahan', aggfunc='sum', fill_value=0)
-                    st.markdown(f"<p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
-                    
-                if not df_pivot.empty:
-                    st.area_chart(df_pivot)
-                else:
-                    st.info("Data belum tersedia untuk filter ini.")
-            else:
-                st.info("Belum ada data rekap tren di tabel rekap_tren_bulanan.")
-        
-        # Menutup Glass Card HTML Container dari Main Layout
-        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("---")
+        st.markdown("### ⚙️ Manajemen Akhir Periode")
+        st.warning("⚠️ Gunakan tombol ini HANYA JIKA periode bulanan sudah diverifikasi.")
+        
+        if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
+            with st.spinner("Sedang memproses pengarsipan data..."):
+                if jalankan_agregasi_tren():
+                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
+                    st.balloons()
+                else:
+                    st.error("Gagal memproses arsip.")
+
+    with tab2:
+        st.markdown("### 📈 Pusat Analisis & Wawasan Data")
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        import plotly.express as px
+        
+        # =========================================================================
+        # 1. BAGIAN A: VISUALISASI CLEVELAND DOT PLOT (PENGGANTI TOTAL BAR)
+        # =========================================================================
+        if st.session_state.get('proses_selesai', False) and st.session_state.get('df_tabel_bawah') is not None:
+            df_bawah = st.session_state['df_tabel_bawah'].copy()
+            
+            if not df_bawah.empty:
+                st.markdown("#### 📊 Sebaran Titik Kesalahan Berdasarkan Kelompok Sasaran")
+                
+                # Standarisasi Tipe Sasaran & Mapping Label
+                df_bawah['Tipe Sasaran'] = df_bawah['Tipe Sasaran'].astype(str).str.replace('.0', '', regex=False).str.strip()
+                map_sasaran = {
+                    '1304': '1304 (MSM)',
+                    '1301': '1301 (TG)',
+                    '1401': '1401 (PWID)'
+                }
+                df_bawah['Kelompok Sasaran'] = df_bawah['Tipe Sasaran'].map(map_sasaran).fillna(df_bawah['Tipe Sasaran'])
+                
+                # Pengaman Duplikat
+                df_bawah = df_bawah.drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien", "INDIKATOR KESALAHAN DATA"])
+                
+                # Memisahkan Kategori (Mutlak vs Konfirmasi)
+                is_konfirmasi = df_bawah['INDIKATOR KESALAHAN DATA'].str.contains(r'\(konfirmasi\)', case=False, na=False)
+                df_mutlak_all = df_bawah[~is_konfirmasi]
+                df_konf_all = df_bawah[is_konfirmasi]
+                
+                # --- VISUALISASI KATEGORI 1: TEMUAN MUTLAK (DOT PLOT) ---
+                st.markdown("##### 🟥 A. Top 5 Temuan Mutlak (Perlu Koreksi / Non-Konfirmasi)")
+                if not df_mutlak_all.empty:
+                    # Ambil top 5 indikator
+                    top_5_mutlak_idx = df_mutlak_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
+                    df_top_5_mutlak = df_mutlak_all[df_mutlak_all['INDIKATOR KESALAHAN DATA'].isin(top_5_mutlak_idx)]
+                    
+                    # Hitung jumlah per kombinasi Indikator + Kelompok Sasaran (Format Panjang/Long-form untuk Scatter)
+                    df_dot_mutlak = df_top_5_mutlak.groupby(['INDIKATOR KESALAHAN DATA', 'Kelompok Sasaran']).size().reset_index(name='Jumlah Kasus')
+                    
+                    # Membuat Cleveland Dot Plot menggunakan px.scatter
+                    fig_mutlak = px.scatter(
+                        df_dot_mutlak,
+                        x='Jumlah Kasus',
+                        y='INDIKATOR KESALAHAN DATA',
+                        color='Kelompok Sasaran',
+                        template="plotly_dark", # Memaksa tema gelap resmi Plotly
+                        color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
+                    )
+                    
+                    fig_mutlak.update_traces(
+                        marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
+                        hoverlabel=dict(
+                            bgcolor="#0f172a",       # Ikut warna latar belakang config.toml Anda
+                            font_size=12,
+                            font_color="#f8fafc"     # Ikut warna teks config.toml Anda
+                        ),
+                        hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
+                        hovertext=df_dot_mutlak['Kelompok Sasaran'] # 👈 Khusus untuk data mutlak
+                    )
+                    
+                    # Pengaturan Layout & Anti-Kotak Putih
+                    fig_mutlak.update_layout(
+                        margin=dict(l=10, r=10, t=10, b=10),
+                        paper_bgcolor='rgba(0,0,0,0)', 
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        font_color='#E0E0E0', 
+                        xaxis_title="Jumlah Kasus Kesalahan", 
+                        yaxis_title="",
+                        legend_title_text="Sasaran", 
+                        height=280, 
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                        yaxis={'categoryorder':'total ascending'}, # Otomatis urut dari yang terbesar di paling atas
+                        hoverlabel=dict(bgcolor="#1E1E24", font_size=12, font_color="#FFFFFF") # Fix kotak putih
+                    )
+                    fig_mutlak.update_xaxes(showgrid=True, gridcolor='#333333')
+                    fig_mutlak.update_yaxes(showgrid=True, gridcolor='#222222') # Garis pandu horizontal untuk titik
+                    
+                    st.plotly_chart(fig_mutlak, use_container_width=True, theme=None)
+                else:
+                    st.info("✨ Bersih! Tidak ada temuan mutlak terdeteksi.")
+                    
+                st.markdown("<br>", unsafe_allow_html=True)
+    
+                # --- VISUALISASI KATEGORI 2: TEMUAN BUTUH KONFIRMASI (DOT PLOT) ---
+                st.markdown("##### 🟨 B. Top 5 Temuan Butuh Klarifikasi (Ada Unsur Justifikasi / Konfirmasi)")
+                if not df_konf_all.empty:
+                    # Ambil top 5 indikator
+                    top_5_konf_idx = df_konf_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
+                    df_top_5_konf = df_konf_all[df_konf_all['INDIKATOR KESALAHAN DATA'].isin(top_5_konf_idx)]
+                    
+                    # Hitung jumlah per kombinasi
+                    df_dot_konf = df_top_5_konf.groupby(['INDIKATOR KESALAHAN DATA', 'Kelompok Sasaran']).size().reset_index(name='Jumlah Kasus')
+                    
+                    # Membuat Cleveland Dot Plot
+                    fig_konf = px.scatter(
+                        df_dot_konf,
+                        x='Jumlah Kasus',
+                        y='INDIKATOR KESALAHAN DATA',
+                        color='Kelompok Sasaran',
+                        template="plotly_dark",
+                        color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
+                    )
+                    
+                    fig_konf.update_traces(
+                        marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
+                        hoverlabel=dict(
+                            bgcolor="#0f172a",       # Ikut warna latar belakang config.toml Anda
+                            font_size=12,
+                            font_color="#f8fafc"     # Ikut warna teks config.toml Anda
+                        ),
+                        hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
+                        hovertext=df_dot_konf['Kelompok Sasaran'] # 👈 Khusus untuk data konfirmasi
+                    )
+                    
+                    fig_konf.update_layout(
+                        margin=dict(l=10, r=10, t=10, b=10),
+                        paper_bgcolor='rgba(0,0,0,0)', 
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        font_color='#E0E0E0', 
+                        xaxis_title="Jumlah Kasus Kesalahan", 
+                        yaxis_title="",
+                        legend_title_text="Sasaran", 
+                        height=280, 
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                        yaxis={'categoryorder':'total ascending'},
+                        hoverlabel=dict(bgcolor="#1E1E24", font_size=12, font_color="#FFFFFF") # Fix kotak putih
+                    )
+                    fig_konf.update_xaxes(showgrid=True, gridcolor='#333333')
+                    fig_konf.update_yaxes(showgrid=True, gridcolor='#222222')
+                    
+                    st.plotly_chart(fig_konf, use_container_width=True, theme=None)
+                else:
+                    st.info("✨ Aman! Tidak ada data yang membutuhkan konfirmasi tambahan.")
+            else:
+                st.info("✨ Tidak ada rincian data kesalahan untuk dianalisa berdasarkan target.")
+    
+        # =========================================================================
+        # LINE BREAK / PEMBATAS ELEGAN ANTARA DATA SEKARANG VS DATA HISTORIS
+        # =========================================================================
+        st.markdown("---")
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # =========================================================================
+        # 2. BAGIAN B: ANALISIS TREN SEMESTER (AREA CHART)
+        # =========================================================================
+        st.markdown("#### 📉 Analisis Tren Kesalahan per Periode")
+        
+        df_tren = ambil_rekap_tren()
+        if not df_tren.empty:
+            df_tren['Tanggal'] = df_tren['periode']
+            
+            col_kiri, col_kanan = st.columns([1, 2])
+            with col_kiri:
+                daftar_ssr = ["SEMUA"] + sorted(df_tren['nama_ssr'].dropna().unique().tolist())
+                pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr, key="select_ssr_tren")
+                
+            if pilihan_ssr == "SEMUA":
+                df_pivot = df_tren.groupby('Tanggal')['jumlah_kesalahan'].sum().reset_index()
+                df_pivot = df_pivot.set_index('Tanggal')
+                st.markdown(f"<p>📈 Tren total kesalahan <b>seluruh SSR</b>:</p>", unsafe_allow_html=True)
+            else:
+                df_filtered = df_tren[df_tren['nama_ssr'] == pilihan_ssr]
+                df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', values='jumlah_kesalahan', aggfunc='sum', fill_value=0)
+                st.markdown(f"<p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
+                
+            if not df_pivot.empty:
+                st.area_chart(df_pivot)
+            else:
+                st.info("Data belum tersedia untuk filter ini.")
+        else:
+            st.info("Belum ada data rekap tren di tabel rekap_tren_bulanan.")
+    
+    # Menutup Glass Card HTML Container dari Main Layout
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
 
 # ----------------------------------------------------------
