@@ -747,22 +747,28 @@ if tombol_proses:
 # ----------------------------------------------------------
 if menu_pilihan == "🎯 Dashboard Review Data":
     
-    if st.session_state.get('proses_selesai', False):
+    # 1. BUKA KUNCI DASHBOARD: Tampilkan jika proses validasi selesai ATAU ada data historis dari DB
+    df_historis = st.session_state.get('df_tabel_atas', pd.DataFrame())
+    
+    if st.session_state.get('proses_selesai', False) or (df_historis is not None and not df_historis.empty):
         
         tot_data = st.session_state.get('total_entri', 0)
-        
+       
         # ==========================================================
-        # 🛠️ PERBAIKAN UTAMA: Hitung baris fisik yang unik (bukan total indikator)
+        # 🛠️ PERBAIKAN UTAMA: Hitung baris fisik secara cerdas
         # ==========================================================
         if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-            # Mengeliminasi duplikasi jika 1 baris klien memiliki lebih dari 1 temuan kesalahan
+            # Hitung dari data yang baru saja divalidasi (Live)
             df_baris_unik = st.session_state['df_tabel_bawah'].drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien"])
             tot_err = len(df_baris_unik)
+        elif df_historis is not None and not df_historis.empty:
+            # Hitung dari total data rekap agregasi database (Jika aplikasi baru di-refresh)
+            tot_err = int(df_historis['Jumlah per indikator'].sum()) if 'Jumlah per indikator' in df_historis.columns else 0
         else:
             tot_err = 0
             
-        # Nilai akurasi sekarang dijamin akurat dan tidak akan minus/drop berlebihan
         akurasi = 100.0 if tot_data == 0 else max(0, 100 - (tot_err / tot_data * 100))
+        akurasi_teks = f"{akurasi:.1f}%" if tot_data > 0 else "Data Historis DB"
         
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 
@@ -777,10 +783,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         with col1:
             st.metric(label="Total Data Diproses", value=f"{tot_data:,}")
         with col2:
-            # Mengubah label sedikit menjadi "Total Baris Temuan" agar informasinya sinkron
             st.metric(label="Total Baris Temuan", value=f"{tot_err:,}", delta="Data Perlu Perhatian", delta_color="inverse")
         with col3:
-            st.metric(label="Tingkat Akurasi", value=f"{akurasi:.1f}%", delta="Berdasarkan Validasi")
+            st.metric(label="Tingkat Akurasi", value=akurasi_teks, delta="Berdasarkan Validasi")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
