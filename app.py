@@ -331,10 +331,10 @@ with st.sidebar:
                         st.rerun()
 
         st.markdown("""<div style="margin-top: 35px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>""", unsafe_allow_html=True)
-        tombol_proses = st.button("🚀 Jalankan Penelaahan", type="primary", use_container_width=True)
+        tombol_proses = st.button("🚀 Jalankan Validasi", type="primary", use_container_width=True)
 
 # ==========================================================
-# 3. ENGINE VALIDASI UTAMA (VERSI SEMPURNA & DINAMIS)
+# 3. ENGINE VALIDASI UTAMA (VERSI SEMPURNA & DINAMIS + INTEGRASI NOTIFIKASI)
 # ==========================================================
 def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     list_kesalahan = []
@@ -391,7 +391,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     else:
         pattern_medsos_dinamis = r'\b(TIDAK_ADA_MEDSOS_TERDAFTAR_DI_SISTEM)\b'
 
-    # Pengaman Database terintegrasi
+    # Pengaman Database terintegrasi (Membaca riwayat konfirmasi & revisi terdahulu)
     try:
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
     except Exception as e:
@@ -490,14 +490,12 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             col_tipe_sasaran = c
             break
 
-    # 🌟 REVISI BARU: Deteksi otomatis kolom Virtual & Tatap Muka (VC1) secara dinamis
     col_vc1 = ""
     for c in df.columns:
         if "VIRTUAL" in str(c).upper() or "VC1" in str(c).upper() or "TATAP MUKA" in str(c).upper():
             col_vc1 = c
             break
     
-    # Perhitungan akumulatif menggunakan kolom hasil deteksi dinamis
     if col_info and col_kegiatan:
         df['is_info_hiv'] = df[col_info].apply(periksa_hiv) | df[col_kegiatan].apply(periksa_hiv)
     else:
@@ -553,9 +551,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         umur = row.get('Umur', None)
         jk = str(row.get('Jenis Kelamin', '')).replace('.0', '').strip()
         
-        # ==========================================================
-        # 🛠️ SINKRONISASI KOLOM DINAMIS & PENGAMAN FLOAT
-        # ==========================================================
         jns_kontak = str(row.get(col_kontak, row.get('Jenis Kontak', ''))).replace('.0', '').strip()
         jns_kegiatan = str(row.get(col_kegiatan, row.get('Jenis Kegiatan', ''))).replace('.0', '').strip()
         lokasi = str(row.get(col_lokasi, row.get('Lokasi Outreach / Jenis Sosial Media', ''))).strip()
@@ -564,7 +559,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         rujukan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         
-        # 🌟 REVISI BARU: Sekarang dinamis menggunakan col_vc1 dengan fallback aman ke nama string bawaan
         vc1 = str(row.get(col_vc1, row.get('Virtual & Tatap Muka', ''))).replace('.0', '').strip()
 
         log_kie = sum(_safe_float(row.get(c, 0)) for c in col_kie_list)
@@ -604,16 +598,19 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             nama_ind = rule["nama"]
             try:
                 if rule["periksa"](context_data):
+                    # Kunci unik pencocokan database: SSR + TANGGAL + ID + INDIKATOR
                     key_db = f"{v_ssr}_{v_tanggal}_{id_clean}_{nama_ind}"
-                    is_butuh_konfirmasi = "konfirmasi" in nama_ind.lower()
                     
-                    if is_butuh_konfirmasi and key_db in dict_justifikasi and not dict_revisi.get(key_db, False): 
-                        continue
-                        
                     status_validasi = "-"
                     checked_state = False
-                    justif_val = dict_justifikasi.get(key_db, "") if is_butuh_konfirmasi else ""
+                    justif_val = dict_justifikasi.get(key_db, "")
                     
+                    # 🛠️ INTEGRASI PENYEMPURNAAN ALUR NOTIFIKASI 🛠️
+                    # Kondisi 1: Jika data terdeteksi kembali DAN sudah pernah diisi justifikasinya di database konfirmasi
+                    if key_db in dict_justifikasi:
+                        status_validasi = f"⚠️ Terdeteksi Kembali (Riwayat Justifikasi: {justif_val})"
+                        
+                    # Kondisi 2: Jika sistem mendeteksi ini sebagai data berulang yang belum tuntas direvisi
                     if key_db in dict_revisi:
                         status_validasi = "kesalahan pada ID yang berulang (belum dilakukan revisi)"
                         checked_state = True
@@ -628,7 +625,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                         "NIK": nik_clean, 
                         "Tipe Sasaran": v_tipe_sasaran,
                         "INDIKATOR KESALAHAN DATA": nama_ind,
-                        "validasi hasil review": status_validasi,
+                        "validasi hasil review": status_validasi, # Kolom notifikasi dinamis
                         "Justifikasi": justif_val
                     })
             except Exception as e: 
