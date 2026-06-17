@@ -303,10 +303,13 @@ def ambil_agregasi_terakhir_dari_neon():
                 
             # 3. Transformasi kembali dari format baris (long) ke format tabel lebar (wide)
             df_long = pd.DataFrame(rows, columns=['nama_ssr', 'indikator_kesalahan', 'jumlah_kesalahan'])
-            df_wide = df_long.pivot(
+            
+            # 🔥 GANTI pivot() MENJADI pivot_table() DAN TAMBAHKAN aggfunc='sum'
+            df_wide = df_long.pivot_table(
                 index='indikator_kesalahan', 
                 columns='nama_ssr', 
-                values='jumlah_kesalahan'
+                values='jumlah_kesalahan',
+                aggfunc='sum'
             ).fillna(0).astype(int)
             
             # Kembalikan kolom indeks menjadi kolom biasa untuk kebutuhan manipulasi data
