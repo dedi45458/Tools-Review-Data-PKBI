@@ -102,6 +102,32 @@ def ambil_keyword_medsos():
     # Mengembalikan list yang sudah diurutkan dari database
     return sorted(st.session_state['medsoc_keywords'])
 
+
+# =========================================================================
+# 🗄️ STRUKTUR SESSION STATE & AMBIL DATA HISTORIS DARI NEON
+# =========================================================================
+
+# Inisialisasi state untuk tabel agregasi atas
+if 'df_tabel_atas' not in st.session_state:
+    st.session_state['df_tabel_atas'] = None
+
+if 'proses_selesai' not in st.session_state:
+    st.session_state['proses_selesai'] = False
+
+# Otomatis tarik data dari Neon saat aplikasi di-refresh/di-launch pertama kali
+if st.session_state['df_tabel_atas'] is None and not st.session_state['proses_selesai']:
+    try:
+        df_dari_db = ambil_agregasi_terakhir_neon()
+        if df_dari_db is not None and not df_dari_db.empty:
+            st.session_state['df_tabel_atas'] = df_dari_db
+    except Exception as e:
+        # Menuliskan error ke log server agar tidak mengganggu UI pengguna
+        print(f"Gagal memuat data awal Neon: {e}")
+
+
+# =========================================================================
+# 🎨 TAMPILAN HEADER / JUDUL UTAMA APLIKASI
+# =========================================================================
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu (Neon DB)</div>', unsafe_allow_html=True)
 
