@@ -375,7 +375,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
     
     df = df_asli.copy()
-    st.write("Tampilan Data Mentah Sebelum Divalidasi:", df.head())
+    
     # ==========================================================
     # LOGIKA PERBAIKAN HEADER BERTINGKAT (MERGED CELLS)
     # ==========================================================
@@ -669,7 +669,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     
 # ==========================================================
-# 4. LOGIKA TOMBOL EKSEKUSI (VERSI OPTIMASI & ANTI-CRASH)
+# 4. LOGIKA TOMBOL EKSEKUSI (VERSI TERINTEGRASI PENUH NEON DB)
 # ==========================================================
 if tombol_proses:
     if not files_review:
@@ -678,10 +678,8 @@ if tombol_proses:
         with st.spinner("Sedang memproses validasi data, mohon tunggu..."):
             df_ref = None
             if file_referensi:
-                try: 
-                    df_ref = pd.read_excel(file_referensi)
-                except Exception as e: 
-                    st.error(f"❌ Gagal membaca file referensi: {e}")
+                try: df_ref = pd.read_excel(file_referensi)
+                except Exception: pass
             
             all_errs, total_records = [], 0
             detected_ssrs = set()
@@ -690,61 +688,46 @@ if tombol_proses:
                 try:
                     df_target = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     total_records += len(df_target)
-                    
                     df_res = jalankan_review_data(df_target, df_ref, nama_file=f.name)
-                    
-                    if df_res is not None and not df_res.empty:
+                    if not df_res.empty:
                         all_errs.append(df_res)
-                        if 'Lembaga SSR' in df_res.columns:
-                            detected_ssrs.update(df_res['Lembaga SSR'].dropna().unique())
-                        
-                except Exception as e:
-                    st.error(f"❌ Error saat memproses file '{f.name}': {str(e)}")
-                    st.info("Pesan di atas membantu melacak kesalahan di dalam fungsi 'jalankan_review_data'.")
+                        detected_ssrs.update(df_res['Lembaga SSR'].unique())
+                except Exception: pass
 
             st.session_state['total_entri'] = total_records
 
             if all_errs:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
-                
-                # 🛠️ AMAN DARI TYPO: Deteksi kolom indikator secara fleksibel
-                kolom_indikator_bawah = [c for c in df_bawah.columns if 'INDIKATOR' in str(c).upper()]
-                if kolom_indikator_bawah:
-                    df_bawah.rename(columns={kolom_indikator_bawah[0]: 'INDIKATOR KESALAHAN DATA'}, inplace=True)
-                
-                # Pastikan kolom wajib ada agar tidak KeyError saat kalkulasi matriks
-                if 'INDIKATOR KESALAHAN DATA' not in df_bawah.columns:
-                    df_bawah['INDIKATOR KESALAHAN DATA'] = 'Kategori Tidak Diketahui'
-                if 'Lembaga SSR' not in df_bawah.columns:
-                    df_bawah['Lembaga SSR'] = 'SSR Tidak Diketahui'
-
+                active_ssrs = sorted(list(detected_ssrs))
                 total_seluruh_kesalahan = len(df_bawah)
+                DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state['aturan_kustom'])]
                 
-                # 🛠️ AMAN DARI NAMEERROR: Proteksi jika ATURAN_VALIDASI_BAWAAN tidak terdefinisi
-                aturan_bawaan = ATURAN_VALIDASI_BAWAAN if 'ATURAN_VALIDASI_BAWAAN' in globals() or 'ATURAN_VALIDASI_BAWAAN' in locals() else []
-                aturan_kustom = st.session_state.get('aturan_kustom', [])
-                DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (aturan_bawaan + aturan_kustom)]
+                matrix_rows = []
                 
-                # Jika list aturan kosong, ambil dinamis dari data temuan agar matriks tidak kosong
-                if not DAFTAR_INDIKATOR_AKTIF:
-                    DAFTAR_INDIKATOR_AKTIF = df_bawah['INDIKATOR KESALAHAN DATA'].dropna().unique().tolist()
-
-                # ⚡ OPTIMASI PERFORMA: Gunakan Pandas Crosstab (Jauh lebih cepat dari nested loop)
-                df_matriks = pd.crosstab(
-                    df_bawah['INDIKATOR KESALAHAN DATA'], 
-                    df_bawah['Lembaga SSR']
-                ).reindex(index=DAFTAR_INDIKATOR_AKTIF, fill_value=0)
+                for ind in DAFTAR_INDIKATOR_AKTIF:
+                    r_dict = {"INDIKATOR KESALAHAN DATA": ind}
+                    total_ind_err = 0
+                    for ssr in active_ssrs:
+                        c = len(df_bawah[(df_bawah['INDIKATOR KESALAHAN DATA'] == ind) & (df_bawah['Lembaga SSR'] == ssr)])
+                        r_dict[ssr] = c
+                        total_ind_err += c
+                    
+                    r_dict["Jumlah per indikator"] = total_ind_err
+                    r_dict["%"] = (total_ind_err / total_seluruh_kesalahan * 100) if total_seluruh_kesalahan > 0 else 0.0
+                    matrix_rows.append(r_dict)
                 
-                # Menghitung total per baris (Indikator)
-                df_matriks['Jumlah per indikator'] = df_matriks.sum(axis=1)
+                # Menyusun matriks rekapitulasi (Tabel Atas)
+                df_atas = pd.DataFrame(matrix_rows)
+                df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
                 
-                # Menghitung persentase terhadap total keseluruhan kesalahan
-                df_matriks['%'] = (df_matriks['Jumlah per indikator'] / total_seluruh_kesalahan * 100) if total_seluruh_kesalahan > 0 else 0.0
+                # Biarkan UI memilikinya sebagai Index secara lokal sementara
+                df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
                 
-                # Filter hanya indikator yang memiliki temuan kesalahan > 0 dan rapikan format
-                df_atas = df_matriks[df_matriks['Jumlah per indikator'] > 0].reset_index()
-                
+                # -----------------------------------------------------------------
+                # 🔥 INTEGRASI SEKALIGUS: SIMPAN AGREGASI & DETIL KE NEON DB 🔥
+                # -----------------------------------------------------------------
                 try:
+                    # Import seluruh fungsi penanganan terpusat Neon DB
                     from database import (
                         simpan_agregasi_ke_neon, 
                         simpan_detil_review_ke_neon,
@@ -752,41 +735,50 @@ if tombol_proses:
                         ambil_detil_terakhir_dari_neon
                     )
                     
-                    # Pengiriman ke DB menggunakan DataFrame yang bersih (Memiliki kolom INDIKATOR KESALAHAN DATA asli)
-                    sukses_simpan_atas = simpan_agregasi_ke_neon(df_atas)
+                    # 1. Kirim Tabel Atas (Agregasi Tren)
+                    df_to_db_atas = df_atas.copy().reset_index()
+                    sukses_simpan_atas = simpan_agregasi_ke_neon(df_to_db_atas)
+                    
+                    # 2. Kirim Tabel Bawah (Detil Mentah Per Baris) -> Menjawab Soal No. 1
                     sukses_simpan_bawah = simpan_detil_review_ke_neon(df_bawah)
                     
                     if sukses_simpan_atas and sukses_simpan_bawah:
-                        st.toast("💾 Data review berhasil diamankan ke Neon DB!", icon="✅")
+                        st.toast("💾 Seluruh data review (Agregasi & Detil) berhasil diamankan ke Neon DB!", icon="✅")
+                        
+                        # 3. Ambil ulang langsung data resmi terupdate dari Neon DB 
+                        # Supaya data sinkron dengan timestamp Jakarta yang digenerate oleh server Neon -> Menjawab Soal No. 2 & 3
                         df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
                         df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
                         
                         if not df_atas_db.empty:
                             st.session_state['df_tabel_atas'] = df_atas_db
                             st.session_state['tanggal_terakhir_review'] = ts_atas_db
+                            
                         if not df_bawah_db.empty:
                             st.session_state['df_tabel_bawah'] = df_bawah_db
                             st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
                     else:
-                        raise Exception("Fungsi simpan database mengembalikan nilai False.")
+                        # Fallback jika koneksi DB bermasalah tengah jalan (tetap simpan ke memori lokal aplikasi)
+                        st.session_state['df_tabel_atas'] = df_atas
+                        st.session_state['df_tabel_bawah'] = df_bawah
+                        st.session_state['tanggal_terakhir_review'] = dt.datetime.now()
+                        st.session_state['tanggal_terakhir_bawah'] = dt.datetime.now()
+                        st.warning("⚠️ Data gagal masuk ke salah satu tabel cloud Neon, namun tersimpan sementara di lokal.")
                         
                 except Exception as e:
-                    st.warning(f"⚠️ Gagal sinkronisasi cloud Neon ({str(e)}). Menggunakan penyimpanan memori lokal.")
-                    
-                    # Fallback ke Waktu Lokal (Gunakan penanganan dinamis agar aman dari salah import datetime)
-                    import datetime
-                    waktu_sekarang = datetime.datetime.now()
-                    
+                    st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database: {str(e)}")
+                    # Jalur darurat agar aplikasi tidak crash jika db offline
                     st.session_state['df_tabel_atas'] = df_atas
                     st.session_state['df_tabel_bawah'] = df_bawah
-                    st.session_state['tanggal_terakhir_review'] = waktu_sekarang
-                    st.session_state['tanggal_terakhir_bawah'] = waktu_sekarang
                     
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
 
+            # Memicu perubahan state pemrosesan selesai
             st.session_state['proses_selesai'] = True
+            
+            # Memberikan jeda sedikit agar st.toast/pesan sukses sempat terbaca user
             import time
             time.sleep(1.5) 
             st.rerun()
@@ -825,7 +817,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 
-        tanggal_hari_ini = dt.datetime.now().strftime('%d %B %Y')
+        tanggal_hari_ini = datetime.now().strftime('%d %B %Y')
         st.markdown(f"""
             <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
                 📅 <b>Executive Review</b> | Tanggal: {tanggal_hari_ini}
