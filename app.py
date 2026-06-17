@@ -3,7 +3,7 @@ import pandas as pd
 import io
 import re
 import datetime
-from database import ambil_agregasi_terakhir_neon
+from database import ambil_agregasi_terakhir_dari_neon
 
 # ==========================================================
 # IMPORT FUNGSI NEON DARI FILE database.py
