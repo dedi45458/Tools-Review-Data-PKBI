@@ -14,7 +14,9 @@ from database import (
     ambil_rekap_tren,
     hitung_dan_ambil_log_db,    # <--- TAMBAHKAN BARIS INI
     ambil_keyword_medsos_db,     # <--- Tambahkan fungsi baru
-    tambah_keyword_medsos_db
+    tambah_keyword_medsos_db,
+    simpan_agregasi_ke_neon,
+    ambil_agregasi_terakhir_dari_neon
 )
 
 # ==========================================================
