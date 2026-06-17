@@ -2,22 +2,22 @@ import streamlit as st
 import pandas as pd
 import io
 import re
-import datetime
-from database import ambil_agregasi_terakhir_dari_neon
+# 🔄 UBAH BARIS INI: Menggunakan alias 'dt' agar tidak bentrok di baris 780
+import datetime as dt  
 
 # ==========================================================
-# IMPORT FUNGSI NEON DARI FILE database.py
+# IMPORT FUNGSI NEON DARI FILE database.py (Disatukan agar rapi)
 # ==========================================================
 from database import (
     dapatkan_koneksi_neon,
     simpan_log_ke_neon,
     jalankan_agregasi_tren,
     ambil_rekap_tren,
-    hitung_dan_ambil_log_db,    # <--- TAMBAHKAN BARIS INI
-    ambil_keyword_medsos_db,     # <--- Tambahkan fungsi baru
+    hitung_dan_ambil_log_db,     
+    ambil_keyword_medsos_db,     
     tambah_keyword_medsos_db,
     simpan_agregasi_ke_neon,
-    ambil_agregasi_terakhir_dari_neon
+    ambil_agregasi_terakhir_dari_neon  # <-- Cukup di-import sekali di dalam blok ini
 )
 
 # ==========================================================
@@ -777,7 +777,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 
-        tanggal_hari_ini = datetime.now().strftime('%d %B %Y')
+        tanggal_hari_ini = dt.datetime.now().strftime('%d %B %Y')
         st.markdown(f"""
             <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
                 📅 <b>Executive Review</b> | Tanggal: {tanggal_hari_ini}
