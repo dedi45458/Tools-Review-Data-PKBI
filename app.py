@@ -669,7 +669,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     
 # ==========================================================
-# 4. LOGIKA TOMBOL EKSEKUSI (VERSI TERINTEGRASI PENUH NEON DB)
+# 4. LOGIKA TOMBOL EKSEKUSI (VERSI PERBAIKAN BUG)
 # ==========================================================
 if tombol_proses:
     if not files_review:
@@ -678,8 +678,10 @@ if tombol_proses:
         with st.spinner("Sedang memproses validasi data, mohon tunggu..."):
             df_ref = None
             if file_referensi:
-                try: df_ref = pd.read_excel(file_referensi)
-                except Exception: pass
+                try: 
+                    df_ref = pd.read_excel(file_referensi)
+                except Exception as e: 
+                    st.error(f"❌ Gagal membaca file referensi: {e}")
             
             all_errs, total_records = [], 0
             detected_ssrs = set()
@@ -688,11 +690,18 @@ if tombol_proses:
                 try:
                     df_target = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     total_records += len(df_target)
+                    
+                    # Eksekusi fungsi review data
                     df_res = jalankan_review_data(df_target, df_ref, nama_file=f.name)
-                    if not df_res.empty:
+                    
+                    if df_res is not None and not df_res.empty:
                         all_errs.append(df_res)
                         detected_ssrs.update(df_res['Lembaga SSR'].unique())
-                except Exception: pass
+                        
+                except Exception as e:
+                    # 🔴 PERBAIKAN UTAMA: Tampilkan error secara transparan ke UI
+                    st.error(f"❌ Error saat memproses file '{f.name}': {str(e)}")
+                    st.info("Pesan di atas membantu melacak kolom atau baris mana di dalam fungsi 'jalankan_review_data' yang tidak sesuai.")
 
             st.session_state['total_entri'] = total_records
 
@@ -716,18 +725,13 @@ if tombol_proses:
                     r_dict["%"] = (total_ind_err / total_seluruh_kesalahan * 100) if total_seluruh_kesalahan > 0 else 0.0
                     matrix_rows.append(r_dict)
                 
-                # Menyusun matriks rekapitulasi (Tabel Atas)
                 df_atas = pd.DataFrame(matrix_rows)
                 df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
                 
-                # Biarkan UI memilikinya sebagai Index secara lokal sementara
-                df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
+                if not df_atas.empty:
+                    df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
                 
-                # -----------------------------------------------------------------
-                # 🔥 INTEGRASI SEKALIGUS: SIMPAN AGREGASI & DETIL KE NEON DB 🔥
-                # -----------------------------------------------------------------
                 try:
-                    # Import seluruh fungsi penanganan terpusat Neon DB
                     from database import (
                         simpan_agregasi_ke_neon, 
                         simpan_detil_review_ke_neon,
@@ -735,39 +739,30 @@ if tombol_proses:
                         ambil_detil_terakhir_dari_neon
                     )
                     
-                    # 1. Kirim Tabel Atas (Agregasi Tren)
                     df_to_db_atas = df_atas.copy().reset_index()
                     sukses_simpan_atas = simpan_agregasi_ke_neon(df_to_db_atas)
-                    
-                    # 2. Kirim Tabel Bawah (Detil Mentah Per Baris) -> Menjawab Soal No. 1
                     sukses_simpan_bawah = simpan_detil_review_ke_neon(df_bawah)
                     
                     if sukses_simpan_atas and sukses_simpan_bawah:
-                        st.toast("💾 Seluruh data review (Agregasi & Detil) berhasil diamankan ke Neon DB!", icon="✅")
-                        
-                        # 3. Ambil ulang langsung data resmi terupdate dari Neon DB 
-                        # Supaya data sinkron dengan timestamp Jakarta yang digenerate oleh server Neon -> Menjawab Soal No. 2 & 3
+                        st.toast("💾 Data review berhasil diamankan ke Neon DB!", icon="✅")
                         df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
                         df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
                         
                         if not df_atas_db.empty:
                             st.session_state['df_tabel_atas'] = df_atas_db
                             st.session_state['tanggal_terakhir_review'] = ts_atas_db
-                            
                         if not df_bawah_db.empty:
                             st.session_state['df_tabel_bawah'] = df_bawah_db
                             st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
                     else:
-                        # Fallback jika koneksi DB bermasalah tengah jalan (tetap simpan ke memori lokal aplikasi)
                         st.session_state['df_tabel_atas'] = df_atas
                         st.session_state['df_tabel_bawah'] = df_bawah
                         st.session_state['tanggal_terakhir_review'] = dt.datetime.now()
                         st.session_state['tanggal_terakhir_bawah'] = dt.datetime.now()
-                        st.warning("⚠️ Data gagal masuk ke salah satu tabel cloud Neon, namun tersimpan sementara di lokal.")
+                        st.warning("⚠️ Data gagal masuk ke cloud Neon, disimpan di memori lokal.")
                         
                 except Exception as e:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database: {str(e)}")
-                    # Jalur darurat agar aplikasi tidak crash jika db offline
                     st.session_state['df_tabel_atas'] = df_atas
                     st.session_state['df_tabel_bawah'] = df_bawah
                     
@@ -775,10 +770,7 @@ if tombol_proses:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
 
-            # Memicu perubahan state pemrosesan selesai
             st.session_state['proses_selesai'] = True
-            
-            # Memberikan jeda sedikit agar st.toast/pesan sukses sempat terbaca user
             import time
             time.sleep(1.5) 
             st.rerun()
