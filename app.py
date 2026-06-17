@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import re
-import datetime as dt  
+from datetime import datetime  
 
 # ==========================================================
 # IMPORT FUNGSI NEON DARI FILE database.py
