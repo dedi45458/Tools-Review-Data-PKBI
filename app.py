@@ -969,130 +969,166 @@ if menu_pilihan == "🎯 Dashboard Review Data":
 
 
             # =========================================================================
-            # TABEL HASIL REVIEW PENJANGKAUAN DETIL PER BARIS
-            # =========================================================================
-            st.markdown("### 🔍 Hasil Review Penjangkauan")
-            st.markdown("<small style='color: #888;'>💡 Kolom Justifikasi hanya akan diproses jika indikator kesalahan mengandung kata 'konfirmasi'. Kolom lain dikunci.</small>", unsafe_allow_html=True)
+# TABEL HASIL REVIEW PENJANGKAUAN DETIL PER BARIS
+# =========================================================================
+st.markdown("### 🔍 Hasil Review Penjangkauan")
+st.markdown("<small style='color: #888;'>💡 Kolom Justifikasi hanya akan diproses jika indikator kesalahan mengandung kata 'konfirmasi'. Kolom lain dikunci.</small>", unsafe_allow_html=True)
             
-            tanggal_terakhir_bawah = st.session_state.get('tanggal_terakhir_bawah', None)
-            if tanggal_terakhir_bawah and st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-                if hasattr(tanggal_terakhir_bawah, 'strftime'):
-                    tgl_format_bawah = tanggal_terakhir_bawah.strftime("%d-%m-%Y pukul %H:%M WIB")
-                else:
-                    tgl_format_bawah = str(tanggal_terakhir_bawah)
+tanggal_terakhir_bawah = st.session_state.get('tanggal_terakhir_bawah', None)
+if tanggal_terakhir_bawah and st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
+    if hasattr(tanggal_terakhir_bawah, 'strftime'):
+        tgl_format_bawah = tanggal_terakhir_bawah.strftime("%d-%m-%Y pukul %H:%M WIB")
+    else:
+        tgl_format_bawah = str(tanggal_terakhir_bawah)
                     
-                badge_bawah_html = f"""
-                <div style="
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    background-color: rgba(28, 131, 225, 0.12);
-                    color: #1c83e1;
-                    padding: 6px 14px;
-                    border-radius: 20px;
-                    border: 1px solid rgba(28, 131, 225, 0.25);
-                    font-size: 0.88rem;
-                    font-weight: 500;
-                    margin-bottom: 18px;
-                ">
-                    ℹ️ Hasil Review Data Penjangkauan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_format_bawah}</span>
-                </div>
-                """
-                st.markdown(badge_bawah_html, unsafe_allow_html=True)
+    badge_bawah_html = f"""
+    <div style="
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background-color: rgba(28, 131, 225, 0.12);
+        color: #1c83e1;
+        padding: 6px 14px;
+        border-radius: 20px;
+        border: 1px solid rgba(28, 131, 225, 0.25);
+        font-size: 0.88rem;
+        font-weight: 500;
+        margin-bottom: 18px;
+    ">
+        ℹ️ Hasil Review Data Penjangkauan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_format_bawah}</span>
+    </div>
+    """
+    st.markdown(badge_bawah_html, unsafe_allow_html=True)
             
-            # Render data editor jika data tersedia
-            if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-                kolom_susunan = [
-                    "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
-                    "NIK", "Tipe Sasaran", "INDIKATOR KESALAHAN DATA", "validasi hasil review", "Justifikasi"
-                ]
-                df_bawah_view = st.session_state['df_tabel_bawah'][kolom_susunan].copy()
+# Render data editor jika data tersedia
+if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
+    # Menggunakan penamaan kolom yang seragam dan sesuai dengan database
+    kolom_susunan = [
+        "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
+        "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", "Validasi Hasil Review", "Justifikasi"
+    ]
+    
+    # Ambil data dari session_state
+    df_bawah_raw = st.session_state['df_tabel_bawah'].copy()
+    
+    # 🛠️ SYNCHRONIZATION: Ubah nama kolom jika database mengembalikannya dengan case huruf yang berbeda
+    rename_dict = {}
+    for col in df_bawah_raw.columns:
+        if col.lower() == "indikator kesalahan data":
+            rename_dict[col] = "Indikator Kesalahan Data"
+        elif col.lower() == "validasi hasil review":
+            rename_dict[col] = "Validasi Hasil Review"
             
-                # 🛠️ PENYEMPURNAAN 1: Memberikan visual penanda teks "[Terkunci]" agar user tahu baris mana yang tidak boleh diisi
-                for idx, row in df_bawah_view.iterrows():
-                    ind_text = str(row['INDIKATOR KESALAHAN DATA']).lower()
-                    if "konfirmasi" not in ind_text:
-                        # Jika tidak ada kata konfirmasi dan isinya kosong/None, beri tanda text terkunci
-                        if str(row['Justifikasi']).strip() in ["", "None", "-", "nan"]:
-                            df_bawah_view.at[idx, 'Justifikasi'] = "🔒 Terkunci (Bukan Konfirmasi)"
-            
-                df_hasil_edit = st.data_editor(
-                    df_bawah_view,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika telah direvisi", default=False),
-                        "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
-                        "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
-                        "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
-                        "Kode Petugas": st.column_config.TextColumn("Kode Petugas", width=110),
-                        "Nama Kota": st.column_config.TextColumn("Nama Kota", width=120),
-                        "NIK": st.column_config.TextColumn("NIK", width=140),
-                        "Tipe Sasaran": st.column_config.TextColumn("Tipe Sasaran", width=120),
-                        "INDIKATOR KESALAHAN DATA": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
-                        "validasi hasil review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
-                        "Justifikasi": st.column_config.TextColumn("Justifikasi", help="Hanya diisi untuk indikator berunsur 'konfirmasi'", width=280),
-                    },
-                    # 🛠️ PENYEMPURNAAN 2: Mengunci TOTAL seluruh kolom lainnya. Hanya "Pilih" dan "Justifikasi" yang bisa diinteraksi secara global.
-                    disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
-                )
+    if rename_dict:
+        df_bawah_raw = df_bawah_raw.rename(columns=rename_dict)
+    
+    # 🛠️ SAFETY CHECK: Jika kolom pembantu UI belum ada di DataFrame asal, buat otomatis agar bebas KeyError
+    for col in kolom_susunan:
+        if col not in df_bawah_raw.columns:
+            if col == "Pilih":
+                df_bawah_raw["Pilih"] = False
+            else:
+                df_bawah_raw[col] = "-"
                 
-                st.markdown("<br>", unsafe_allow_html=True)
-                col_save, _ = st.columns([1, 2])
-                with col_save:
-                    if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
+    # Potong susunan kolom sesuai urutan visual yang diinginkan
+    df_bawah_view = df_bawah_raw[kolom_susunan].copy()
+            
+    # memberikan visual penanda teks "[Terkunci]" agar user tahu baris mana yang tidak boleh diisi
+    for idx, row in df_bawah_view.iterrows():
+        ind_text = str(row['Indikator Kesalahan Data']).lower()
+        if "konfirmasi" not in ind_text:
+            if str(row['Justifikasi']).strip() in ["", "None", "-", "nan"]:
+                df_bawah_view.at[idx, 'Justifikasi'] = "🔒 Terkunci (Bukan Konfirmasi)"
+            
+    df_hasil_edit = st.data_editor(
+        df_bawah_view,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika telah direvisi", default=False),
+            "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
+            "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
+            "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
+            "Kode Petugas": st.column_config.TextColumn("Kode Petugas", width=110),
+            "Nama Kota": st.column_config.TextColumn("Nama Kota", width=120),
+            "NIK": st.column_config.TextColumn("NIK", width=140),
+            "Tipe Sasaran": st.column_config.TextColumn("Tipe Sasaran", width=120),
+            "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
+            "Validasi Hasil Review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
+            "Justifikasi": st.column_config.TextColumn("Justifikasi", help="Hanya diisi untuk indikator berunsur 'konfirmasi'", width=280),
+        },
+        # Mengunci TOTAL seluruh kolom lainnya kecuali "Pilih" dan "Justifikasi"
+        disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
+    )
+                
+    st.markdown("<br>", unsafe_allow_html=True)
+    col_save, _ = st.columns([1, 2])
+    with col_save:
+        if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
                         
-                        with st.spinner("Menyimpan progres validasi..."):
-                            list_log_db = []
-                            indeks_baris_terpilih = []
-                            peringatan_justifikasi = False
+            with st.spinner("Menyimpan progres validasi..."):
+                list_log_db = []
+                indeks_baris_terpilih = []
+                peringatan_justifikasi = False
             
-                            for idx, row_edit in df_hasil_edit.iterrows():
-                                ind_text = str(row_edit['INDIKATOR KESALAHAN DATA'])
-                                text_justifikasi = str(row_edit['Justifikasi']).strip()
+                for idx, row_edit in df_hasil_edit.iterrows():
+                    ind_text = str(row_edit['Indikator Kesalahan Data'])
+                    text_justifikasi = str(row_edit['Justifikasi']).strip()
                                 
-                                is_konfirmasi = "konfirmasi" in ind_text.lower()
+                    is_konfirmasi = "konfirmasi" in ind_text.lower()
                                 
-                                # 🛠️ PENYEMPURNAAN 3: Validasi Ketat Logika Bisnis. Jika user memaksa mengetik pada baris Non-Konfirmasi, hapus isinya!
-                                if not is_konfirmasi:
-                                    if text_justifikasi != "🔒 Terkunci (Bukan Konfirmasi)" and text_justifikasi not in ["", "None", "-"]:
-                                        peringatan_justifikasi = True
-                                    text_justifikasi = "" # Paksa kosongkan text jika bukan baris konfirmasi
-                                else:
-                                    # Jika baris konfirmasi tapi isinya masih teks bawaan atau kosong, bersihkan
-                                    if text_justifikasi in ["🔒 Terkunci (Bukan Konfirmasi)", "", "None"]:
-                                        text_justifikasi = ""
+                    # Validasi Ketat Logika Bisnis
+                    if not is_konfirmasi:
+                        if text_justifikasi != "🔒 Terkunci (Bukan Konfirmasi)" and text_justifikasi not in ["", "None", "-"]:
+                            peringatan_justifikasi = True
+                        text_justifikasi = "" # Paksa kosongkan text jika bukan baris konfirmasi
+                    else:
+                        # Jika baris konfirmasi tapi isinya masih teks bawaan atau kosong, bersihkan
+                        if text_justifikasi in ["🔒 Terkunci (Bukan Konfirmasi)", "", "None"]:
+                            text_justifikasi = ""
             
-                                # Aturan pemicu simpan ke DB: di-ceklis ATAU merupakan baris konfirmasi yang sukses diisi alasannya
-                                if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi not in ["", "None"]):
-                                    list_log_db.append((
-                                        str(row_edit['Lembaga SSR']),
-                                        str(row_edit['Tanggal']),
-                                        str(row_edit['ID Klien']),
-                                        ind_text,
-                                        bool(row_edit['Pilih']),
-                                        text_justifikasi
-                                    ))
-                                    indeks_baris_terpilih.append(idx)
+                    # Aturan pemicu simpan ke DB: di-ceklis ATAU merupakan baris konfirmasi yang sukses diisi alasannya
+                    if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi not in ["", "None"]):
+                        list_log_db.append((
+                            str(row_edit['Lembaga SSR']),
+                            str(row_edit['Tanggal']),
+                            str(row_edit['ID Klien']),
+                            ind_text,
+                            bool(row_edit['Pilih']),
+                            text_justifikasi
+                        ))
+                        indeks_baris_terpilih.append(idx)
                     
-                            if len(list_log_db) > 0:
-                                if simpan_log_ke_neon(list_log_db):
-                                    df_sekarang = st.session_state['df_tabel_bawah']
-                                    df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
-                                    st.session_state['df_tabel_bawah'] = df_sisa
+                if len(list_log_db) > 0:
+                    # Mengirimkan list_log_db dalam bentuk DataFrame ke database.py agar selaras dengan fungsi simpan_detil_review_ke_neon
+                    df_to_save = pd.DataFrame(list_log_db, columns=[
+                        "Lembaga SSR", "Tanggal", "ID Klien", "Indikator Kesalahan Data", "Pilih", "Justifikasi"
+                    ])
+                    
+                    # Tambahan kolom kosong yang dibutuhkan skema tabel agar tidak memicu error di database.py
+                    df_to_save["Kode Petugas"] = "-"
+                    df_to_save["Nama Kota"] = "-"
+                    df_to_save["NIK"] = "-"
+                    df_to_save["Tipe Sasaran"] = "-"
+                    df_to_save["Validasi Hasil Review"] = "Sudah Direvisi"
+                    
+                    if simpan_detil_review_ke_neon(df_to_save):
+                        df_sekarang = st.session_state['df_tabel_bawah']
+                        df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
+                        st.session_state['df_tabel_bawah'] = df_sisa
                                     
-                                    st.success(f"🎉 Berhasil menyimpan {len(list_log_db)} baris ke database!")
+                        st.success(f"🎉 Berhasil menyimpan {len(list_log_db)} baris ke database!")
                                     
-                                    if peringatan_justifikasi:
-                                        st.warning("⚠️ Catatan: Teks Justifikasi pada baris non-konfirmasi otomatis diabaikan sistem.")
+                        if peringatan_justifikasi:
+                            st.warning("⚠️ Catatan: Teks Justifikasi pada baris non-konfirmasi otomatis diabaikan sistem.")
                                     
-                                    import time
-                                    time.sleep(1.5)
-                                    st.rerun()
-                                else:
-                                    st.error("❌ Gagal menyimpan log ke Neon Database. Periksa konfigurasi data.")
-                            else:
-                                st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' pada kolom konfirmasi sebelum menyimpan.")
+                        import time
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("❌ Gagal menyimpan log ke Neon Database. Periksa konfigurasi data.")
+                else:
+                    st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' pada kolom konfirmasi sebelum menyimpan.")
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
