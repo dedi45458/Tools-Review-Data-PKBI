@@ -136,9 +136,9 @@ st.subheader("📋 Rekap Hasil Review Data per SSR")
 # Menampilkan kalimat "Tanggal review terakhir" jika data tanggal berhasil ditemukan di database
 if st.session_state.get('tanggal_laporan'):
     # Menggunakan st.success atau format teks tebal agar terlihat kontras dan rapi
-    st.markdown(f"🔹 **Tanggal review terakhir:** `{st.session_state['tanggal_laporan']}`")
+    st.markdown(f"🔹 **Tanggal review penjangkauan terakhir:** `{st.session_state['tanggal_laporan']}`")
 else:
-    st.markdown("🔹 **Tanggal review terakhir:** _Belum ada data review yang tersimpan_")
+    st.markdown("🔹 **Tanggal review penjangkauan terakhir:** _Belum ada data review yang tersimpan_")
 
 # Render tabel jika data berhasil ditarik dari database atau setelah klik tombol proses
 if st.session_state['df_tabel_atas'] is not None and not st.session_state['df_tabel_atas'].empty:
