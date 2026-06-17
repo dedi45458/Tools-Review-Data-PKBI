@@ -635,7 +635,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     
 # ==========================================================
-# 4. LOGIKA TOMBOL EKSEKUSI (VERSI SEMPURNA DENGAN ALUR A)
+# 4. LOGIKA TOMBOL EKSEKUSI (VERSI TERINTEGRASI NEON DB)
 # ==========================================================
 if tombol_proses:
     if not files_review:
@@ -685,27 +685,32 @@ if tombol_proses:
                 # Menyusun matriks rekapitulasi (Tabel Atas)
                 df_atas = pd.DataFrame(matrix_rows)
                 df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
-                df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
                 
-                # Masukkan ke Session State UI
+                # Biarkan UI memilikinya sebagai Index
+                df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
                 st.session_state['df_tabel_atas'] = df_atas
                 st.session_state['df_tabel_bawah'] = df_bawah
                 
-                # 🔥 INTEGRASI ALUR A: PENYIMPANAN OTOMATIS KE DATABASE NEON 🔥
+                # 🔥 INTEGRASI ALUR A: PENYIMPANAN OTOMATIS KE TABEL agregasi_hasil_review_penjangkauan 🔥
                 try:
-                    # Impor fungsi penyimpanan (sesuaikan nama fungsinya jika di database.py Anda menggunakan nama lain)
                     from database import simpan_agregasi_ke_neon
                     
-                    # Kirim df_atas yang baru saja terbentuk untuk disimpan/diarsip ke Neon
-                    sukses_simpan = simpan_agregasi_ke_neon(df_atas)
+                    # 1. PENTING: Reset index & copy agar "INDIKATOR KESALAHAN DATA" bisa dibaca DB sebagai kolom
+                    df_to_db = df_atas.copy().reset_index()
+                    
+                    # 2. Tangkap nama file sebagai referensi arsip DB
+                    nama_file_gabungan = ", ".join([f.name for f in files_review])
+                    
+                    # 3. Eksekusi pengiriman
+                    sukses_simpan = simpan_agregasi_ke_neon(df_to_db, nama_file_gabungan)
                     
                     if sukses_simpan:
-                        st.toast("💾 Hasil agregasi berhasil disimpan ke database Neon!", icon="✅")
+                        st.toast("💾 Hasil agregasi berhasil disimpan ke tabel agregasi_hasil_review_penjangkauan!", icon="✅")
                     else:
-                        st.toast("⚠️ Validasi selesai, namun gagal menyimpan arsip ke database.", icon="❌")
+                        st.warning("⚠️ Validasi UI selesai, tapi script database me-return False.")
                 except Exception as e:
-                    # Pengaman jika database mengalami kendala jaringan agar UI aplikasi tidak crash/white-screen
-                    st.warning(f"⚠️ Gagal menghubungkan arsip ke database Neon: {str(e)}")
+                    # Menggunakan st.error agar masalah koneksi / typo nama tabel langsung ketahuan
+                    st.error(f"⚠️ Gagal mengeksekusi query penyimpanan ke Neon: {str(e)}")
                     
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
@@ -714,7 +719,7 @@ if tombol_proses:
             # Memicu perubahan state pemrosesan selesai
             st.session_state['proses_selesai'] = True
             
-            # Memaksa rerun sekali agar komponen visual Tab 1 & Tab 2 langsung membaca data terbaru secara instan
+            # Memaksa rerun sekali agar visualisasi merender ulang
             st.rerun()
 
 # ==========================================================
