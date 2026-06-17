@@ -799,7 +799,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             tanggal_terakhir = st.session_state.get('tanggal_terakhir_review', None)
                     
             # =========================================================================
-            # 📅 TAMPILKAN BADGE TANGGAL REVIEW TERAKHIR (Native Streamlit Info)
+            # 📅 TAMPILKAN BADGE KAPSUL PAS SEUKURAN KALIMAT (HTML Inline-Block)
             # =========================================================================
             if tanggal_terakhir:
                 if hasattr(tanggal_terakhir, 'strftime'):
@@ -807,9 +807,25 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 else:
                     tgl_format = str(tanggal_terakhir)
                     
-                # Membuat badge kotak biru elegan bawaan Streamlit
-                st.info(f"📅 **Review Data Penjangkauan SR terakhir tanggal :** {tgl_format}")
-                st.markdown("<br>", unsafe_allow_html=True)
+                # Menggunakan inline-flex agar lebar kotak otomatis pas mengikuti panjang teksnya saja
+                badge_html = f"""
+                <div style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    background-color: rgba(28, 131, 225, 0.12);
+                    color: #1c83e1;
+                    padding: 6px 14px;
+                    border-radius: 20px;
+                    border: 1px solid rgba(28, 131, 225, 0.25);
+                    font-size: 0.88rem;
+                    font-weight: 500;
+                    margin-bottom: 18px;
+                ">
+                    ℹ️ Review Data Penjangkauan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_format}</span>
+                </div>
+                """
+                st.markdown(badge_html, unsafe_allow_html=True)
                 
             # =========================================================================
             # 🛠️ PROSES RENDERING MATRIKS UI STREAMLIT
