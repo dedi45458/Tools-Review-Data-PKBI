@@ -128,17 +128,51 @@ if st.session_state['df_tabel_atas'] is None:
 
 
 # ==========================================================
-# 🆕 MENAMPILKAN TABEL REKAP & TANGGAL REVIEW DI UI
+# 🆕 MENAMPILKAN TABEL REKAP & TANGGAL REVIEW DI UI (VERSI BADGE BIRU)
 # ==========================================================
 st.write("---") # Garis pembatas visual
 st.subheader("📋 Rekap Hasil Review Data per SSR")
 
-# Menampilkan kalimat "Tanggal review terakhir" jika data tanggal berhasil ditemukan di database
+# Menampilkan kalimat dengan badge biru tipis
 if st.session_state.get('tanggal_laporan'):
-    # Menggunakan st.success atau format teks tebal agar terlihat kontras dan rapi
-    st.markdown(f"🔹 **Tanggal review penjangkauan terakhir:** `{st.session_state['tanggal_laporan']}`")
+    tanggal_str = str(st.session_state['tanggal_laporan'])
+    st.markdown(
+        f"""
+        <div style="
+            display: inline-block;
+            background-color: #e3f2fd; 
+            color: #0d47a1; 
+            padding: 6px 12px; 
+            border-radius: 6px; 
+            font-size: 14px; 
+            font-weight: 600;
+            border: 1px solid #bbdefb;
+            margin-bottom: 15px;
+        ">
+            📅 Tanggal review penjangkauan terakhir: {tanggal_str}
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
 else:
-    st.markdown("🔹 **Tanggal review penjangkauan terakhir:** _Belum ada data review yang tersimpan_")
+    st.markdown(
+        """
+        <div style="
+            display: inline-block;
+            background-color: #f5f5f5; 
+            color: #616161; 
+            padding: 6px 12px; 
+            border-radius: 6px; 
+            font-size: 14px; 
+            font-weight: 600;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 15px;
+        ">
+            📅 Tanggal review penjangkauan terakhir: Belum ada data terekam
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
 
 # Render tabel jika data berhasil ditarik dari database atau setelah klik tombol proses
 if st.session_state['df_tabel_atas'] is not None and not st.session_state['df_tabel_atas'].empty:
