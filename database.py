@@ -438,3 +438,42 @@ def ambil_detil_terakhir_dari_neon():
         return pd.DataFrame(), None
     finally:
         conn.close()
+
+def ambil_status_storage_neon():
+    """
+    Mengambil ukuran database aktif saat ini di Neon 
+    dan menghitung sisa storage berdasarkan kuota paket Free Tier (500 MB).
+    """
+    conn = dapatkan_koneksi_neon()
+    if conn is None:
+        return None
+        
+    try:
+        with conn.cursor() as cur:
+            # 1. Ambil nama database yang sedang terhubung saat ini
+            cur.execute("SELECT current_database();")
+            db_name = cur.fetchone()[0]
+            
+            # 2. Hitung ukuran database dalam satuan Bytes
+            cur.execute("SELECT pg_database_size(%s);", (db_name,))
+            size_bytes = cur.fetchone()[0]
+            
+            # 3. Konversi ukuran ke Megabytes (MB)
+            size_mb = size_bytes / (1024 * 1024)
+            
+            # Batas kuota paket gratis Neon (Free Tier) = 500 MB
+            kuota_maksimal_mb = 500.0
+            sisa_mb = max(0.0, kuota_maksimal_mb - size_mb)
+            persen_terpakai = min(100.0, (size_mb / kuota_maksimal_mb) * 100)
+            
+            return {
+                "terpakai_mb": round(size_mb, 2),
+                "sisa_mb": round(sisa_mb, 2),
+                "total_mb": kuota_maksimal_mb,
+                "persen_terpakai": round(persen_terpakai, 1)
+            }
+    except Exception as e:
+        print("Error saat mengambil ukuran storage:", e)
+        return None
+    finally:
+        conn.close()
