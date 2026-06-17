@@ -425,7 +425,7 @@ def ambil_detil_terakhir_dari_neon():
             if not rows:
                 return pd.DataFrame(), max_timestamp
                 
-            # Rekonstruksi DataFrame
+            # Rekonstruksi DataFrame menggunakan nama kolom PascalCase yang sinkron dengan UI
             df = pd.DataFrame(rows, columns=[
                 "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", 
                 "Nama Kota", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", 
