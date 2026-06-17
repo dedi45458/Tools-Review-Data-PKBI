@@ -88,19 +88,40 @@ if 'df_tabel_atas' not in st.session_state: st.session_state['df_tabel_atas'] = 
 if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = []
 
 # ==========================================================
-# FUNGSI & INISIALISASI KEYWORD MEDSOS (Tersinkron Neon DB)
+# 1. GLOBAL STATE INISIALISASI (Tersinkron Neon DB)
 # ==========================================================
 
-# 1. Inisialisasi dari Database
+# --- A. Inisialisasi Keyword Medsos ---
 if 'medsoc_keywords' not in st.session_state:
     # Memanggil fungsi dari database.py yang mengambil data dari tabel 'keyword_medsos'
     st.session_state['medsoc_keywords'] = ambil_keyword_medsos_db()
 
 def ambil_keyword_medsos():
-    """Mengambil daftar keyword medsos aktif dari session state"""
-    # Mengembalikan list yang sudah diurutkan dari database
-    return sorted(st.session_state['medsoc_keywords'])
+    """Mengambil daftar keyword medsos aktif dari session state secara aman"""
+    keywords = st.session_state.get('medsoc_keywords', [])
+    return sorted(keywords) if keywords else []
 
+
+# --- B. OPTIMASI ALUR B: Tarik Data Agregasi Terakhir Langsung di Awal Skrip ---
+# Ini memastikan data rekap dari database Neon SUDAH SIAP sebelum layout Tab 1 dibangun!
+if 'df_tabel_atas' not in st.session_state or 'tanggal_terakhir_review' not in st.session_state:
+    try:
+        # Panggil fungsi penarik data agregasi terakhir dari database.py
+        df_dari_db, max_date = ambil_agregasi_terakhir_dari_neon()
+        
+        if df_dari_db is not None and not df_dari_db.empty:
+            st.session_state['df_tabel_atas'] = df_dari_db
+            st.session_state['tanggal_terakhir_review'] = max_date
+        else:
+            st.session_state['df_tabel_atas'] = pd.DataFrame()
+            st.session_state['tanggal_terakhir_review'] = None
+    except Exception as e:
+        # Menghindari crash jika database bermasalah, di-set kosong secara aman
+        st.session_state['df_tabel_atas'] = pd.DataFrame()
+        st.session_state['tanggal_terakhir_review'] = None
+
+
+# --- C. Desain Judul Utama ---
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu (Neon DB)</div>', unsafe_allow_html=True)
 
@@ -773,72 +794,44 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         with tab1:
             st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
             
-            # Ambil data lama dan tanggal dari session state (jika sudah ada dari proses upload)
+            # Tinggal memanggil data yang sudah ditarik di awal tadi secara instan
             df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame()).copy()
             tanggal_terakhir = st.session_state.get('tanggal_terakhir_review', None)
-            
-            # =========================================================================
-            # 🔥 INTEGRASI ALUR B: OTOMATIS TARIK DATA DARI NEON SAAT APLIKASI DI-LAUNCH / REFRESH
-            # =========================================================================
-            if df_atas_view.empty and not st.session_state.get('proses_selesai', False):
-                try:
-                    # 1. Impor nama fungsi yang sesuai dengan database.py Anda
-                    from database import ambil_agregasi_terakhir_dari_neon
-                    
-                    # 2. Tangkap 2 nilai sekaligus dari database
-                    df_dari_db, max_date = ambil_agregasi_terakhir_dari_neon()
-                    
-                    if df_dari_db is not None and not df_dari_db.empty:
-                        df_atas_view = df_dari_db.copy()
-                        tanggal_terakhir = max_date
-                        
-                        # Simpan ke session state agar tetap tersimpan saat pindah antar-tab
-                        st.session_state['df_tabel_atas'] = df_dari_db
-                        st.session_state['tanggal_terakhir_review'] = max_date
-                except Exception as e:
-                    # Jika database offline, dilewati agar aplikasi utama tidak macet total
-                    pass
                     
             # =========================================================================
-            # 📅 PERSYARATAN 2: TAMPILKAN TEKS TANGGAL REVIEW TERAKHIR DI ATAS TABEL
+            # 📅 TAMPILKAN TEKS TANGGAL REVIEW TERAKHIR
             # =========================================================================
             if tanggal_terakhir:
-                # Memformat tampilan objek tanggal dari database menjadi format DD-MM-YYYY
                 if hasattr(tanggal_terakhir, 'strftime'):
                     tgl_format = tanggal_terakhir.strftime("%d-%m-%Y")
                 else:
                     tgl_format = str(tanggal_terakhir)
                     
                 st.markdown(f"Review Data Penjangkauan SR terakhir tanggal : **{tgl_format}**")
-                st.markdown("<br>", unsafe_allow_html=True) # Jarak pembatas teks dan tabel
+                st.markdown("<br>", unsafe_allow_html=True)
                 
             # =========================================================================
-            # 🛠️ PERSYARATAN 1: PROSES RENDER AUTOMATIC TAMPILAN MATRIKS UI
+            # 🛠️ PROSES RENDER TAMPILAN MATRIKS UI
             # =========================================================================
             if not df_atas_view.empty:
-                # PENGAMAN INDEKS DATA: Kembalikan indeks dari database menjadi kolom biasa
                 if df_atas_view.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_atas_view.columns:
                     df_atas_view = df_atas_view.reset_index()
                     
                 kolom_indikator = 'INDIKATOR KESALAHAN DATA'
                 kolom_ssr = [c for c in df_atas_view.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
                 
-                # Pastikan data SSR dikonversi ke numerik terlebih dahulu
                 for col in kolom_ssr:
                     df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
                 
-                # Filter hanya SSR yang memiliki temuan data
                 ssr_aktif = [col for col in kolom_ssr if df_atas_view[col].sum() > 0]
                 kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
                 df_final = df_atas_view[[c for c in kolom_final if c in df_atas_view.columns]].copy()
                 
-                # OPTIMASI FORMATTING: Hanya ubah kolom SSR menjadi string untuk mengganti angka 0 menjadi '-'
                 df_display = df_final.copy()
                 for col in ssr_aktif:
                     if col in df_display.columns:
                         df_display[col] = df_display[col].astype(str).replace({'0': '-', '0.0': '-'})
                 
-                # Konfigurasi kolom Streamlit (Menggunakan ProgressColumn agar indikator % tampak profesional)
                 column_config = {
                     kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
                     "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
@@ -847,7 +840,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 for col in ssr_aktif:
                     column_config[col] = st.column_config.TextColumn(col, width="small")
             
-                # Render Tabel Ke Layar Aplikasi
                 st.dataframe(
                     df_display, 
                     use_container_width=True, 
