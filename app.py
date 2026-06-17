@@ -2,22 +2,21 @@ import streamlit as st
 import pandas as pd
 import io
 import re
-# 🔄 UBAH BARIS INI: Menggunakan alias 'dt' agar tidak bentrok di baris 780
-import datetime as dt  
+from datetime import datetime
 
 # ==========================================================
-# IMPORT FUNGSI NEON DARI FILE database.py (Disatukan agar rapi)
+# IMPORT FUNGSI NEON DARI FILE database.py
 # ==========================================================
 from database import (
     dapatkan_koneksi_neon,
     simpan_log_ke_neon,
     jalankan_agregasi_tren,
     ambil_rekap_tren,
-    hitung_dan_ambil_log_db,     
-    ambil_keyword_medsos_db,     
+    hitung_dan_ambil_log_db,    # <--- TAMBAHKAN BARIS INI
+    ambil_keyword_medsos_db,     # <--- Tambahkan fungsi baru
     tambah_keyword_medsos_db,
     simpan_agregasi_ke_neon,
-    ambil_agregasi_terakhir_dari_neon  # <-- Cukup di-import sekali di dalam blok ini
+    ambil_agregasi_terakhir_dari_neon
 )
 
 # ==========================================================
@@ -102,37 +101,6 @@ def ambil_keyword_medsos():
     # Mengembalikan list yang sudah diurutkan dari database
     return sorted(st.session_state['medsoc_keywords'])
 
-
-# =========================================================================
-# 🗄️ STRUKTUR SESSION STATE & AMBIL DATA HISTORIS DARI NEON
-# =========================================================================
-
-# Inisialisasi state untuk tabel agregasi atas
-if 'df_tabel_atas' not in st.session_state:
-    st.session_state['df_tabel_atas'] = None
-
-if 'proses_selesai' not in st.session_state:
-    st.session_state['proses_selesai'] = False
-
-# =========================================================================
-# 🔥 OTOMATIS AMBIL DATA DARI NEON DI AWAL
-# =========================================================================
-if st.session_state['df_tabel_atas'] is None and not st.session_state['proses_selesai']:
-    try:
-        # 🔄 PERBAIKAN 1: Tangkap DUA variabel secara bersamaan
-        df_dari_db, tgl_db = ambil_agregasi_terakhir_dari_neon()
-        
-        # 🔄 PERBAIKAN 2: Pastikan df_dari_db adalah DataFrame yang sah, bukan None
-        if df_dari_db is not None and not df_dari_db.empty:
-            st.session_state['df_tabel_atas'] = df_dari_db
-            
-    except Exception as e:
-        print(f"Gagal memuat data awal Neon: {e}")
-
-
-# =========================================================================
-# 🎨 TAMPILAN HEADER / JUDUL UTAMA APLIKASI
-# =========================================================================
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu (Neon DB)</div>', unsafe_allow_html=True)
 
@@ -730,17 +698,19 @@ if tombol_proses:
                     # 1. PENTING: Reset index & copy agar "INDIKATOR KESALAHAN DATA" bisa dibaca DB sebagai kolom
                     df_to_db = df_atas.copy().reset_index()
                     
-                    # 2. Eksekusi pengiriman tanpa perlu menyisipkan nama_file_gabungan
-                    # Ini akan membuat fungsi otomatis menggunakan datetime.now().date()
-                    sukses_simpan = simpan_agregasi_ke_neon(df_to_db)
+                    # 2. Tangkap nama file sebagai referensi arsip DB
+                    nama_file_gabungan = ", ".join([f.name for f in files_review])
+                    
+                    # 3. Eksekusi pengiriman
+                    sukses_simpan = simpan_agregasi_ke_neon(df_to_db, nama_file_gabungan)
                     
                     if sukses_simpan:
-                        st.toast("💾 Hasil agregasi berhasil disimpan ke database Neon!", icon="✅")
+                        st.toast("💾 Hasil agregasi berhasil disimpan ke tabel agregasi_hasil_review_penjangkauan!", icon="✅")
                     else:
-                        st.error("⚠️ Proses simpan me-return False. Cek log terminal untuk detail error database.")
-                
+                        st.warning("⚠️ Validasi UI selesai, tapi script database me-return False.")
                 except Exception as e:
-                    st.error(f"⚠️ Gagal mengeksekusi script database: {str(e)}")
+                    # Menggunakan st.error agar masalah koneksi / typo nama tabel langsung ketahuan
+                    st.error(f"⚠️ Gagal mengeksekusi query penyimpanan ke Neon: {str(e)}")
                     
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
@@ -749,9 +719,7 @@ if tombol_proses:
             # Memicu perubahan state pemrosesan selesai
             st.session_state['proses_selesai'] = True
             
-            # (Opsional) Jika ingin pesan sukses/gagal terbaca, berikan jeda sedikit sebelum rerun
-            import time
-            time.sleep(1.5) 
+            # Memaksa rerun sekali agar visualisasi merender ulang
             st.rerun()
 
 # ==========================================================
@@ -782,7 +750,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 
-        tanggal_hari_ini = dt.datetime.now().strftime('%d %B %Y')
+        tanggal_hari_ini = datetime.now().strftime('%d %B %Y')
         st.markdown(f"""
             <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
                 📅 <b>Executive Review</b> | Tanggal: {tanggal_hari_ini}
@@ -800,21 +768,12 @@ if menu_pilihan == "🎯 Dashboard Review Data":
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        tab1, tab2 = st.tabs(["📋 Hasil Review SR", "📈 Analisis Tren Semester"])
+        tab1, tab2 = st.tabs(["📋 Rekap Kesalahan (Matriks)", "📈 Analisis Tren Semester"])
 
         with tab1:
             st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
-    
-            # 🔄 PERBAIKAN 3: Ambil dengan cara yang aman tanpa Unpacking
-            df_state = st.session_state.get('df_tabel_atas')
             
-            # Render tabel HANYA jika df_state berisi DataFrame
-            if df_state is not None and isinstance(df_state, pd.DataFrame) and not df_state.empty:
-                df_atas_view = df_state.copy()
-            elif isinstance(df_state, pd.DataFrame) and not df_state.empty:
-                 df_atas_view = df_state.copy()
-            else:
-                df_atas_view = pd.DataFrame()
+            df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame()).copy()
             
             # =========================================================================
             # 🔥 INTEGRASI ALUR B: OTOMATIS TARIK DATA DARI NEON SAAT APLIKASI DI-LAUNCH
@@ -858,13 +817,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     if col in df_display.columns:
                         df_display.loc[df_display[col] == '0', col] = '-'
                 
-                # 🛠️ PENGAMAN 2: Memperbaiki typo "indicator" menjadi "indikator" agar UI rapi
                 column_config = {
                     kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=300),
-                    "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
+                    "Jumlah per indicator": st.column_config.NumberColumn("Total", width="small"),
                     "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
                 }
-                
                 for col in ssr_aktif:
                     column_config[col] = st.column_config.TextColumn(col, width="small")
             
@@ -876,7 +833,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 )
             else:
                 # Menggunakan st.caption/info yang netral agar estetik saat data benar-benar nihil
-                st.info("✨ Belum ada data review historis. Silakan jalankan validasi di sidebar atau pastikan database terisi.")
+                st.info("✨ Belum ada data review. Silakan jalankan validasi di sidebar atau pastikan database terisi.")
 
 
             # --- BARIS 3: DETAIL DATA ---
