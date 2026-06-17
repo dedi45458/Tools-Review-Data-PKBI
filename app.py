@@ -876,7 +876,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 st.info("✨ Belum ada data review dalam database Neon. Silakan lakukan proses validasi baru via unggah file Excel di sidebar.")
 
 
-            # --- BARIS 3: DETAIL DATA ---
+            # =========================================================================
+            # TABEL HASIL REVIEW PENJANGKAUAN DETIL PER BARIS
+            # =========================================================================
             st.markdown("### 🔍 Hasil Review Penjangkauan")
             if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
                 kolom_susunan = [
