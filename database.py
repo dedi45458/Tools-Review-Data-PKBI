@@ -349,3 +349,98 @@ def ambil_agregasi_terakhir_dari_neon():
         return pd.DataFrame(), None
     finally:
         conn.close()
+
+def simpan_detil_review_ke_neon(df_detil):
+    """
+    1. MENJAWAB SOAL NO 1:
+    Menyimpan seluruh baris hasil validasi mentah ke tabel hasil_review_penjangkauan_detil_per_baris.
+    Menggunakan satu penanda waktu (Timestamp Jakarta) yang seragam untuk satu batch klik validasi.
+    """
+    if df_detil is None or df_detil.empty:
+        return False
+        
+    conn = dapatkan_koneksi_neon()
+    if not conn:
+        return False
+        
+    try:
+        with conn.cursor() as cur:
+            # Dapatkan satu timestamp Jakarta yang sama untuk seluruh batch entri ini
+            cur.execute("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')")
+            batch_timestamp = cur.fetchone()[0]
+            
+            query = """
+                INSERT INTO hasil_review_penjangkauan_detil_per_baris 
+                (created_at, lembaga_ssr, tanggal, id_klien, indikator_kesalahan_data, is_revisi, justifikasi)
+                VALUES (%s, %s, %s, %s, %s, FALSE, '');
+            """
+            
+            # Siapkan list data berupa tuple untuk dieksekusi secara cepat (executemany)
+            list_data = []
+            for _, row in df_detil.iterrows():
+                list_data.append((
+                    batch_timestamp,
+                    str(row.get('Lembaga SSR', '')),
+                    str(row.get('Tanggal', '')),
+                    str(row.get('ID Klien', '')),
+                    str(row.get('INDIKATOR KESALAHAN DATA', row.get('Indikator Kesalahan Data', '')))
+                ))
+                
+            cur.executemany(query, list_data)
+            conn.commit()
+            return True
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Gagal menyimpan detil review ke Neon DB: {e}")
+        return False
+    finally:
+        conn.close()
+
+def ambil_detil_terakhir_dari_neon():
+    """
+    2. MENJAWAB SOAL NO 2:
+    Mengambil data review detil dari batch terakhir berdasarkan timestamp 'created_at' terbaru.
+    """
+    conn = dapatkan_koneksi_neon()
+    if not conn:
+        return pd.DataFrame(), None
+        
+    try:
+        with conn.cursor() as cur:
+            # Ambil timestamp terbaru dari data yang tersimpan
+            cur.execute("SELECT MAX(created_at) FROM hasil_review_penjangkauan_detil_per_baris")
+            max_timestamp = cur.fetchone()[0]
+            
+            if not max_timestamp:
+                return pd.DataFrame(), None
+                
+            # Ambil seluruh data yang memiliki timestamp tepat sama dengan batch terakhir tersebut
+            cur.execute("""
+                SELECT lembaga_ssr, tanggal, id_klien, indikator_kesalahan_data, is_revisi, justifikasi
+                FROM hasil_review_penjangkauan_detil_per_baris
+                WHERE created_at = %s
+            """, (max_timestamp,))
+            rows = cur.fetchall()
+            
+            if not rows:
+                return pd.DataFrame(), max_timestamp
+                
+            # Rekonstruksi kembali ke DataFrame agar siap dibaca UI Streamlit
+            df = pd.DataFrame(rows, columns=[
+                "Lembaga SSR", "Tanggal", "ID Klien", "INDIKATOR KESALAHAN DATA", "Pilih", "Justifikasi"
+            ])
+            
+            # Pastikan tipe data boolean & isi kolom pelengkap UI yang tidak masuk skema database
+            df["Pilih"] = df["Pilih"].astype(bool)
+            df["Kode Petugas"] = "-"
+            df["Nama Kota"] = "-"
+            df["NIK"] = "-"
+            df["Tipe Sasaran"] = "-"
+            df["validasi hasil review"] = "-"
+            
+            return df, max_timestamp
+    except Exception as e:
+        st.error(f"Gagal memuat histori detil review dari Neon: {e}")
+        return pd.DataFrame(), None
+    finally:
+        conn.close()
