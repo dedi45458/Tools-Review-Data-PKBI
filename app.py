@@ -635,7 +635,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     
 # ==========================================================
-# 4. LOGIKA TOMBOL EKSEKUSI
+# 4. LOGIKA TOMBOL EKSEKUSI (VERSI SEMPURNA DENGAN ALUR A)
 # ==========================================================
 if tombol_proses:
     if not files_review:
@@ -682,18 +682,40 @@ if tombol_proses:
                     r_dict["%"] = (total_ind_err / total_seluruh_kesalahan * 100) if total_seluruh_kesalahan > 0 else 0.0
                     matrix_rows.append(r_dict)
                 
+                # Menyusun matriks rekapitulasi (Tabel Atas)
                 df_atas = pd.DataFrame(matrix_rows)
                 df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
                 df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
                 
+                # Masukkan ke Session State UI
                 st.session_state['df_tabel_atas'] = df_atas
                 st.session_state['df_tabel_bawah'] = df_bawah
                 
+                # 🔥 INTEGRASI ALUR A: PENYIMPANAN OTOMATIS KE DATABASE NEON 🔥
+                try:
+                    # Impor fungsi penyimpanan (sesuaikan nama fungsinya jika di database.py Anda menggunakan nama lain)
+                    from database import simpan_agregasi_ke_neon
+                    
+                    # Kirim df_atas yang baru saja terbentuk untuk disimpan/diarsip ke Neon
+                    sukses_simpan = simpan_agregasi_ke_neon(df_atas)
+                    
+                    if sukses_simpan:
+                        st.toast("💾 Hasil agregasi berhasil disimpan ke database Neon!", icon="✅")
+                    else:
+                        st.toast("⚠️ Validasi selesai, namun gagal menyimpan arsip ke database.", icon="❌")
+                except Exception as e:
+                    # Pengaman jika database mengalami kendala jaringan agar UI aplikasi tidak crash/white-screen
+                    st.warning(f"⚠️ Gagal menghubungkan arsip ke database Neon: {str(e)}")
+                    
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
 
+            # Memicu perubahan state pemrosesan selesai
             st.session_state['proses_selesai'] = True
+            
+            # Memaksa rerun sekali agar komponen visual Tab 1 & Tab 2 langsung membaca data terbaru secara instan
+            st.rerun()
 
 # ==========================================================
 # 5. RENDER LAYOUT UTAMA (BERDASARKAN PILIHAN MENU)
@@ -748,7 +770,33 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             
             df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame()).copy()
             
+            # =========================================================================
+            # 🔥 INTEGRASI ALUR B: OTOMATIS TARIK DATA DARI NEON SAAT APLIKASI DI-LAUNCH
+            # =========================================================================
+            if df_atas_view.empty and not st.session_state.get('proses_selesai', False):
+                try:
+                    # Panggil fungsi penarik data agregasi terakhir dari database.py Anda
+                    from database import ambil_agregasi_terakhir_neon
+                    
+                    df_dari_db = ambil_agregasi_terakhir_neon()
+                    if df_dari_db is not None and not df_dari_db.empty:
+                        df_atas_view = df_dari_db.copy()
+                        # Simpan ke session state agar komponen UI lain ikut tersinkronisasi
+                        st.session_state['df_tabel_atas'] = df_dari_db
+                except Exception as e:
+                    # Jika database offline/gagal, dibiarkan lolos agar aplikasi tidak macet
+                    pass
+            
+            # 🛠️ PENGAMAN INDEKS DATA:
+            # Karena pada Alur A 'INDIKATOR KESALAHAN DATA' dijadikan indeks (set_index), 
+            # kita kembalikan menjadi kolom biasa agar logika ekstraksi string di bawah berjalan lancar.
             if not df_atas_view.empty:
+                if df_atas_view.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_atas_view.columns:
+                    df_atas_view = df_atas_view.reset_index()
+            
+                # =========================================================================
+                # PROSES RENDER TAMPILAN MATRIKS UI
+                # =========================================================================
                 kolom_indikator = 'INDIKATOR KESALAHAN DATA'
                 kolom_ssr = [c for c in df_atas_view.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
                 
@@ -766,12 +814,12 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 
                 column_config = {
                     kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=300),
-                    "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
+                    "Jumlah per indicator": st.column_config.NumberColumn("Total", width="small"),
                     "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
                 }
                 for col in ssr_aktif:
                     column_config[col] = st.column_config.TextColumn(col, width="small")
-
+            
                 st.dataframe(
                     df_display, 
                     use_container_width=True, 
@@ -779,7 +827,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     hide_index=True
                 )
             else:
-                st.info("✨ Tidak ada rekapan karena data bersih.")
+                # Menggunakan st.caption/info yang netral agar estetik saat data benar-benar nihil
+                st.info("✨ Belum ada data review. Silakan jalankan validasi di sidebar atau pastikan database terisi.")
 
 
             # --- BARIS 3: DETAIL DATA ---
