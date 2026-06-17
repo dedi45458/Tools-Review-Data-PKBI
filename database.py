@@ -211,3 +211,110 @@ def hitung_dan_ambil_log_db():
         conn.close()
         
     return dict_revisi, dict_justifikasi
+
+def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
+    """
+    Menyimpan otomatis hasil rekap data per SSR ke database Neon.
+    Menghapus data lama pada tanggal yang sama terlebih dahulu untuk menghindari duplikasi.
+    """
+    if tanggal_review is None:
+        tanggal_review = datetime.now().date()
+        
+    conn = dapatkan_koneksi_neon()
+    if not conn:
+        return False
+        
+    try:
+        with conn.cursor() as cur:
+            # 1. Bersihkan data lama pada tanggal yang sama agar tidak menumpuk/duplikat
+            cur.execute(
+                "DELETE FROM agregasi_hasil_review_penjangkauan WHERE tanggal_review = %s", 
+                (tanggal_review,)
+            )
+            
+            kolom_indikator = 'INDIKATOR KESALAHAN DATA'
+            # Ambil hanya nama-nama SSR (kecuali kolom indikator, total, dan persen)
+            kolom_ssr = [c for c in df_tabel_atas.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
+            
+            # 2. Iterasi baris dan kolom untuk dimasukkan ke DB
+            for _, row in df_tabel_atas.iterrows():
+                indikator = row[kolom_indikator]
+                for ssr in kolom_ssr:
+                    try:
+                        jumlah = int(float(row[ssr]))
+                    except:
+                        jumlah = 0
+                    
+                    # Simpan hanya jika jumlah kesalahan lebih dari 0 demi efisiensi storage Neon
+                    if jumlah > 0:
+                        cur.execute("""
+                            INSERT INTO agregasi_hasil_review_penjangkauan 
+                            (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
+                            VALUES (%s, %s, %s, %s)
+                        """, (tanggal_review, ssr, indikator, jumlah))
+                        
+            conn.commit()
+            return True
+    except Exception as e:
+        print("Error simpan agregasi ke Neon:", e)
+        return False
+    finally:
+        conn.close()
+
+def ambil_agregasi_terakhir_dari_neon():
+    """
+    Mengambil data review terakhir dari Neon DB dan merekonstruksinya 
+    kembali menjadi format DataFrame wide yang siap dibaca oleh UI Streamlit.
+    """
+    conn = dapatkan_koneksi_neon()
+    if not conn:
+        return pd.DataFrame(), None
+        
+    try:
+        with conn.cursor() as cur:
+            # 1. Cari tanggal review paling terakhir/terbaru
+            cur.execute("SELECT MAX(tanggal_review) FROM agregasi_hasil_review_penjangkauan")
+            max_date = cur.fetchone()[0]
+            if not max_date:
+                return pd.DataFrame(), None
+                
+            # 2. Ambil semua data kesalahan pada tanggal tersebut
+            cur.execute("""
+                SELECT nama_ssr, indikator_kesalahan, jumlah_kesalahan 
+                FROM agregasi_hasil_review_penjangkauan 
+                WHERE tanggal_review = %s
+            """, (max_date,))
+            rows = cur.fetchall()
+            
+            if not rows:
+                return pd.DataFrame(), max_date
+                
+            # 3. Transformasi kembali dari format baris (long) ke format tabel lebar (wide)
+            df_long = pd.DataFrame(rows, columns=['nama_ssr', 'indikator_kesalahan', 'jumlah_kesalahan'])
+            df_wide = df_long.pivot(
+                index='indikator_kesalahan', 
+                columns='nama_ssr', 
+                values='jumlah_kesalahan'
+            ).fillna(0).astype(int)
+            
+            # Kembalikan kolom indeks menjadi kolom biasa
+            df_wide = df_wide.reset_index()
+            df_wide.rename(columns={'indikator_kesalahan': 'INDIKATOR KESALAHAN DATA'}, inplace=True)
+            
+            # Hitung ulang kolom 'Jumlah per indikator'
+            kolom_ssr = [c for c in df_wide.columns if c != 'INDIKATOR KESALAHAN DATA']
+            df_wide['Jumlah per indikator'] = df_wide[kolom_ssr].sum(axis=1)
+            
+            # Hitung ulang kolom presentase (%)
+            total_semua = df_wide['Jumlah per indikator'].sum()
+            if total_semua > 0:
+                df_wide['%'] = ((df_wide['Jumlah per indikator'] / total_semua) * 100).round().astype(int)
+            else:
+                df_wide['%'] = 0
+                
+            return df_wide, max_date
+    except Exception as e:
+        print("Error ambil agregasi terakhir:", e)
+        return pd.DataFrame(), None
+    finally:
+        conn.close()
