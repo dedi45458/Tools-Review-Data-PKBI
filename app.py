@@ -698,19 +698,17 @@ if tombol_proses:
                     # 1. PENTING: Reset index & copy agar "INDIKATOR KESALAHAN DATA" bisa dibaca DB sebagai kolom
                     df_to_db = df_atas.copy().reset_index()
                     
-                    # 2. Tangkap nama file sebagai referensi arsip DB
-                    nama_file_gabungan = ", ".join([f.name for f in files_review])
-                    
-                    # 3. Eksekusi pengiriman
-                    sukses_simpan = simpan_agregasi_ke_neon(df_to_db, nama_file_gabungan)
+                    # 2. Eksekusi pengiriman tanpa perlu menyisipkan nama_file_gabungan
+                    # Ini akan membuat fungsi otomatis menggunakan datetime.now().date()
+                    sukses_simpan = simpan_agregasi_ke_neon(df_to_db)
                     
                     if sukses_simpan:
-                        st.toast("💾 Hasil agregasi berhasil disimpan ke tabel agregasi_hasil_review_penjangkauan!", icon="✅")
+                        st.toast("💾 Hasil agregasi berhasil disimpan ke database Neon!", icon="✅")
                     else:
-                        st.warning("⚠️ Validasi UI selesai, tapi script database me-return False.")
+                        st.error("⚠️ Proses simpan me-return False. Cek log terminal untuk detail error database.")
+                
                 except Exception as e:
-                    # Menggunakan st.error agar masalah koneksi / typo nama tabel langsung ketahuan
-                    st.error(f"⚠️ Gagal mengeksekusi query penyimpanan ke Neon: {str(e)}")
+                    st.error(f"⚠️ Gagal mengeksekusi script database: {str(e)}")
                     
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
@@ -719,7 +717,9 @@ if tombol_proses:
             # Memicu perubahan state pemrosesan selesai
             st.session_state['proses_selesai'] = True
             
-            # Memaksa rerun sekali agar visualisasi merender ulang
+            # (Opsional) Jika ingin pesan sukses/gagal terbaca, berikan jeda sedikit sebelum rerun
+            import time
+            time.sleep(1.5) 
             st.rerun()
 
 # ==========================================================
