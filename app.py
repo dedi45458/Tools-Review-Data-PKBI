@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import io
 import re
-from datetime
+import datetime
+from database import ambil_agregasi_terakhir_neon
 
 # ==========================================================
 # IMPORT FUNGSI NEON DARI FILE database.py
