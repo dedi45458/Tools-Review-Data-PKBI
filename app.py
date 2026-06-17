@@ -768,12 +768,23 @@ if menu_pilihan == "🎯 Dashboard Review Data":
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        tab1, tab2 = st.tabs(["📋 Rekap Kesalahan (Matriks)", "📈 Analisis Tren Semester"])
+        tab1, tab2 = st.tabs(["📋 Hasil Review SR", "📈 Analisis Tren Semester"])
 
         with tab1:
             st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
             
-            df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame()).copy()
+            # =========================================================================
+            # 🛠️ PENGAMAN 1: Ambil dari session_state dengan aman 
+            # (Mencegah error .copy() jika state masih bernilai None)
+            # =========================================================================
+            df_state = st.session_state.get('df_tabel_atas')
+            if df_state is not None and not isinstance(df_state, pd.DataFrame) and not df_state.empty:
+                # Tambahan: memastikan tipe datanya DataFrame
+                df_atas_view = df_state.copy()
+            elif isinstance(df_state, pd.DataFrame) and not df_state.empty:
+                 df_atas_view = df_state.copy()
+            else:
+                df_atas_view = pd.DataFrame()
             
             # =========================================================================
             # 🔥 INTEGRASI ALUR B: OTOMATIS TARIK DATA DARI NEON SAAT APLIKASI DI-LAUNCH
@@ -817,11 +828,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     if col in df_display.columns:
                         df_display.loc[df_display[col] == '0', col] = '-'
                 
+                # 🛠️ PENGAMAN 2: Memperbaiki typo "indicator" menjadi "indikator" agar UI rapi
                 column_config = {
                     kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=300),
-                    "Jumlah per indicator": st.column_config.NumberColumn("Total", width="small"),
+                    "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small"),
                     "%": st.column_config.ProgressColumn("%", format="%d%%", min_value=0, max_value=100, width="small")
                 }
+                
                 for col in ssr_aktif:
                     column_config[col] = st.column_config.TextColumn(col, width="small")
             
@@ -833,7 +846,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 )
             else:
                 # Menggunakan st.caption/info yang netral agar estetik saat data benar-benar nihil
-                st.info("✨ Belum ada data review. Silakan jalankan validasi di sidebar atau pastikan database terisi.")
+                st.info("✨ Belum ada data review historis. Silakan jalankan validasi di sidebar atau pastikan database terisi.")
 
 
             # --- BARIS 3: DETAIL DATA ---
