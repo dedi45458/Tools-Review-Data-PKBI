@@ -275,8 +275,8 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
 
 def ambil_agregasi_terakhir_dari_neon():
     """
-    Mengambil data review terakhir dari Neon DB dan merekonstruksinya 
-    kembali menjadi format DataFrame wide yang siap dibaca oleh UI Streamlit.
+    Mengambil data review terakhir dari Neon DB berdasarkan log input 'tanggal_dibuat' (Timestamp)
+    dan merekonstruksinya kembali menjadi format DataFrame wide yang siap dibaca oleh UI Streamlit.
     """
     conn = dapatkan_koneksi_neon()
     if not conn:
@@ -284,27 +284,37 @@ def ambil_agregasi_terakhir_dari_neon():
         
     try:
         with conn.cursor() as cur:
-            # 1. Cari tanggal review paling terakhir/terbaru
-            cur.execute("SELECT MAX(tanggal_review) FROM agregasi_hasil_review_penjangkauan")
-            max_date = cur.fetchone()[0]
-            if not max_date:
+            # 1. Cari timestamp input paling terakhir/terbaru (presisi jam & menit)
+            cur.execute("SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review_penjangkauan")
+            max_timestamp = cur.fetchone()[0]
+            
+            if not max_timestamp:
                 return pd.DataFrame(), None
                 
-            # 2. Ambil semua data kesalahan pada tanggal tersebut
+            # Mengambil nilai tanggal_review yang terikat pada batch timestamp terbaru tersebut
+            cur.execute("""
+                SELECT tanggal_review 
+                FROM agregasi_hasil_review_penjangkauan 
+                WHERE tanggal_dibuat = %s 
+                LIMIT 1
+            """, (max_timestamp,))
+            target_date = cur.fetchone()[0]
+                
+            # 2. Ambil semua data kesalahan pada batch tanggal_review tersebut
             cur.execute("""
                 SELECT nama_ssr, indikator_kesalahan, jumlah_kesalahan 
                 FROM agregasi_hasil_review_penjangkauan 
                 WHERE tanggal_review = %s
-            """, (max_date,))
+            """, (target_date,))
             rows = cur.fetchall()
             
             if not rows:
-                return pd.DataFrame(), max_date
+                return pd.DataFrame(), max_timestamp
                 
             # 3. Transformasi kembali dari format baris (long) ke format tabel lebar (wide)
             df_long = pd.DataFrame(rows, columns=['nama_ssr', 'indikator_kesalahan', 'jumlah_kesalahan'])
             
-            # 🔥 GANTI pivot() MENJADI pivot_table() DAN TAMBAHKAN aggfunc='sum'
+            # Menggunakan pivot_table dengan agregasi sum agar aman dari duplikasi record
             df_wide = df_long.pivot_table(
                 index='indikator_kesalahan', 
                 columns='nama_ssr', 
@@ -330,9 +340,11 @@ def ambil_agregasi_terakhir_dari_neon():
             # Kembalikan ke format UI aslinya (Indikator Kesalahan diatur sebagai Indeks kembali)
             df_wide.set_index('INDIKATOR KESALAHAN DATA', inplace=True)
                 
-            return df_wide, max_date
+            # Mengembalikan DataFrame hasil dan nilai timestamp pembuatannya
+            return df_wide, max_timestamp
+            
     except Exception as e:
-        # 🚨 PERBAIKAN 3: Jangan disembunyikan pakai print, tampilkan di UI Streamlit
+        # Menampilkan pesan error langsung ke UI Streamlit agar mudah diidentifikasi
         st.error(f"Gagal memuat agregasi terakhir dari Neon DB: {e}")
         return pd.DataFrame(), None
     finally:
