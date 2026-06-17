@@ -231,7 +231,7 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
             df_lokal.rename(columns={df_lokal.columns[0]: 'INDIKATOR KESALAHAN DATA'}, inplace=True)
         
     if tanggal_review is None:
-        tanggal_review = datetime.now().date()
+        tanggal_review = dt.datetime.now().date()
         
     conn = dapatkan_koneksi_neon()
     if not conn:
