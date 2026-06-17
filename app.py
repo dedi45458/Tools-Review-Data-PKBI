@@ -114,14 +114,19 @@ if 'df_tabel_atas' not in st.session_state:
 if 'proses_selesai' not in st.session_state:
     st.session_state['proses_selesai'] = False
 
-# Otomatis tarik data dari Neon saat aplikasi di-refresh/di-launch pertama kali
+# =========================================================================
+# 🔥 OTOMATIS AMBIL DATA DARI NEON DI AWAL
+# =========================================================================
 if st.session_state['df_tabel_atas'] is None and not st.session_state['proses_selesai']:
     try:
-        df_dari_db = ambil_agregasi_terakhir_neon()
+        # 🔄 PERBAIKAN 1: Tangkap DUA variabel secara bersamaan
+        df_dari_db, tgl_db = ambil_agregasi_terakhir_dari_neon()
+        
+        # 🔄 PERBAIKAN 2: Pastikan df_dari_db adalah DataFrame yang sah, bukan None
         if df_dari_db is not None and not df_dari_db.empty:
             st.session_state['df_tabel_atas'] = df_dari_db
+            
     except Exception as e:
-        # Menuliskan error ke log server agar tidak mengganggu UI pengguna
         print(f"Gagal memuat data awal Neon: {e}")
 
 
@@ -799,14 +804,12 @@ if menu_pilihan == "🎯 Dashboard Review Data":
 
         with tab1:
             st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
-            
-            # =========================================================================
-            # 🛠️ PENGAMAN 1: Ambil dari session_state dengan aman 
-            # (Mencegah error .copy() jika state masih bernilai None)
-            # =========================================================================
+    
+            # 🔄 PERBAIKAN 3: Ambil dengan cara yang aman tanpa Unpacking
             df_state = st.session_state.get('df_tabel_atas')
-            if df_state is not None and not isinstance(df_state, pd.DataFrame) and not df_state.empty:
-                # Tambahan: memastikan tipe datanya DataFrame
+            
+            # Render tabel HANYA jika df_state berisi DataFrame
+            if df_state is not None and isinstance(df_state, pd.DataFrame) and not df_state.empty:
                 df_atas_view = df_state.copy()
             elif isinstance(df_state, pd.DataFrame) and not df_state.empty:
                  df_atas_view = df_state.copy()
