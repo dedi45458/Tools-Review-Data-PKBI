@@ -311,7 +311,7 @@ with st.sidebar:
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         ">
             <div style="display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 5px;">
-                <span style="color: #cbd5e1; display: flex; align-items: center; gap: 5px;">💾 Neon Storage</span>
+                <span style="color: #cbd5e1; display: flex; align-items: center; gap: 5px;">💾 Storage</span>
                 <span style="color: {kondisi_warna}; font-weight: 700;">{storage_info['persen_terpakai']}%</span>
             </div>
             <div style="color: #94a3b8; margin-bottom: 0px;">
