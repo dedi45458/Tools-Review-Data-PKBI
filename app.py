@@ -789,8 +789,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         with tab1:
             st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
             
-            # Tinggal memanggil data yang sudah ditarik di awal tadi secara instan
-            df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame()).copy()
+            # Menarik instan data rekapitulasi yang sudah dipersiapkan di awal aplikasi tadi
+            df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame())
             tanggal_terakhir = st.session_state.get('tanggal_terakhir_review', None)
                     
             # =========================================================================
@@ -806,27 +806,35 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 st.markdown("<br>", unsafe_allow_html=True)
                 
             # =========================================================================
-            # 🛠️ PROSES RENDER TAMPILAN MATRIKS UI
+            # 🛠️ PROSES RENDERING MATRIKS UI STREAMLIT
             # =========================================================================
-            if not df_atas_view.empty:
-                if df_atas_view.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_atas_view.columns:
-                    df_atas_view = df_atas_view.reset_index()
+            # Cek apakah DataFrame valid dan memiliki baris data temuan
+            if df_atas_view is not None and not df_atas_view.empty:
+                df_render = df_atas_view.copy()
+                
+                # Bongkar indeks database jika terkunci sebagai nama kolom kesalahan
+                if df_render.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render.columns:
+                    df_render = df_render.reset_index()
                     
                 kolom_indikator = 'INDIKATOR KESALAHAN DATA'
-                kolom_ssr = [c for c in df_atas_view.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
+                kolom_ssr = [c for c in df_render.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
                 
+                # Bersihkan tipe data angka agar menjamin akurasi penjumlahan
                 for col in kolom_ssr:
-                    df_atas_view[col] = pd.to_numeric(df_atas_view[col], errors='coerce').fillna(0).astype(int)
+                    df_render[col] = pd.to_numeric(df_render[col], errors='coerce').fillna(0).astype(int)
                 
-                ssr_aktif = [col for col in kolom_ssr if df_atas_view[col].sum() > 0]
+                # Saring hanya kolom SSR yang memiliki data temuan saja
+                ssr_aktif = [col for col in kolom_ssr if df_render[col].sum() > 0]
                 kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
-                df_final = df_atas_view[[c for c in kolom_final if c in df_atas_view.columns]].copy()
+                df_final = df_render[[c for c in kolom_final if c in df_render.columns]].copy()
                 
+                # Penggantian visual angka 0 menjadi simbol '-' khusus untuk kolom nama SSR
                 df_display = df_final.copy()
                 for col in ssr_aktif:
                     if col in df_display.columns:
                         df_display[col] = df_display[col].astype(str).replace({'0': '-', '0.0': '-'})
                 
+                # Konfigurasi penataan lebar dan format kolom Streamlit
                 column_config = {
                     kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
                     "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
@@ -835,6 +843,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 for col in ssr_aktif:
                     column_config[col] = st.column_config.TextColumn(col, width="small")
             
+                # Tampilkan ke layar UI
                 st.dataframe(
                     df_display, 
                     use_container_width=True, 
@@ -842,7 +851,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     hide_index=True
                 )
             else:
-                st.info("✨ Belum ada data review dalam sesi ini. Silakan unggah file Excel di sidebar untuk memulai validasi baru.")
+                st.info("✨ Belum ada data review dalam database Neon. Silakan lakukan proses validasi baru via unggah file Excel di sidebar.")
 
 
             # --- BARIS 3: DETAIL DATA ---
