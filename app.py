@@ -375,7 +375,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
     
     df = df_asli.copy()
-    
+    st.write("Tampilan Data Mentah Sebelum Divalidasi:", df.head())
     # ==========================================================
     # LOGIKA PERBAIKAN HEADER BERTINGKAT (MERGED CELLS)
     # ==========================================================
