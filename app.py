@@ -799,11 +799,12 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             tanggal_terakhir = st.session_state.get('tanggal_terakhir_review', None)
                     
             # =========================================================================
-            # 📅 TAMPILKAN TEKS TANGGAL REVIEW TERAKHIR
+            # 📅 TAMPILKAN TEKS TANGGAL REVIEW TERAKHIR (Presisi Jam & Menit WIB)
             # =========================================================================
             if tanggal_terakhir:
                 if hasattr(tanggal_terakhir, 'strftime'):
-                    tgl_format = tanggal_terakhir.strftime("%d-%m-%Y")
+                    # Memformat objek datetime/timestamp menjadi format lokal Indonesia (contoh: 18-06-2026 pukul 11:24 WIB)
+                    tgl_format = tanggal_terakhir.strftime("%d-%m-%Y pukul %H:%M WIB")
                 else:
                     tgl_format = str(tanggal_terakhir)
                     
