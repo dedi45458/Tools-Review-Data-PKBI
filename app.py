@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import re
-from datetime import datetime
+import datetime as dt  
 
 # ==========================================================
 # IMPORT FUNGSI NEON DARI FILE database.py
@@ -12,11 +12,13 @@ from database import (
     simpan_log_ke_neon,
     jalankan_agregasi_tren,
     ambil_rekap_tren,
-    hitung_dan_ambil_log_db,    # <--- TAMBAHKAN BARIS INI
-    ambil_keyword_medsos_db,     # <--- Tambahkan fungsi baru
+    hitung_dan_ambil_log_db,     
+    ambil_keyword_medsos_db,     
     tambah_keyword_medsos_db,
     simpan_agregasi_ke_neon,
-    ambil_agregasi_terakhir_dari_neon
+    ambil_agregasi_terakhir_dari_neon,
+    simpan_detil_review_ke_neon,       # 🔥 WAJIB TAMBAHKAN BARIS INI
+    ambil_detil_terakhir_dari_neon      # 🔥 WAJIB TAMBAHKAN BARIS INI
 )
 
 # ==========================================================
