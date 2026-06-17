@@ -707,6 +707,12 @@ if tombol_proses:
 
             if all_errs:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
+                
+                # 🛠️ AMAN DARI TYPO: Deteksi kolom indikator secara fleksibel & ubah namanya
+                kolom_indikator_bawah = [c for c in df_bawah.columns if 'INDIKATOR' in str(c).upper()]
+                if kolom_indikator_bawah:
+                    df_bawah.rename(columns={kolom_indikator_bawah[0]: 'INDIKATOR KESALAHAN DATA'}, inplace=True)
+                
                 active_ssrs = sorted(list(detected_ssrs))
                 total_seluruh_kesalahan = len(df_bawah)
                 DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state['aturan_kustom'])]
