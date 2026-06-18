@@ -305,34 +305,85 @@ with st.sidebar:
     if menu_pilihan == "🎯 Dashboard Review Data":
         with st.container():
             st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>📁 MANAJEMEN BERKAS</b>", unsafe_allow_html=True)
+            st.markdown("<small style='color: #888;'>Kelola berkas referensi/master dan unggah data operasional penjangkauan di bawah ini.</small>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
             
-            # 1. Uploader Data Referensi (HIV Positif)
-            file_referensi = st.file_uploader("Data HIV+ Semester Lalu (.xlsx)", type=["xlsx"], help="Digunakan sebagai basis data rujukan konfirmasi")
+            # Buat 2 kolom khusus untuk unggahan Data Master / Referensi
+            col_master_1, col_master_2 = st.columns(2)
             
-            # Logika tombol update database yang muncul HANYA saat file diupload
-            if file_referensi is not None:
-                if st.button("🔄 Update Database Referensi", use_container_width=True):
-                    with st.spinner("Sedang memproses data rujukan..."):
-                        try:
-                            from database import import_data_rujukan
-                            df_ref = pd.read_excel(file_referensi)
-                            if import_data_rujukan(df_ref):
-                                st.success("✅ Database referensi diperbarui!")
-                            else:
-                                st.error("❌ Gagal mengupdate database.")
-                        except Exception as e:
-                            st.error(f"Error: {e}")
+            # --- KOLOM 1: UPLOADER DATA HIV POSITIF ---
+            with col_master_1:
+                st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>📋 1. Data Referensi (HIV Positif)</span>", unsafe_allow_html=True)
+                file_referensi = st.file_uploader(
+                    "Data HIV+ Semester Lalu (.xlsx)", 
+                    type=["xlsx"], 
+                    help="Digunakan sebagai basis data rujukan konfirmasi kesalahan data.",
+                    key="uploader_hiv_positif"
+                )
+                
+                # Logika tombol update database yang muncul HANYA saat file diupload
+                if file_referensi is not None:
+                    if st.button("🔄 Update Database Referensi HIV", use_container_width=False, key="btn_update_hiv"):
+                        with st.spinner("Sedang memproses data rujukan..."):
+                            try:
+                                from database import import_data_rujukan
+                                df_ref = pd.read_excel(file_referensi)
+                                if import_data_rujukan(df_ref):
+                                    st.success("✅ Database referensi HIV diperbarui!")
+                                else:
+                                    st.error("❌ Gagal mengupdate database.")
+                            except Exception as e:
+                                st.error(f"Error: {e}")
             
-            st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+            # --- KOLOM 2: UPLOADER DATABASE LAYANAN MASTER (BARU) ---
+            with col_master_2:
+                st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>🏥 2. Database Layanan Fasyankes / SSR</span>", unsafe_allow_html=True)
+                file_layanan = st.file_uploader(
+                    "Data Master Layanan (.xlsx)", 
+                    type=["xlsx"], 
+                    help="Digunakan untuk memperbarui daftar layanan, jenis, kabupaten/kota, dan Kode SIHA.",
+                    key="uploader_master_layanan"
+                )
+                
+                # Logika tombol update database yang muncul HANYA saat file diupload
+                if file_layanan is not None:
+                    if st.button("🔄 Update Database Referensi Layanan", use_container_width=False, key="btn_update_layanan"):
+                        with st.spinner("Sedang memproses database master layanan..."):
+                            try:
+                                from database import import_database_layanan
+                                df_layanan = pd.read_excel(file_layanan)
+                                
+                                # Jalankan fungsi integrasi yang telah dibuat di database.py
+                                sukses, pesan = import_database_layanan(df_layanan)
+                                
+                                if sukses:
+                                    st.success(f"✅ {pesan}")
+                                else:
+                                    st.error(f"❌ Gagal: {pesan}")
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                                
+            # Pembatas vertikal kecil
+            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
             
-            # 2. Uploader Raw Data Penjangkauan
-            files_review = st.file_uploader("Raw Data Penjangkauan (Multi-File)", type=["xlsx", "csv"], accept_multiple_files=True, help="Wajib: Anda bisa memilih lebih dari satu file sekaligus")
+            # --- BAGIAN BAWAH DATA MASTER: UPLOADER RAW DATA PENJANGKAUAN ---
+            st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>📂 3. Uploader Raw Data Penjangkauan Berkala</span>", unsafe_allow_html=True)
+            files_review = st.file_uploader(
+                "Raw Data Penjangkauan (Multi-File)", 
+                type=["xlsx", "csv"], 
+                accept_multiple_files=True, 
+                help="Wajib: Anda bisa memilih lebih dari satu file sekaligus",
+                key="uploader_raw_penjangkauan"
+            )
             
             if files_review:
                 st.info(f"📁 {len(files_review)} file siap diproses.")
-
+    
         st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
         
+        # =================================================================
+        # PARAMETER VALIDASI
+        # =================================================================
         with st.container():
             st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>⚙️ PARAMETER VALIDASI</b>", unsafe_allow_html=True)
             
@@ -366,7 +417,7 @@ with st.sidebar:
                     if st.button("🗑️ Bersihkan Semua Aturan", use_container_width=True, type="secondary"):
                         st.session_state['aturan_kustom'] = []
                         st.rerun()
-
+    
         st.markdown("""<div style="margin-top: 35px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>""", unsafe_allow_html=True)
         tombol_proses = st.button("🚀 Jalankan Validasi", type="primary", use_container_width=True)
 
