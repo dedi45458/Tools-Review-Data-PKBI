@@ -837,7 +837,7 @@ if tombol_proses:
                 df_atas = pd.DataFrame(matrix_rows)
                 df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
                 
-                # 🔥 IMPLEMENTASI BARU: Cek duplikasi berdasarkan 4 parameter sesuai request Anda
+                # 🔥 IMPLEMENTASI BARU: Cek duplikasi berdasarkan 4 parameter
                 if not df_atas.empty:
                     for idx, row in df_atas.iterrows():
                         ind_name = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
@@ -874,7 +874,7 @@ if tombol_proses:
                     df_bawah = df_bawah.rename(columns={"INDIKATOR KESALAHAN DATA": "Indikator Kesalahan Data"})
                 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 4: SINKRONISASI KE NEON DB 🔥
+                # 🔥 LANGKAH 4: SINKRONISASI KE NEON DB (VERSI CERDAS DETECTION) 🔥
                 # -----------------------------------------------------------------
                 try:
                     from database import (
@@ -884,34 +884,55 @@ if tombol_proses:
                         ambil_detil_terakhir_dari_neon
                     )
                     
-                    df_to_db_atas = df_atas.copy().reset_index()
-                    sukses_simpan_atas = simpan_agregasi_ke_neon(df_to_db_atas)
-                    sukses_simpan_bawah = simpan_detil_review_ke_neon(df_bawah)
-                    
-                    if sukses_simpan_atas and sukses_simpan_bawah:
-                        st.toast("💾 Data berhasil disinkronisasi dengan aturan kombinasi baru!", icon="✅")
+                    # SITUASI 1: JIKA DATA TERNYATA SUDAH PERNAH DIUPLOAD (KOSONG SETELAH FILTER)
+                    if df_bawah.empty:
+                        st.info("ℹ️ Seluruh data yang diupload sudah ada dan tersimpan di database Neon (Tidak ada data baru yang dimasukkan).", icon="ℹ️")
                         
+                        # Ambil riwayat historis terakhir resmi dari DB Neon agar visualisasi dashboard tetap muncul
                         df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
                         df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
                         
                         if not df_atas_db.empty:
                             st.session_state['df_tabel_atas'] = df_atas_db
                             st.session_state['tanggal_terakhir_review'] = ts_atas_db
-                            
                         if not df_bawah_db.empty:
                             st.session_state['df_tabel_bawah'] = df_bawah_db
                             st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
+                    
+                    # SITUASI 2: ADA DATA BARU YANG UNIK UNTUK DISIMPAN
                     else:
-                        st.session_state['df_tabel_atas'] = df_atas
-                        st.session_state['df_tabel_bawah'] = df_bawah
-                        st.session_state['tanggal_terakhir_review'] = datetime.now()
-                        st.session_state['tanggal_terakhir_bawah'] = datetime.now()
-                        st.warning("⚠️ Data disimpan sementara di session lokal.")
+                        df_to_db_atas = df_atas.copy().reset_index()
+                        sukses_simpan_atas = simpan_agregasi_ke_neon(df_to_db_atas)
+                        sukses_simpan_bawah = simpan_detil_review_ke_neon(df_bawah)
                         
+                        # Berhasil Masuk Cloud Database
+                        if sukses_simpan_atas and sukses_simpan_bawah:
+                            st.toast("💾 Data baru berhasil disinkronisasi dengan aturan kombinasi baru!", icon="✅")
+                            
+                            df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
+                            df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
+                            
+                            if not df_atas_db.empty:
+                                st.session_state['df_tabel_atas'] = df_atas_db
+                                st.session_state['tanggal_terakhir_review'] = ts_atas_db
+                            if not df_bawah_db.empty:
+                                st.session_state['df_tabel_bawah'] = df_bawah_db
+                                st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
+                        
+                        # Gagal karena Masalah Teknis / Koneksi DB Putus
+                        else:
+                            st.session_state['df_tabel_atas'] = df_atas
+                            st.session_state['df_tabel_bawah'] = df_bawah
+                            st.session_state['tanggal_terakhir_review'] = datetime.now()
+                            st.session_state['tanggal_terakhir_bawah'] = datetime.now()
+                            st.error("❌ Gagal Sinkronisasi: Terjadi gangguan koneksi ke DB Neon. Data disimpan sementara di session lokal.")
+                            
                 except Exception as e:
-                    st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database: {str(e)}")
+                    st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database (Sistem Crash): {str(e)}")
                     st.session_state['df_tabel_atas'] = df_atas
                     st.session_state['df_tabel_bawah'] = df_bawah
+                    st.session_state['tanggal_terakhir_review'] = datetime.now()
+                    st.session_state['tanggal_terakhir_bawah'] = datetime.now()
                     
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
@@ -922,6 +943,7 @@ if tombol_proses:
             import time
             time.sleep(1.5) 
             st.rerun()
+            
 # ==========================================================
 # 5. RENDER LAYOUT UTAMA (BERDASARKAN PILIHAN MENU)
 # ==========================================================
