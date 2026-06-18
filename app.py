@@ -1129,7 +1129,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     col_filter, _ = st.columns([1, 2])
                     with col_filter:
                         pilihan_ssr = st.selectbox(
-                            "🎯 Filter Tampilan Berdasarkan Lembaga SSR:",
+                            "🎯 Pilih Lembaga SSR:",
                             options=["Semua"] + list_ssr_unik,
                             index=0,
                             help="Pilih nama SSR tertentu untuk mempercepat pencarian data yang akan dikonfirmasi."
