@@ -746,13 +746,63 @@ if tombol_proses:
             st.session_state['total_entri'] = total_records
 
             if all_errs:
+                # Menggabungkan seluruh data mentah hasil deteksi awal
                 df_bawah = pd.concat(all_errs, ignore_index=True)
+                
+                # -----------------------------------------------------------------
+                # 🔥 LANGKAH 1: TARIK LOG VALIDASI SEBAGAI PEMBANDING DI AWAL SEKALI 🔥
+                # -----------------------------------------------------------------
+                existing_logs = set()
+                try:
+                    from database import dapatkan_koneksi_neon
+                    conn = dapatkan_koneksi_neon()
+                    if conn:
+                        with conn.cursor() as cur:
+                            cur.execute("SELECT LOWER(Lembaga_SSR), LOWER(Tanggal), LOWER(ID_Klien), LOWER(Indikator_Kesalahan_Data) FROM log_validasi_review;")
+                            for r in cur.fetchall():
+                                # Format komposit: (lembaga_ssr, tanggal, id_klien, indikator)
+                                existing_logs.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
+                        conn.close()
+                except Exception:
+                    pass
+
+                # -----------------------------------------------------------------
+                # 🔥 LANGKAH 2: FILTRASI TOTAL (DROP KONFIRMASI LAMA SEBELUM HITUNG) 🔥
+                # -----------------------------------------------------------------
+                if 'Validasi Hasil Review' not in df_bawah.columns:
+                    df_bawah['Validasi Hasil Review'] = ""
+                
+                indices_to_drop = []
+                for idx, row in df_bawah.iterrows():
+                    ssr = str(row.get('Lembaga SSR', '')).strip().lower()
+                    tgl = str(row.get('Tanggal', '')).strip().lower()
+                    id_klien = str(row.get('ID Klien', '')).strip().lower()
+                    ind = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
+                    
+                    key = (ssr, tgl, id_klien, ind)
+                    
+                    if key in existing_logs:
+                        if "konfirmasi" in ind:
+                            # Logika Baru Anda: Masukkan ke daftar drop agar tidak ikut terhitung di Tabel Atas
+                            indices_to_drop.append(idx)
+                        else:
+                            # Kesalahan biasa tetap ditandai teks peringatan
+                            df_bawah.at[idx, 'Validasi Hasil Review'] = "kesalahan pada ID yang sama (belum direvisi)"
+                
+                # Eksekusi pembuangan baris konfirmasi lama yang sudah settled sebelum perhitungan ringkasan
+                if indices_to_drop:
+                    df_bawah = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
+                
+                # -----------------------------------------------------------------
+                # 🔥 LANGKAH 3: HITUNG MATRIKS REKAP (TABEL ATAS) DARI DATA BERSIH 🔥
+                # -----------------------------------------------------------------
+                # Menghitung ulang daftar SSR aktif setelah potensi ada baris yang dibuang total
+                detected_ssrs = set(df_bawah['Lembaga SSR'].unique()) if not df_bawah.empty else set()
                 active_ssrs = sorted(list(detected_ssrs))
                 total_seluruh_kesalahan = len(df_bawah)
                 DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state['aturan_kustom'])]
                 
                 matrix_rows = []
-                
                 for ind in DAFTAR_INDIKATOR_AKTIF:
                     r_dict = {"INDIKATOR KESALAHAN DATA": ind}
                     total_ind_err = 0
@@ -765,22 +815,23 @@ if tombol_proses:
                     r_dict["%"] = (total_ind_err / total_seluruh_kesalahan * 100) if total_seluruh_kesalahan > 0 else 0.0
                     matrix_rows.append(r_dict)
                 
-                # Menyusun matriks rekapitulasi (Tabel Atas)
                 df_atas = pd.DataFrame(matrix_rows)
                 df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
                 
-                # Biarkan UI memilikinya sebagai Index secara lokal sementara
-                df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
-                
-                # -----------------------------------------------------------------
-                # 🔥 INTEGRASI SEKALIGUS: SIMPAN AGREGASI & DETIL KE NEON DB 🔥
-                # -----------------------------------------------------------------
+                # Cek jika df_atas kosong akibat semua indikator ter-filter bersih
+                if not df_atas.empty:
+                    df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
+                else:
+                    df_atas = pd.DataFrame(columns=["Jumlah per indikator", "%"])
                 
                 # Standarisasi nama kolom df_bawah sebelum dilempar ke database
                 if "INDIKATOR KESALAHAN DATA" in df_bawah.columns:
                     df_bawah = df_bawah.rename(columns={"INDIKATOR KESALAHAN DATA": "Indikator Kesalahan Data"})
+                
+                # -----------------------------------------------------------------
+                # 🔥 LANGKAH 4: SINKRONISASI DATA HASIL FILTER KE NEON DB 🔥
+                # -----------------------------------------------------------------
                 try:
-                    # Import seluruh fungsi penanganan terpusat Neon DB
                     from database import (
                         simpan_agregasi_ke_neon, 
                         simpan_detil_review_ke_neon,
@@ -788,18 +839,13 @@ if tombol_proses:
                         ambil_detil_terakhir_dari_neon
                     )
                     
-                    # 1. Kirim Tabel Atas (Agregasi Tren)
                     df_to_db_atas = df_atas.copy().reset_index()
                     sukses_simpan_atas = simpan_agregasi_ke_neon(df_to_db_atas)
-                    
-                    # 2. Kirim Tabel Bawah (Detil Mentah Per Baris) -> Menjawab Soal No. 1
                     sukses_simpan_bawah = simpan_detil_review_ke_neon(df_bawah)
                     
                     if sukses_simpan_atas and sukses_simpan_bawah:
                         st.toast("💾 Seluruh data review (Agregasi & Detil) berhasil diamankan ke Neon DB!", icon="✅")
                         
-                        # 3. Ambil ulang langsung data resmi terupdate dari Neon DB 
-                        # Supaya data sinkron dengan timestamp Jakarta yang digenerate oleh server Neon -> Menjawab Soal No. 2 & 3
                         df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
                         df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
                         
@@ -811,7 +857,6 @@ if tombol_proses:
                             st.session_state['df_tabel_bawah'] = df_bawah_db
                             st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
                     else:
-                        # Fallback jika koneksi DB bermasalah tengah jalan (tetap simpan ke memori lokal aplikasi)
                         st.session_state['df_tabel_atas'] = df_atas
                         st.session_state['df_tabel_bawah'] = df_bawah
                         st.session_state['tanggal_terakhir_review'] = datetime.now()
@@ -820,7 +865,6 @@ if tombol_proses:
                         
                 except Exception as e:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database: {str(e)}")
-                    # Jalur darurat agar aplikasi tidak crash jika db offline
                     st.session_state['df_tabel_atas'] = df_atas
                     st.session_state['df_tabel_bawah'] = df_bawah
                     
@@ -828,10 +872,8 @@ if tombol_proses:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
 
-            # Memicu perubahan state pemrosesan selesai
             st.session_state['proses_selesai'] = True
             
-            # Memberikan jeda sedikit agar st.toast/pesan sukses sempat terbaca user
             import time
             time.sleep(1.5) 
             st.rerun()
