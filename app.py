@@ -998,7 +998,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         tab1, tab2 = st.tabs(["📋 Hasil Review Data SR", "📈 Analisis Tren Temuan"])
 
         with tab1:
-            st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
+            st.markdown("#### 📋 Rekap Hasil Review Data Penjangkauan SSR")
             
             # Menarik instan data rekapitulasi yang sudah dipersiapkan di awal aplikasi tadi
             df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame())
