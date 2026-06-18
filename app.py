@@ -1229,7 +1229,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_save, _ = st.columns([1, 2])
                     with col_save:
-                        if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
+                        if st.button("💾 Simpan Progres Validasi", type="secondary", use_container_width=True):
                                     
                             with st.spinner("Menyimpan progres validasi..."):
                                 list_log_db = []
