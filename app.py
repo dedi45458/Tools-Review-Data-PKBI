@@ -305,74 +305,62 @@ with st.sidebar:
     if menu_pilihan == "🎯 Dashboard Review Data":
         with st.container():
             st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>📁 MANAJEMEN BERKAS</b>", unsafe_allow_html=True)
-            st.markdown("<small style='color: #888;'>Kelola berkas referensi/master dan unggah data operasional penjangkauan di bawah ini.</small>", unsafe_allow_html=True)
+            st.markdown("<small style='color: #888;'>Unggah berkas master/referensi atau data operasional berkala di bawah ini.</small>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # Buat 2 kolom khusus untuk unggahan Data Master / Referensi
-            col_master_1, col_master_2 = st.columns(2)
+            # --- 1. UPLOADER PINTAR (SINGLE SLOT UNTUK SEMUA DATA REFERENSI) ---
+            file_master = st.file_uploader(
+                "Upload Berkas Referensi Master (.xlsx)", 
+                type=["xlsx"], 
+                help="Sistem akan otomatis mendeteksi apakah berkas ini berupa Data HIV+ Semester Lalu atau Database Master Layanan berdasarkan struktur kolomnya.",
+                key="uploader_master_tunggal"
+            )
             
-            # --- KOLOM 1: UPLOADER DATA HIV POSITIF ---
-            with col_master_1:
-                st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>📋 1. Data Referensi (HIV Positif)</span>", unsafe_allow_html=True)
-                file_referensi = st.file_uploader(
-                    "Data HIV+ Semester Lalu (.xlsx)", 
-                    type=["xlsx"], 
-                    help="Digunakan sebagai basis data rujukan konfirmasi kesalahan data.",
-                    key="uploader_hiv_positif"
-                )
-                
-                # Logika tombol update database yang muncul HANYA saat file diupload
-                if file_referensi is not None:
-                    if st.button("🔄 Update Database Referensi HIV", use_container_width=False, key="btn_update_hiv"):
-                        with st.spinner("Sedang memproses data rujukan..."):
-                            try:
-                                from database import import_data_rujukan
-                                df_ref = pd.read_excel(file_referensi)
-                                if import_data_rujukan(df_ref):
-                                    st.success("✅ Database referensi HIV diperbarui!")
-                                else:
-                                    st.error("❌ Gagal mengupdate database.")
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-            
-            # --- KOLOM 2: UPLOADER DATABASE LAYANAN MASTER (BARU) ---
-            with col_master_2:
-                st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>🏥 2. Database Layanan Fasyankes / SSR</span>", unsafe_allow_html=True)
-                file_layanan = st.file_uploader(
-                    "Data Master Layanan (.xlsx)", 
-                    type=["xlsx"], 
-                    help="Digunakan untuk memperbarui daftar layanan, jenis, kabupaten/kota, dan Kode SIHA.",
-                    key="uploader_master_layanan"
-                )
-                
-                # Logika tombol update database yang muncul HANYA saat file diupload
-                if file_layanan is not None:
-                    if st.button("🔄 Update Database Referensi Layanan", use_container_width=False, key="btn_update_layanan"):
-                        with st.spinner("Sedang memproses database master layanan..."):
-                            try:
+            # Logika pemrosesan otomatis setelah berkas diunggah
+            if file_master is not None:
+                try:
+                    df_check = pd.read_excel(file_master)
+                    # Normalisasi nama kolom untuk pengecekan tipe data secara aman
+                    kolom_terdeteksi = [str(c).strip().lower() for c in df_check.columns]
+                    
+                    # Deteksi Tipe A: Apakah ini Database Layanan?
+                    is_data_layanan = any("lembaga" in c or "ssr" in c for c in kolom_terdeteksi) and any("layanan" in c for c in kolom_terdeteksi)
+                    
+                    if is_data_layanan:
+                        st.info("🏥 **Terdeteksi:** Berkas Master Layanan Fasyankes / SSR")
+                        if st.button("🔄 Update Database Referensi Layanan", use_container_width=False, key="btn_exec_layanan"):
+                            with st.spinner("Sedang memproses database master layanan..."):
                                 from database import import_database_layanan
-                                df_layanan = pd.read_excel(file_layanan)
-                                
-                                # Jalankan fungsi integrasi yang telah dibuat di database.py
-                                sukses, pesan = import_database_layanan(df_layanan)
-                                
+                                sukses, pesan = import_database_layanan(df_check)
                                 if sukses:
                                     st.success(f"✅ {pesan}")
                                 else:
                                     st.error(f"❌ Gagal: {pesan}")
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-                                
-            # Pembatas vertikal kecil
-            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+                    
+                    # Deteksi Tipe B: Berarti ini Data HIV+ Semester Lalu
+                    else:
+                        st.info("📋 **Terdeteksi:** Berkas Data Referensi HIV+ Semester Lalu")
+                        if st.button("🔄 Update Database Referensi HIV", use_container_width=False, key="btn_exec_hiv"):
+                            with st.spinner("Sedang memproses data rujukan HIV..."):
+                                from database import import_data_rujukan
+                                if import_data_rujukan(df_check):
+                                    st.success("✅ Database referensi HIV diperbarui!")
+                                else:
+                                    st.error("❌ Gagal mengupdate database.")
+                                    
+                except Exception as e:
+                    st.error(f"⚠️ Gagal membaca struktur berkas Excel: {e}")
             
-            # --- BAGIAN BAWAH DATA MASTER: UPLOADER RAW DATA PENJANGKAUAN ---
-            st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>📂 3. Uploader Raw Data Penjangkauan Berkala</span>", unsafe_allow_html=True)
+            # Pembatas vertikal pemisah antar uploader
+            st.markdown("<div style='margin-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 15px;'></div>", unsafe_allow_html=True)
+            
+            # --- 2. UPLOADER RAW DATA PENJANGKAUAN BERKALA ---
+            st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>📂 Upload Raw Data Penjangkauan Berkala</span>", unsafe_allow_html=True)
             files_review = st.file_uploader(
                 "Raw Data Penjangkauan (Multi-File)", 
                 type=["xlsx", "csv"], 
                 accept_multiple_files=True, 
-                help="Wajib: Anda bisa memilih lebih dari satu file sekaligus",
+                help="Wajib: Anda bisa memilih lebih dari satu file operasional sekaligus untuk di-review",
                 key="uploader_raw_penjangkauan"
             )
             
