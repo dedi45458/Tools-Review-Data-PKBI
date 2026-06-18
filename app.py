@@ -305,12 +305,12 @@ with st.sidebar:
     if menu_pilihan == "🎯 Dashboard Review Data":
         with st.container():
             st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>📁 MANAJEMEN BERKAS</b>", unsafe_allow_html=True)
-            st.markdown("<small style='color: #888;'>Unggah berkas master/referensi atau data operasional berkala di bawah ini.</small>", unsafe_allow_html=True)
+            st.markdown("<small style='color: #888;'>Unggah berkas database.</small>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
             # --- 1. UPLOADER PINTAR (SINGLE SLOT UNTUK SEMUA DATA REFERENSI) ---
             file_master = st.file_uploader(
-                "Upload Berkas Referensi Master (.xlsx)", 
+                "Upload Berkas Database (.xlsx)", 
                 type=["xlsx"], 
                 help="Sistem akan otomatis mendeteksi apakah berkas ini berupa Data HIV+ Semester Lalu atau Database Master Layanan berdasarkan struktur kolomnya.",
                 key="uploader_master_tunggal"
@@ -355,7 +355,7 @@ with st.sidebar:
             st.markdown("<div style='margin-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 15px;'></div>", unsafe_allow_html=True)
             
             # --- 2. UPLOADER RAW DATA PENJANGKAUAN BERKALA ---
-            st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>📂 Upload Raw Data Penjangkauan Berkala</span>", unsafe_allow_html=True)
+            st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>📂 Upload RD Penjangkauan & Rujukan</span>", unsafe_allow_html=True)
             files_review = st.file_uploader(
                 "Raw Data Penjangkauan (Multi-File)", 
                 type=["xlsx", "csv"], 
