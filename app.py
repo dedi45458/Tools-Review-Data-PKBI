@@ -1000,7 +1000,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             <style>
             /* Menargetkan teks paragraf di dalam komponen Tab Streamlit */
             .stTabs [data-baseweb="tab"] p {
-                font-size: 1.2rem !important;    /* Mengubah ukuran huruf (Default: ~0.875rem) */
+                font-size: 1.5rem !important;    /* Mengubah ukuran huruf (Default: ~0.875rem) */
                 font-weight: 600 !important;      /* Membuat teks menjadi lebih tebal/tegas */
                 color: #ffffff !important;        /* Memastikan warna teks tetap kontras */
             }
