@@ -9,7 +9,7 @@ from datetime import datetime
 # ==========================================================
 from database import (
     dapatkan_koneksi_neon,
-    simpan_log_ke_neon,
+    simpan_log_validasi_ke_neon,
     jalankan_agregasi_tren,
     ambil_rekap_tren,
     hitung_dan_ambil_log_db,     
@@ -1070,66 +1070,65 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 with col_save:
                     if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
                                     
-                        with st.spinner("Menyimpan progres validasi..."):
-                            list_log_db = []
-                            indeks_baris_terpilih = []
-                            peringatan_justifikasi = False
-                        
-                            for idx, row_edit in df_hasil_edit.iterrows():
-                                ind_text = str(row_edit['Indikator Kesalahan Data'])
-                                text_justifikasi = str(row_edit['Justifikasi']).strip()
-                                            
-                                is_konfirmasi = "konfirmasi" in ind_text.lower()
-                                            
-                                # Intersepsi Belakang Layar (Proteksi Data Non-Konfirmasi)
-                                if not is_konfirmasi:
-                                    if text_justifikasi not in ["", "None", "-", "nan"]:
-                                        peringatan_justifikasi = True
-                                    text_justifikasi = ""  
-                                else:
-                                    if text_justifikasi in ["None", "-", "nan"]:
-                                        text_justifikasi = ""
-                        
-                                # Trigger simpan jika di-ceklis ATAU baris konfirmasi yang terisi justifikasinya
-                                if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi != ""):
-                                    list_log_db.append((
-                                        str(row_edit.get('Lembaga SSR', '-')),
-                                        str(row_edit.get('Tanggal', '-')),
-                                        str(row_edit.get('ID Klien', '-')),
-                                        str(row_edit.get('Kode Petugas', '-')),
-                                        str(row_edit.get('Nama Kota', '-')),
-                                        str(row_edit.get('NIK', '-')),
-                                        str(row_edit.get('Tipe Sasaran', '-')),
-                                        ind_text,
-                                        "Sudah Direvisi" if bool(row_edit['Pilih']) else str(row_edit.get('Validasi Hasil Review', '-')),
-                                        text_justifikasi
-                                    ))
-                                    indeks_baris_terpilih.append(idx)
-                                
-                            if len(list_log_db) > 0:
-                                df_to_save = pd.DataFrame(list_log_db, columns=[
-                                    "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", 
-                                    "Nama Kota", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", 
-                                    "Validasi Hasil Review", "Justifikasi"
-                                ])
-                                
-                                if simpan_detil_review_ke_neon(df_to_save):
-                                    df_sekarang = st.session_state['df_tabel_bawah']
-                                    df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
-                                    st.session_state['df_tabel_bawah'] = df_sisa
-                                                
-                                    st.success(f"🎉 Berhasil menyimpan {len(list_log_db)} baris ke database!")
-                                                
-                                    if peringatan_justifikasi:
-                                        st.warning("⚠️ Catatan: Input Justifikasi pada baris non-konfirmasi otomatis diabaikan oleh sistem.")
-                                                
-                                    import time
-                                    time.sleep(1.5)
-                                    st.rerun()
-                                else:
-                                    st.error("❌ Gagal menyimpan log ke Neon Database. Periksa struktur tabel Anda.")
+                    with st.spinner("Menyimpan progres validasi..."):
+                        list_log_db = []
+                        indeks_baris_terpilih = []
+                        peringatan_justifikasi = False
+                    
+                        for idx, row_edit in df_hasil_edit.iterrows():
+                            ind_text = str(row_edit['Indikator Kesalahan Data'])
+                            text_justifikasi = str(row_edit['Justifikasi']).strip()
+                                        
+                            is_konfirmasi = "konfirmasi" in ind_text.lower()
+                                        
+                            # Intersepsi Belakang Layar (Proteksi Data Non-Konfirmasi)
+                            if not is_konfirmasi:
+                                if text_justifikasi not in ["", "None", "-", "nan"]:
+                                    peringatan_justifikasi = True
+                                text_justifikasi = ""  
                             else:
-                                st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
+                                if text_justifikasi in ["None", "-", "nan"]:
+                                    text_justifikasi = ""
+                    
+                            # Trigger simpan jika di-ceklis ATAU baris konfirmasi yang terisi justifikasinya
+                            if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi != ""):
+                                
+                                # 🛠️ PENYESUAIAN 1: Tentukan nilai boolean untuk kolom is_revisi (True jika diceklis)
+                                status_revisi = bool(row_edit['Pilih'])
+                                
+                                # 🛠️ PENYESUAIAN 2: Susun persis 6 elemen sesuai urutan %s di database.py
+                                # (Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi)
+                                list_log_db.append((
+                                    str(row_edit.get('Lembaga SSR', '-')),
+                                    str(row_edit.get('Tanggal', '-')),
+                                    str(row_edit.get('ID Klien', '-')),
+                                    ind_text,
+                                    status_revisi,       # Mengirim True/False (BOOLEAN)
+                                    text_justifikasi     # Mengirim teks Justifikasi
+                                ))
+                                indeks_baris_terpilih.append(idx)
+                                    
+                        if len(list_log_db) > 0:
+                            # 🛠️ PENYESUAIAN 3: Langsung panggil fungsi asli dari database.py Anda
+                            if simpan_log_ke_neon(list_log_db):
+                                
+                                # Sesuai poin 1: Potong baris yang sukses dari layar agar hilang
+                                df_sekarang = st.session_state['df_tabel_bawah']
+                                df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
+                                st.session_state['df_tabel_bawah'] = df_sisa
+                                            
+                                st.success(f"🎉 Berhasil memindahkan {len(list_log_db)} baris ke tabel log_validasi_review!")
+                                            
+                                if peringatan_justifikasi:
+                                    st.warning("⚠️ Catatan: Input Justifikasi pada baris non-konfirmasi otomatis diabaikan oleh sistem.")
+                                            
+                                import time
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("❌ Gagal menyimpan log ke Neon Database. Periksa kembali koneksi Anda.")
+                        else:
+                            st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
