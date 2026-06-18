@@ -205,7 +205,8 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
         df_lokal.rename(columns={df_lokal.columns[0]: 'INDIKATOR KESALAHAN DATA'}, inplace=True)
         
     if tanggal_review is None:
-        tanggal_review = dt.datetime.now().date()
+        # 🔥 PERBAIKAN 1: Menggunakan datetime langsung (bukan dt.datetime)
+        tanggal_review = datetime.now().date()
         
     conn = dapatkan_koneksi_neon()
     if not conn:
@@ -213,11 +214,9 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
         
     try:
         with conn.cursor() as cur:
-            # 🔥 PERBAIKAN 1: Eksekusi ke tabel `agregasi_hasil_review` (Nama Asli DB)
             cur.execute("DELETE FROM agregasi_hasil_review WHERE tanggal_review = %s", (tanggal_review,))
             
             kolom_indikator = 'INDIKATOR KESALAHAN DATA'
-            # 🔥 PERBAIKAN 2: Proteksi agar variasi nama Indikator tidak ikut dikalkulasi sebagai Lembaga SSR
             kolom_ssr = [c for c in df_lokal.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%'] and 'indikator' not in str(c).lower()]
             
             for _, row in df_lokal.iterrows():
@@ -250,20 +249,12 @@ def ambil_agregasi_terakhir_dari_neon():
         
     try:
         with conn.cursor() as cur:
-            # 🔥 PERBAIKAN 3: Eksekusi ke tabel `agregasi_hasil_review`
-            cur.execute("SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review")
-            max_timestamp = cur.fetchone()[0]
-            
-            if not max_timestamp:
-                return pd.DataFrame(), None
-                
-            cur.execute("""
-                SELECT tanggal_review 
-                FROM agregasi_hasil_review 
-                WHERE tanggal_dibuat = %s 
-                LIMIT 1
-            """, (max_timestamp,))
+            # 🔥 PERBAIKAN 2: Ubah dari tanggal_dibuat menjadi tanggal_review yang memang ada di tabel
+            cur.execute("SELECT MAX(tanggal_review) FROM agregasi_hasil_review")
             target_date = cur.fetchone()[0]
+            
+            if not target_date:
+                return pd.DataFrame(), None
                 
             cur.execute("""
                 SELECT nama_ssr, indikator_kesalahan, jumlah_kesalahan 
@@ -273,7 +264,7 @@ def ambil_agregasi_terakhir_dari_neon():
             rows = cur.fetchall()
             
             if not rows:
-                return pd.DataFrame(), max_timestamp
+                return pd.DataFrame(), target_date
                 
             df_long = pd.DataFrame(rows, columns=['nama_ssr', 'indikator_kesalahan', 'jumlah_kesalahan'])
             df_wide = df_long.pivot_table(
@@ -296,7 +287,7 @@ def ambil_agregasi_terakhir_dari_neon():
                 df_wide['%'] = 0.0
                 
             df_wide.set_index('INDIKATOR KESALAHAN DATA', inplace=True)
-            return df_wide, max_timestamp
+            return df_wide, target_date
             
     except Exception as e:
         st.error(f"Gagal memuat agregasi terakhir dari Neon DB: {e}")
@@ -314,7 +305,6 @@ def simpan_detil_review_ke_neon(df_detil):
         
     try:
         with conn.cursor() as cur:
-            # 🔥 PERBAIKAN 4: Ubah tabel jadi `hasil_review_penjangkauan` & hilangkan input paksa 'created_at'
             query = """
                 INSERT INTO hasil_review_penjangkauan 
                 ("Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", 
@@ -355,7 +345,6 @@ def ambil_detil_terakhir_dari_neon():
         
     try:
         with conn.cursor() as cur:
-            # 🔥 PERBAIKAN 5: Karena tidak ada 'created_at' dari tabel asli, kita kembalikan limit data teratas
             cur.execute("""
                 SELECT "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", 
                        "Nama Kota", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", 
@@ -368,7 +357,8 @@ def ambil_detil_terakhir_dari_neon():
             rows = cur.fetchall()
             
             if not rows:
-                return pd.DataFrame(), dt.datetime.now()
+                # 🔥 PERBAIKAN 3: Menggunakan datetime langsung (bukan dt.datetime)
+                return pd.DataFrame(), datetime.now()
                 
             df = pd.DataFrame(rows, columns=[
                 "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", 
@@ -376,7 +366,8 @@ def ambil_detil_terakhir_dari_neon():
                 "Validasi Hasil Review", "Justifikasi"
             ])
             
-            return df, dt.datetime.now()
+            # 🔥 PERBAIKAN 4: Menggunakan datetime langsung (bukan dt.datetime)
+            return df, datetime.now()
     except Exception as e:
         st.error(f"Gagal memuat histori detil review dari Neon: {e}")
         return pd.DataFrame(), None
