@@ -773,6 +773,10 @@ if tombol_proses:
                 # -----------------------------------------------------------------
                 # 🔥 INTEGRASI SEKALIGUS: SIMPAN AGREGASI & DETIL KE NEON DB 🔥
                 # -----------------------------------------------------------------
+                
+                # Standarisasi nama kolom df_bawah sebelum dilempar ke database
+                if "INDIKATOR KESALAHAN DATA" in df_bawah.columns:
+                    df_bawah = df_bawah.rename(columns={"INDIKATOR KESALAHAN DATA": "Indikator Kesalahan Data"})
                 try:
                     # Import seluruh fungsi penanganan terpusat Neon DB
                     from database import (
