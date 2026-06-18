@@ -1229,7 +1229,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_save, _ = st.columns([1, 2])
                     with col_save:
-                        if st.button("💾 Simpan Progres Validasi", type="secondary", use_container_width=True):
+                        # Sumbu kotak sekarang akan otomatis mengecil mengikuti panjang teks di dalamnya
+                        if st.button("💾 Simpan Progres Validasi", type="secondary", use_container_width=False):
+                                    
+                            with st.spinner("Menyimpan progres validasi..."):
+                                list_log_db = []
                                     
                             with st.spinner("Menyimpan progres validasi..."):
                                 list_log_db = []
