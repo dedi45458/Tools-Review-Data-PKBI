@@ -9,7 +9,7 @@ from datetime import datetime
 # ==========================================================
 from database import (
     dapatkan_koneksi_neon,
-    simpan_log_validasi_ke_neon,
+    simpan_log_ke_neon,
     jalankan_agregasi_tren,
     ambil_rekap_tren,
     hitung_dan_ambil_log_db,     
