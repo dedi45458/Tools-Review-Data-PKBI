@@ -383,7 +383,10 @@ def simpan_detil_review_ke_neon(df_detil):
                     str(row.get('Nama Kota', '')),
                     str(row.get('NIK', '')),
                     str(row.get('Tipe Sasaran', '')),
-                    str(row.get('Indikator Kesalahan Data', '')),
+                    
+                    # 👇 PERBAIKAN DI SINI: Gunakan fallback agar mendukung huruf besar maupun Title Case
+                    str(row.get('Indikator Kesalahan Data', row.get('INDIKATOR KESALAHAN DATA', ''))),
+                    
                     str(row.get('Validasi Hasil Review', '')),
                     str(row.get('Justifikasi', ''))
                 ))
