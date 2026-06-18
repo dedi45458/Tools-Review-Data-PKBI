@@ -786,6 +786,18 @@ if tombol_proses:
                 # -----------------------------------------------------------------
                 # 🔥 LANGKAH 2: FILTRASI TOTAL TABEL DETIL (TABEL BAWAH) 🔥
                 # -----------------------------------------------------------------
+                # 🛠️ ANTI-KEYERROR: Standardisasi nama kolom utama ke huruf kapital/sesuai kebutuhan script
+                for col in df_bawah.columns:
+                    col_clean = str(col).strip().lower()
+                    if col_clean in ["indikator kesalahan data", "indikator_kesalahan_data"]:
+                        df_bawah = df_bawah.rename(columns={col: "INDIKATOR KESALAHAN DATA"})
+                    elif col_clean in ["lembaga ssr", "lembaga_ssr"]:
+                        df_bawah = df_bawah.rename(columns={col: "Lembaga SSR"})
+                    elif col_clean in ["id klien", "id_klien"]:
+                        df_bawah = df_bawah.rename(columns={col: "ID Klien"})
+                    elif col_clean == "tanggal":
+                        df_bawah = df_bawah.rename(columns={col: "Tanggal"})
+
                 if 'Validasi Hasil Review' not in df_bawah.columns:
                     df_bawah['Validasi Hasil Review'] = ""
                 
@@ -826,6 +838,7 @@ if tombol_proses:
                     r_dict = {"INDIKATOR KESALAHAN DATA": ind}
                     total_ind_err = 0
                     for ssr in active_ssrs:
+                        # Pengecekan aman menggunakan kolom yang sudah distandardisasi
                         c = len(df_bawah[(df_bawah['INDIKATOR KESALAHAN DATA'] == ind) & (df_bawah['Lembaga SSR'] == ssr)])
                         r_dict[ssr] = c
                         total_ind_err += c
@@ -837,7 +850,7 @@ if tombol_proses:
                 df_atas = pd.DataFrame(matrix_rows)
                 df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
                 
-                # 🔥 IMPLEMENTASI BARU: Cek duplikasi berdasarkan 4 parameter sesuai request Anda
+                # Cek duplikasi berdasarkan 4 parameter agregasi
                 if not df_atas.empty:
                     for idx, row in df_atas.iterrows():
                         ind_name = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
@@ -848,14 +861,12 @@ if tombol_proses:
                             if jumlah_hitung_baru == 0:
                                 continue
                             
-                            # Kombinasi Kunci: (tanggal_dibuat, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
                             agg_key = (hari_ini_str, ssr_name, ind_name, jumlah_hitung_baru)
                             
                             if agg_key in existing_aggregations:
-                                # Jika kombinasi 4 parameter ini COCOK dengan yang ada di DB, nolkan nilai kolom SSR tersebut
                                 df_atas.at[idx, ssr] = 0
                     
-                    # Hitung ulang total dan persentase setelah penyaringan nilai duplikat
+                    # Hitung ulang total setelah pembersihan duplikat agregasi
                     df_atas['Jumlah per indikator'] = [sum(row[ssr] for ssr in active_ssrs) for idx, row in df_atas.iterrows()]
                     df_atas = df_atas[df_atas['Jumlah per indikator'] > 0] 
                     
@@ -865,11 +876,13 @@ if tombol_proses:
                     else:
                         df_atas['%'] = 0.0
 
+                # 🛠️ PERBAIKAN UTAMA: Jika df_atas kosong, strukturnya harus tetap dipertahankan agar tidak KeyError di Langkah 4
                 if not df_atas.empty:
                     df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
                 else:
-                    df_atas = pd.DataFrame(columns=["Jumlah per indikator", "%"])
+                    df_atas = pd.DataFrame(columns=["INDIKATOR KESALAHAN DATA", "Jumlah per indikator", "%"]).set_index("INDIKATOR KESALAHAN DATA")
                 
+                # Standarisasi nama kolom df_bawah sebelum dilempar ke database
                 if "INDIKATOR KESALAHAN DATA" in df_bawah.columns:
                     df_bawah = df_bawah.rename(columns={"INDIKATOR KESALAHAN DATA": "Indikator Kesalahan Data"})
                 
