@@ -995,7 +995,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        tab1, tab2 = st.tabs(["📋 Rekap Kesalahan (Matriks)", "📈 Analisis Tren Semester"])
+        tab1, tab2 = st.tabs(["📋 Hasil Review Data SR", "📈 Analisis Tren Temuan"])
 
         with tab1:
             st.markdown("#### 📋 Rekap Hasil Review Data per SSR")
