@@ -774,7 +774,7 @@ if tombol_proses:
                                 existing_details.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
                             
                             # c. Ambil dari agregasi_hasil_review MENGGUNAKAN KOLOM: tanggal_dibuat, nama_ssr, indikator_kesalahan, jumlah_kesalahan
-                            cur.execute('SELECT tanggal_dibuat, LOWER(nama_ssr), LOWER(indikator_kesalahan), jumlah_kesalahan FROM agregasi_hasil_review_penjangkaun;')
+                            cur.execute('SELECT tanggal_dibuat, LOWER(nama_ssr), LOWER(indikator_kesalahan), jumlah_kesalahan FROM agregasi_hasil_review_penjangkauan;')
                             for r in cur.fetchall():
                                 # Ekstrak part tanggal saja dari objek TIMESTAMP tanggal_dibuat
                                 tgl_dibuat_str = r[0].date().isoformat() if hasattr(r[0], 'date') else str(r[0]).split()[0]
