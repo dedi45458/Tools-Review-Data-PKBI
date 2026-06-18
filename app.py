@@ -718,13 +718,13 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     
 # ==========================================================
-# 4. LOGIKA TOMBOL EKSEKUSI (VERSI TERINTEGRASI PENUH NEON DB)
+# 4. LOGIKA TOMBOL EKSEKUSI (VERSI ADJUSTMENT KOMBINASI AGREGASI)
 # ==========================================================
 if tombol_proses:
     if not files_review:
         st.error("⚠️ Silakan unggah berkas Raw Data terlebih dahulu di sidebar!")
     else:
-        with st.spinner("Sedang memproses validasi data, mohon tunggu..."):
+        with st.spinner("Sedang memproses validasi data & sinkronisasi database..."):
             df_ref = None
             if file_referensi:
                 try: df_ref = pd.read_excel(file_referensi)
@@ -750,24 +750,41 @@ if tombol_proses:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
                 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 1: TARIK LOG VALIDASI SEBAGAI PEMBANDING DI AWAL SEKALI 🔥
+                # 🔥 LANGKAH 1: TARIK SELURUH INDEKS PEMBANDING DARI DB 🔥
                 # -----------------------------------------------------------------
-                existing_logs = set()
+                existing_logs = set()         # Dari log_validasi_review
+                existing_details = set()      # Dari hasil_review_penjangkauan
+                existing_aggregations = set() # Dari agregasi_hasil_review (4 Parameter)
+                
+                hari_ini_str = datetime.now().date().isoformat() # Format 'YYYY-MM-DD' untuk pencocokan tanggal_dibuat
+                
                 try:
                     from database import dapatkan_koneksi_neon
                     conn = dapatkan_koneksi_neon()
                     if conn:
                         with conn.cursor() as cur:
+                            # a. Ambil dari log_validasi_review
                             cur.execute("SELECT LOWER(Lembaga_SSR), LOWER(Tanggal), LOWER(ID_Klien), LOWER(Indikator_Kesalahan_Data) FROM log_validasi_review;")
                             for r in cur.fetchall():
-                                # Format komposit: (lembaga_ssr, tanggal, id_klien, indikator)
                                 existing_logs.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
+                            
+                            # b. Ambil dari hasil_review_penjangkauan 
+                            cur.execute('SELECT LOWER("Lembaga SSR"), LOWER("Tanggal"), LOWER("ID Klien"), LOWER("Indikator Kesalahan Data") FROM hasil_review_penjangkauan;')
+                            for r in cur.fetchall():
+                                existing_details.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
+                            
+                            # c. Ambil dari agregasi_hasil_review MENGGUNAKAN KOLOM: tanggal_dibuat, nama_ssr, indikator_kesalahan, jumlah_kesalahan
+                            cur.execute('SELECT tanggal_dibuat, LOWER(nama_ssr), LOWER(indikator_kesalahan), jumlah_kesalahan FROM agregasi_hasil_review;')
+                            for r in cur.fetchall():
+                                # Ekstrak part tanggal saja dari objek TIMESTAMP tanggal_dibuat
+                                tgl_dibuat_str = r[0].date().isoformat() if hasattr(r[0], 'date') else str(r[0]).split()[0]
+                                existing_aggregations.add((tgl_dibuat_str.strip(), str(r[1]).strip(), str(r[2]).strip(), int(r[3])))
                         conn.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    st.warning(f"⚠️ Catatan: Gagal memuat indeks pembanding lengkap dari DB ({str(e)}). Sistem beralih ke mode aman.")
 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 2: FILTRASI TOTAL (DROP KONFIRMASI LAMA SEBELUM HITUNG) 🔥
+                # 🔥 LANGKAH 2: FILTRASI TOTAL TABEL DETIL (TABEL BAWAH) 🔥
                 # -----------------------------------------------------------------
                 if 'Validasi Hasil Review' not in df_bawah.columns:
                     df_bawah['Validasi Hasil Review'] = ""
@@ -775,28 +792,30 @@ if tombol_proses:
                 indices_to_drop = []
                 for idx, row in df_bawah.iterrows():
                     ssr = str(row.get('Lembaga SSR', '')).strip().lower()
-                    tgl = str(row.get('Tanggal', '')).strip().lower()
+                    tgl = str(row.get('Tanggal', '')).strip().lower() 
                     id_klien = str(row.get('ID Klien', '')).strip().lower()
                     ind = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
                     
                     key = (ssr, tgl, id_klien, ind)
                     
+                    # Jika sudah ada di tabel hasil_review_penjangkauan -> DROP TOTAL
+                    if key in existing_details:
+                        indices_to_drop.append(idx)
+                        continue
+                    
+                    # Jika ada di log_validasi_review -> Cek Aturan Justifikasi
                     if key in existing_logs:
                         if "konfirmasi" in ind:
-                            # Logika Baru Anda: Masukkan ke daftar drop agar tidak ikut terhitung di Tabel Atas
                             indices_to_drop.append(idx)
                         else:
-                            # Kesalahan biasa tetap ditandai teks peringatan
                             df_bawah.at[idx, 'Validasi Hasil Review'] = "kesalahan pada ID yang sama (belum direvisi)"
                 
-                # Eksekusi pembuangan baris konfirmasi lama yang sudah settled sebelum perhitungan ringkasan
                 if indices_to_drop:
                     df_bawah = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
                 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 3: HITUNG MATRIKS REKAP (TABEL ATAS) DARI DATA BERSIH 🔥
+                # 🔥 LANGKAH 3: HITUNG REKAP (TABEL ATAS) & FILTER DUPLIKAT AGREGASI BARU 🔥
                 # -----------------------------------------------------------------
-                # Menghitung ulang daftar SSR aktif setelah potensi ada baris yang dibuang total
                 detected_ssrs = set(df_bawah['Lembaga SSR'].unique()) if not df_bawah.empty else set()
                 active_ssrs = sorted(list(detected_ssrs))
                 total_seluruh_kesalahan = len(df_bawah)
@@ -818,18 +837,44 @@ if tombol_proses:
                 df_atas = pd.DataFrame(matrix_rows)
                 df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
                 
-                # Cek jika df_atas kosong akibat semua indikator ter-filter bersih
+                # 🔥 IMPLEMENTASI BARU: Cek duplikasi berdasarkan 4 parameter sesuai request Anda
+                if not df_atas.empty:
+                    for idx, row in df_atas.iterrows():
+                        ind_name = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
+                        for ssr in active_ssrs:
+                            ssr_name = str(ssr).strip().lower()
+                            jumlah_hitung_baru = int(row.get(ssr, 0))
+                            
+                            if jumlah_hitung_baru == 0:
+                                continue
+                            
+                            # Kombinasi Kunci: (tanggal_dibuat, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
+                            agg_key = (hari_ini_str, ssr_name, ind_name, jumlah_hitung_baru)
+                            
+                            if agg_key in existing_aggregations:
+                                # Jika kombinasi 4 parameter ini COCOK dengan yang ada di DB, nolkan nilai kolom SSR tersebut
+                                df_atas.at[idx, ssr] = 0
+                    
+                    # Hitung ulang total dan persentase setelah penyaringan nilai duplikat
+                    df_atas['Jumlah per indikator'] = [sum(row[ssr] for ssr in active_ssrs) for idx, row in df_atas.iterrows()]
+                    df_atas = df_atas[df_atas['Jumlah per indikator'] > 0] 
+                    
+                    total_sisa_agregat = df_atas['Jumlah per indikator'].sum()
+                    if total_sisa_agregat > 0:
+                        df_atas['%'] = (df_atas['Jumlah per indikator'] / total_sisa_agregat * 100)
+                    else:
+                        df_atas['%'] = 0.0
+
                 if not df_atas.empty:
                     df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
                 else:
                     df_atas = pd.DataFrame(columns=["Jumlah per indikator", "%"])
                 
-                # Standarisasi nama kolom df_bawah sebelum dilempar ke database
                 if "INDIKATOR KESALAHAN DATA" in df_bawah.columns:
                     df_bawah = df_bawah.rename(columns={"INDIKATOR KESALAHAN DATA": "Indikator Kesalahan Data"})
                 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 4: SINKRONISASI DATA HASIL FILTER KE NEON DB 🔥
+                # 🔥 LANGKAH 4: SINKRONISASI KE NEON DB 🔥
                 # -----------------------------------------------------------------
                 try:
                     from database import (
@@ -844,7 +889,7 @@ if tombol_proses:
                     sukses_simpan_bawah = simpan_detil_review_ke_neon(df_bawah)
                     
                     if sukses_simpan_atas and sukses_simpan_bawah:
-                        st.toast("💾 Seluruh data review (Agregasi & Detil) berhasil diamankan ke Neon DB!", icon="✅")
+                        st.toast("💾 Data berhasil disinkronisasi dengan aturan kombinasi baru!", icon="✅")
                         
                         df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
                         df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
@@ -861,7 +906,7 @@ if tombol_proses:
                         st.session_state['df_tabel_bawah'] = df_bawah
                         st.session_state['tanggal_terakhir_review'] = datetime.now()
                         st.session_state['tanggal_terakhir_bawah'] = datetime.now()
-                        st.warning("⚠️ Data gagal masuk ke salah satu tabel cloud Neon, namun tersimpan sementara di lokal.")
+                        st.warning("⚠️ Data disimpan sementara di session lokal.")
                         
                 except Exception as e:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database: {str(e)}")
