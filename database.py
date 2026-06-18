@@ -363,7 +363,7 @@ def simpan_detil_review_ke_neon(df_detil):
             cur.execute("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')")
             batch_timestamp = cur.fetchone()[0]
             
-            # Query dengan kolom baru
+            # Pastikan nama kolom di tabel Neon Anda SAMA PERSIS dengan ini
             query = """
                 INSERT INTO hasil_review_penjangkauan_detil_per_baris 
                 ("created_at", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", 
@@ -393,7 +393,8 @@ def simpan_detil_review_ke_neon(df_detil):
             return True
     except Exception as e:
         conn.rollback()
-        st.error(f"Gagal menyimpan detil review ke Neon DB: {e}")
+        # Menampilkan pesan error asli Postgres ke layar agar lebih mudah dilacak
+        st.error(f"Gagal menyimpan ke DB: {e}") 
         return False
     finally:
         conn.close()
@@ -411,7 +412,6 @@ def ambil_detil_terakhir_dari_neon():
             if not max_timestamp:
                 return pd.DataFrame(), None
                 
-            # Query SELECT dengan kolom yang lengkap
             cur.execute("""
                 SELECT "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", 
                        "Nama Kota", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", 
@@ -425,7 +425,6 @@ def ambil_detil_terakhir_dari_neon():
             if not rows:
                 return pd.DataFrame(), max_timestamp
                 
-            # Rekonstruksi DataFrame menggunakan nama kolom PascalCase yang sinkron dengan UI
             df = pd.DataFrame(rows, columns=[
                 "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", 
                 "Nama Kota", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", 
