@@ -812,8 +812,8 @@ if tombol_proses:
                         # Fallback jika koneksi DB bermasalah tengah jalan (tetap simpan ke memori lokal aplikasi)
                         st.session_state['df_tabel_atas'] = df_atas
                         st.session_state['df_tabel_bawah'] = df_bawah
-                        st.session_state['tanggal_terakhir_review'] = dt.datetime.now()
-                        st.session_state['tanggal_terakhir_bawah'] = dt.datetime.now()
+                        st.session_state['tanggal_terakhir_review'] = datetime.now()
+                        st.session_state['tanggal_terakhir_bawah'] = datetime.now()
                         st.warning("⚠️ Data gagal masuk ke salah satu tabel cloud Neon, namun tersimpan sementara di lokal.")
                         
                 except Exception as e:
