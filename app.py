@@ -92,7 +92,7 @@ if 'df_tabel_bawah' not in st.session_state: st.session_state['df_tabel_bawah'] 
 if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = []
 
 # --- A. INISIALISASI OTOMATIS AMBIL DATA AGREGASI TERAKHIR DARI NEON DB ---
-# Kondisi diperketat: Jika key belum ada ATAU nilainya masih None/kosong, paksa tarik dari Neon DB
+# Jika key belum ada ATAU nilainya masih kosong, tarik dari Neon DB
 if 'df_tabel_atas' not in st.session_state or st.session_state['df_tabel_atas'] is None:
     try:
         # Panggil fungsi penarik data dari database.py
@@ -102,15 +102,15 @@ if 'df_tabel_atas' not in st.session_state or st.session_state['df_tabel_atas'] 
             st.session_state['df_tabel_atas'] = df_dari_db
             st.session_state['tanggal_terakhir_review'] = max_date
         else:
-            # Jika tabel di database ternyata masih kosong
+            # Jika tabel kosong, set datetime.now() agar tidak error saat di-format di UI
             st.session_state['df_tabel_atas'] = pd.DataFrame()
-            st.session_state['tanggal_terakhir_review'] = None
+            st.session_state['tanggal_terakhir_review'] = datetime.now()
     except Exception as e:
-        # Pengaman jika database offline agar aplikasi utama tidak macet
+        # Pengaman jika database offline
         st.session_state['df_tabel_atas'] = pd.DataFrame()
-        st.session_state['tanggal_terakhir_review'] = None
+        st.session_state['tanggal_terakhir_review'] = datetime.now()
         
-# 👇 TAMBAHKAN BLOK INI DI BAWAHNYA (Untuk otomatisasi Tabel Detil Bawah) 👇
+# --- B. INISIALISASI OTOMATIS TABEL DETIL BAWAH ---
 if 'df_tabel_bawah' not in st.session_state or st.session_state['df_tabel_bawah'] is None:
     try:
         # Panggil fungsi penarik detil dari database.py
@@ -120,11 +120,13 @@ if 'df_tabel_bawah' not in st.session_state or st.session_state['df_tabel_bawah'
             st.session_state['df_tabel_bawah'] = df_detil_db
             st.session_state['tanggal_terakhir_bawah'] = max_ts_bawah
         else:
+            # Jika tabel kosong, set datetime.now() agar tidak error saat di-format di UI
             st.session_state['df_tabel_bawah'] = pd.DataFrame()
-            st.session_state['tanggal_terakhir_bawah'] = None
+            st.session_state['tanggal_terakhir_bawah'] = datetime.now()
     except Exception as e:
+        # Pengaman jika database offline
         st.session_state['df_tabel_bawah'] = pd.DataFrame()
-        st.session_state['tanggal_terakhir_bawah'] = None
+        st.session_state['tanggal_terakhir_bawah'] = datetime.now()
 
 # --- B. INISIALISASI KEYWORD MEDSOS ---
 if 'medsoc_keywords' not in st.session_state:
