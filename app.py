@@ -718,7 +718,7 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
     
 # ==========================================================
-# 4. LOGIKA TOMBOL EKSEKUSI (REVISI TOTAL SESUAI SCHEMA DB)
+# 4. LOGIKA TOMBOL EKSEKUSI (VERSI MULTI-ALIAS ANTI-KEYERROR)
 # ==========================================================
 if tombol_proses:
     if not files_review:
@@ -749,7 +749,7 @@ if tombol_proses:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
                 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 1: FETCH BERDASARKAN PARAMETER ASLI TIAP TABEL 🔥
+                # 🔥 LANGKAH 1: TARIK SELURUH INDEKS PEMBANDING DARI DB 🔥
                 # -----------------------------------------------------------------
                 existing_logs = set()         
                 existing_details = set()      
@@ -762,34 +762,31 @@ if tombol_proses:
                     conn = dapatkan_koneksi_neon()
                     if conn:
                         with conn.cursor() as cur:
-                            # 1. Parameter tabel log_validasi_review (Menggunakan Underscore)
                             cur.execute("SELECT LOWER(Lembaga_SSR), LOWER(Tanggal), LOWER(ID_Klien), LOWER(Indikator_Kesalahan_Data) FROM log_validasi_review;")
                             for r in cur.fetchall():
                                 existing_logs.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
                             
-                            # 2. Parameter tabel hasil_review_penjangkauan (Menggunakan Spasi & Case Sensitive)
                             cur.execute('SELECT LOWER("Lembaga SSR"), LOWER("Tanggal"), LOWER("ID Klien"), LOWER("Indikator Kesalahan Data") FROM hasil_review_penjangkauan;')
                             for r in cur.fetchall():
                                 existing_details.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
                             
-                            # 3. Parameter tabel agregasi_hasil_review (Menggunakan Huruf Kecil & Underscore)
-                            cur.execute('SELECT tanggal_review, LOWER(nama_ssr), LOWER(indikator_kesalahan), jumlah_kesalahan FROM agregasi_hasil_review;')
+                            cur.execute('SELECT tanggal_dibuat, LOWER(nama_ssr), LOWER(indikator_kesalahan), jumlah_kesalahan FROM agregasi_hasil_review;')
                             for r in cur.fetchall():
-                                tgl_rev_str = r[0].date().isoformat() if hasattr(r[0], 'date') else str(r[0]).split()[0]
-                                existing_aggregations.add((tgl_rev_str.strip(), str(r[1]).strip(), str(r[2]).strip(), int(r[3])))
+                                tgl_dibuat_str = r[0].date().isoformat() if hasattr(r[0], 'date') else str(r[0]).split()[0]
+                                existing_aggregations.add((tgl_dibuat_str.strip(), str(r[1]).strip(), str(r[2]).strip(), int(r[3])))
                         conn.close()
                 except Exception as e:
                     st.warning(f"⚠️ Catatan: Gagal memuat indeks DB ({str(e)}).")
 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 2: STANDARDISASI ALIAS UNTUK TABEL DETAIL 🔥
+                # 🔥 LANGKAH 2: FILTRASI & STANDARDISASI ALIAS TABEL DETIL (TABEL BAWAH) 🔥
                 # -----------------------------------------------------------------
-                # Memastikan kolom dataframe memiliki variasi nama untuk DB dan UI (Anti-KeyError)
+                # 🛠️ MULTI-ALIAS INJECTION: Suntikkan semua variasi nama kolom agar kebal KeyError
                 for col in df_bawah.columns:
                     col_clean = str(col).strip().lower()
                     if "indikator" in col_clean and "kesalahan" in col_clean:
+                        df_bawah["INDIKATOR KESALAHAN DATA"] = df_bawah[col]
                         df_bawah["Indikator Kesalahan Data"] = df_bawah[col]
-                        df_bawah["INDIKATOR KESALAHAN DATA"] = df_bawah[col]  # Jaga-jaga untuk UI lama
                     elif "lembaga" in col_clean or "ssr" in col_clean:
                         df_bawah["Lembaga SSR"] = df_bawah[col]
                     elif "id" in col_clean or "klien" in col_clean:
@@ -805,7 +802,7 @@ if tombol_proses:
                     ssr = str(row.get('Lembaga SSR', '')).strip().lower()
                     tgl = str(row.get('Tanggal', '')).strip().lower() 
                     id_klien = str(row.get('ID Klien', '')).strip().lower()
-                    ind = str(row.get('Indikator Kesalahan Data', '')).strip().lower()
+                    ind = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
                     
                     key = (ssr, tgl, id_klien, ind)
                     if key in existing_details:
@@ -821,7 +818,7 @@ if tombol_proses:
                     df_bawah = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
                 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 3: PERHITUNGAN MATRIKS REKAP AGREGASI 🔥
+                # 🔥 LANGKAH 3: HITUNG REKAP (TABEL ATAS) & FILTER DUPLIKAT AGREGASI BARU 🔥
                 # -----------------------------------------------------------------
                 detected_ssrs = set(df_bawah['Lembaga SSR'].unique()) if not df_bawah.empty else set()
                 active_ssrs = sorted(list(detected_ssrs))
@@ -830,11 +827,11 @@ if tombol_proses:
                 
                 matrix_rows = []
                 for ind in DAFTAR_INDIKATOR_AKTIF:
-                    # Suntikkan kedua versi kolom (Kapital untuk UI, Spasi Alami untuk DB)
+                    # Sediakan dua variasi key langsung di dictionary generator
                     r_dict = {"INDIKATOR KESALAHAN DATA": ind, "Indikator Kesalahan Data": ind}
                     total_ind_err = 0
                     for ssr in active_ssrs:
-                        c = len(df_bawah[(df_bawah['Indikator Kesalahan Data'] == ind) & (df_bawah['Lembaga SSR'] == ssr)])
+                        c = len(df_bawah[(df_bawah['INDIKATOR KESALAHAN DATA'] == ind) & (df_bawah['Lembaga SSR'] == ssr)])
                         r_dict[ssr] = c
                         total_ind_err += c
                     
@@ -847,7 +844,7 @@ if tombol_proses:
                 
                 if not df_atas.empty:
                     for idx, row in df_atas.iterrows():
-                        ind_name = str(row.get('Indikator Kesalahan Data', '')).strip().lower()
+                        ind_name = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
                         for ssr in active_ssrs:
                             ssr_name = str(ssr).strip().lower()
                             jumlah_hitung_baru = int(row.get(ssr, 0))
@@ -864,7 +861,7 @@ if tombol_proses:
                     total_sisa_agregat = df_atas['Jumlah per indikator'].sum()
                     df_atas['%'] = (df_atas['Jumlah per indikator'] / total_sisa_agregat * 100) if total_sisa_agregat > 0 else 0.0
 
-                # Set Index secara aman sesuai ekspektasi komponen UI lama Anda
+                # Set Index dengan aman
                 if not df_atas.empty:
                     if "INDIKATOR KESALAHAN DATA" in df_atas.columns:
                         df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
@@ -872,7 +869,7 @@ if tombol_proses:
                     df_atas = pd.DataFrame(columns=["INDIKATOR KESALAHAN DATA", "Indikator Kesalahan Data", "Jumlah per indikator", "%"]).set_index("INDIKATOR KESALAHAN DATA")
                 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 4: SINKRONISASI KE NEON DB & PENYELARASAN UI 🔥
+                # 🔥 LANGKAH 4: SINKRONISASI KE NEON DB & PENYELARASAN SESI RENDERING 🔥
                 # -----------------------------------------------------------------
                 try:
                     from database import (
@@ -882,26 +879,27 @@ if tombol_proses:
                         ambil_detil_terakhir_dari_neon
                     )
                     
-                    # Salinan data dengan menyertakan alias kolom yang lengkap sebelum dikirim ke fungsi DB
+                    # Siapkan salinan untuk DB dengan menyertakan seluruh variasi nama kolom
                     df_to_db_atas = df_atas.copy().reset_index()
                     df_to_db_atas["Indikator Kesalahan Data"] = df_to_db_atas["INDIKATOR KESALAHAN DATA"]
+                    df_to_db_atas["indikator_kesalahan"] = df_to_db_atas["INDIKATOR KESALAHAN DATA"]
                     
                     df_to_db_bawah = df_bawah.copy()
+                    df_to_db_bawah["Indikator Kesalahan Data"] = df_to_db_bawah["INDIKATOR KESALAHAN DATA"]
                     
                     sukses_simpan_atas = simpan_agregasi_ke_neon(df_to_db_atas)
                     sukses_simpan_bawah = simpan_detil_review_ke_neon(df_to_db_bawah)
                     
                     if sukses_simpan_atas and sukses_simpan_bawah:
-                        st.toast("💾 Data berhasil disinkronisasi ke Neon Database!", icon="✅")
+                        st.toast("💾 Data berhasil disinkronisasi!", icon="✅")
                         
                         df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
                         df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
                         
-                        # Kembalikan alias kolom setelah keluar dari DB agar UI di luar blok tidak KeyError
+                        # 🛠️ RE-MAPPING SETELAH KELUAR DARI DB: Berikan alias kolom agar UI tidak kelapangan kolom kapital
                         if not df_atas_db.empty:
                             for col in df_atas_db.columns:
-                                c_low = str(col).strip().lower()
-                                if "indikator" in c_low:
+                                if str(col).strip().lower() in ["indikator_kesalahan", "indikator kesalahan data"]:
                                     df_atas_db["INDIKATOR KESALAHAN DATA"] = df_atas_db[col]
                                     df_atas_db["Indikator Kesalahan Data"] = df_atas_db[col]
                             if "INDIKATOR KESALAHAN DATA" in df_atas_db.columns:
@@ -915,11 +913,11 @@ if tombol_proses:
                                 if "indikator" in c_low:
                                     df_bawah_db["INDIKATOR KESALAHAN DATA"] = df_bawah_db[col]
                                     df_bawah_db["Indikator Kesalahan Data"] = df_bawah_db[col]
-                                elif "lembaga" in c_low or "ssr" in c_low:
+                                if "lembaga" in c_low or "ssr" in c_low:
                                     df_bawah_db["Lembaga SSR"] = df_bawah_db[col]
-                                elif "id" in c_low or "klien" in c_low:
+                                if "id" in c_low or "klien" in c_low:
                                     df_bawah_db["ID Klien"] = df_bawah_db[col]
-                                elif "tanggal" in c_low:
+                                if "tanggal" in c_low:
                                     df_bawah_db["Tanggal"] = df_bawah_db[col]
                             st.session_state['df_tabel_bawah'] = df_bawah_db
                             st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
@@ -928,7 +926,7 @@ if tombol_proses:
                         st.session_state['df_tabel_bawah'] = df_bawah
                         st.session_state['tanggal_terakhir_review'] = datetime.now()
                         st.session_state['tanggal_terakhir_bawah'] = datetime.now()
-                        st.warning("⚠️ Data disimpan sementara di session lokal.")
+                        st.warning("⚠️ Data disimpan di session lokal.")
                         
                 except Exception as e:
                     st.error(f"⚠️ Gagal sinkronisasi DB: {str(e)}")
