@@ -1107,13 +1107,35 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     border: 1px solid rgba(28, 131, 225, 0.25);
                     font-size: 0.88rem;
                     font-weight: 500;
-                    margin-bottom: 18px;
+                    margin-bottom: 12px;
                 ">
                     ℹ️ Hasil Review Data Penjangkauan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_format_bawah}</span>
                 </div>
                 """
                 st.markdown(badge_bawah_html, unsafe_allow_html=True)
-                        
+            
+            # 🔥 IMPLEMENTASI BARU: KOMPONEN FILTER NAMA LEMBAGA SSR 🔥
+            pilihan_ssr = "Semua"
+            if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
+                # Mendeteksi nama kolom SSR secara fleksibel (case-insensitive)
+                df_sumber = st.session_state['df_tabel_bawah']
+                kolom_ssr_asli = next((c for c in df_sumber.columns if "lembaga" in str(c).lower() or "ssr" in str(c).lower()), None)
+                
+                if kolom_ssr_asli:
+                    # Ambil daftar unik SSR, buang nilai kosong, urutkan alfabetis
+                    list_ssr_unik = sorted(df_sumber[kolom_ssr_asli].dropna().unique().tolist())
+                    
+                    # Buat kolom layout agar filter terlihat rapi tidak terlalu lebar
+                    col_filter, _ = st.columns([1, 2])
+                    with col_filter:
+                        pilihan_ssr = st.selectbox(
+                            "🎯 Filter Tampilan Berdasarkan Lembaga SSR:",
+                            options=["Semua"] + list_ssr_unik,
+                            index=0,
+                            help="Pilih nama SSR tertentu untuk mempercepat pencarian data yang akan dikonfirmasi."
+                        )
+                        st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+            
             # Render data editor jika data tersedia
             if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
                 kolom_susunan = [
@@ -1123,7 +1145,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 
                 df_bawah_raw = st.session_state['df_tabel_bawah'].copy()
                 
-                # 🛠️ PERBAIKAN 1: Ganti 'and' jadi 'or' agar lebih toleran menangkap nama kolom asli
+                # 🛠️ PERBAIKAN 1: Ganti 'and' jadi 'or' agar lebih tolerant menangkap nama kolom asli
                 rename_dict = {}
                 for col in df_bawah_raw.columns:
                     c_clean = str(col).strip().lower()
@@ -1133,6 +1155,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         rename_dict[col] = "Validasi Hasil Review"
                     elif "justifikasi" in c_clean:
                         rename_dict[col] = "Justifikasi"
+                    elif "lembaga" in c_clean or "ssr" in c_clean:
+                        rename_dict[col] = "Lembaga SSR" # Seragamkan nama kolom lembaga ke standar susunan
                         
                 if rename_dict:
                     df_bawah_raw = df_bawah_raw.rename(columns=rename_dict)
@@ -1144,6 +1168,10 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             df_bawah_raw["Pilih"] = False
                         else:
                             df_bawah_raw[col] = "-"
+                
+                # 🔥 PROSES FILTRASI TAMPILAN BERDASARKAN FILTER SELECTBOX 🔥
+                if pilihan_ssr != "Semua":
+                    df_bawah_raw = df_bawah_raw[df_bawah_raw["Lembaga SSR"] == pilihan_ssr]
                             
                 df_bawah_view = df_bawah_raw[kolom_susunan].copy()
                         
@@ -1152,91 +1180,92 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     ind_text = str(row['Indikator Kesalahan Data']).lower()
                     if "konfirmasi" not in ind_text:
                         df_bawah_view.at[idx, 'Justifikasi'] = ""  
-                        
-                df_hasil_edit = st.data_editor(
-                    df_bawah_view,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika telah direvisi", default=False),
-                        "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
-                        "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
-                        "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
-                        "Kode Petugas": st.column_config.TextColumn("Kode Petugas", width=110),
-                        "Nama Kota": st.column_config.TextColumn("Nama Kota", width=120),
-                        "NIK": st.column_config.TextColumn("NIK", width=140),
-                        "Tipe Sasaran": st.column_config.TextColumn("Tipe Sasaran", width=120),
-                        "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
-                        "Validasi Hasil Review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
-                        "Justifikasi": st.column_config.TextColumn("Justifikasi", help="Hanya untuk baris berunsur 'konfirmasi'", width=280),
-                    },
-                    disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
-                )
+                
+                # Beri info jika setelah di-filter datanya ternyata kosong
+                if df_bawah_view.empty:
+                    st.info(f"✨ Tidak ada data kesalahan yang perlu divalidasi untuk Lembaga SSR: **{pilihan_ssr}**")
+                else:
+                    df_hasil_edit = st.data_editor(
+                        df_bawah_view,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika telah direvisi", default=False),
+                            "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
+                            "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
+                            "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
+                            "Kode Petugas": st.column_config.TextColumn("Kode Petugas", width=110),
+                            "Nama Kota": st.column_config.TextColumn("Nama Kota", width=120),
+                            "NIK": st.column_config.TextColumn("NIK", width=140),
+                            "Tipe Sasaran": st.column_config.TextColumn("Tipe Sasaran", width=120),
+                            "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
+                            "Validasi Hasil Review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
+                            "Justifikasi": st.column_config.TextColumn("Justifikasi", help="Hanya untuk baris berunsur 'konfirmasi'", width=280),
+                        },
+                        disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
+                    )
                             
-                st.markdown("<br>", unsafe_allow_html=True)
-                col_save, _ = st.columns([1, 2])
-                with col_save:
-                    if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    col_save, _ = st.columns([1, 2])
+                    with col_save:
+                        if st.button("💾 Simpan Progres Validasi Ke Database", type="secondary", use_container_width=True):
                                     
-                        with st.spinner("Menyimpan progres validasi..."):
-                            list_log_db = []
-                            indeks_baris_terpilih = []
-                            peringatan_justifikasi = False
-                        
-                            for idx, row_edit in df_hasil_edit.iterrows():
-                                ind_text = str(row_edit['Indikator Kesalahan Data'])
-                                text_justifikasi = str(row_edit['Justifikasi']).strip()
-                                            
-                                is_konfirmasi = "konfirmasi" in ind_text.lower()
-                                            
-                                # Intersepsi Belakang Layar (Proteksi Data Non-Konfirmasi)
-                                if not is_konfirmasi:
-                                    if text_justifikasi not in ["", "None", "-", "nan"]:
-                                        peringatan_justifikasi = True
-                                    text_justifikasi = ""  
-                                else:
-                                    if text_justifikasi in ["None", "-", "nan"]:
-                                        text_justifikasi = ""
-                        
-                                # Trigger simpan jika di-ceklis ATAU baris konfirmasi yang terisi justifikasinya
-                                if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi != ""):
-                                    
-                                    # 🛠️ PENYESUAIAN 1: Tentukan nilai boolean untuk kolom is_revisi (True jika diceklis)
-                                    status_revisi = bool(row_edit['Pilih'])
-                                    
-                                    # 🛠️ PENYESUAIAN 2: Susun persis 6 elemen sesuai urutan %s di database.py
-                                    # (Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi)
-                                    list_log_db.append((
-                                        str(row_edit.get('Lembaga SSR', '-')),
-                                        str(row_edit.get('Tanggal', '-')),
-                                        str(row_edit.get('ID Klien', '-')),
-                                        ind_text,
-                                        status_revisi,       # Mengirim True/False (BOOLEAN)
-                                        text_justifikasi     # Mengirim teks Justifikasi
-                                    ))
-                                    indeks_baris_terpilih.append(idx)
+                            with st.spinner("Menyimpan progres validasi..."):
+                                list_log_db = []
+                                indeks_baris_terpilih = []
+                                peringatan_justifikasi = False
+                            
+                                for idx, row_edit in df_hasil_edit.iterrows():
+                                    ind_text = str(row_edit['Indikator Kesalahan Data'])
+                                    text_justifikasi = str(row_edit['Justifikasi']).strip()
+                                                
+                                    is_konfirmasi = "konfirmasi" in ind_text.lower()
+                                                
+                                    # Intersepsi Belakang Layar (Proteksi Data Non-Konfirmasi)
+                                    if not is_konfirmasi:
+                                        if text_justifikasi not in ["", "None", "-", "nan"]:
+                                            peringatan_justifikasi = True
+                                        text_justifikasi = ""  
+                                    else:
+                                        if text_justifikasi in ["None", "-", "nan"]:
+                                            text_justifikasi = ""
+                            
+                                    # Trigger simpan jika di-ceklis ATAU baris konfirmasi yang terisi justifikasinya
+                                    if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi != ""):
                                         
-                            if len(list_log_db) > 0:
-                                # 🛠️ PENYESUAIAN 3: Langsung panggil fungsi asli dari database.py Anda
-                                if simpan_log_ke_neon(list_log_db):
-                                    
-                                    # Sesuai poin 1: Potong baris yang sukses dari layar agar hilang
-                                    df_sekarang = st.session_state['df_tabel_bawah']
-                                    df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
-                                    st.session_state['df_tabel_bawah'] = df_sisa
-                                                
-                                    st.success(f"🎉 Berhasil memindahkan {len(list_log_db)} baris ke tabel log_validasi_review!")
-                                                
-                                    if peringatan_justifikasi:
-                                        st.warning("⚠️ Catatan: Input Justifikasi pada baris non-konfirmasi otomatis diabaikan oleh sistem.")
-                                                
-                                    import time
-                                    time.sleep(1.5)
-                                    st.rerun()
+                                        status_revisi = bool(row_edit['Pilih'])
+                                        
+                                        # Susun persis 6 elemen sesuai urutan %s di database.py
+                                        list_log_db.append((
+                                            str(row_edit.get('Lembaga SSR', '-')),
+                                            str(row_edit.get('Tanggal', '-')),
+                                            str(row_edit.get('ID Klien', '-')),
+                                            ind_text,
+                                            status_revisi,       # Mengirim True/False (BOOLEAN)
+                                            text_justifikasi     # Mengirim teks Justifikasi
+                                        ))
+                                        indeks_baris_terpilih.append(idx)
+                                            
+                                if len(list_log_db) > 0:
+                                    if simpan_log_ke_neon(list_log_db):
+                                        
+                                        # Potong baris yang sukses dari layar (Berdasarkan indeks asli session_state)
+                                        df_sekarang = st.session_state['df_tabel_bawah']
+                                        df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
+                                        st.session_state['df_tabel_bawah'] = df_sisa
+                                                    
+                                        st.success(f"🎉 Berhasil memindahkan {len(list_log_db)} baris ke tabel log_validasi_review!")
+                                                    
+                                        if peringatan_justifikasi:
+                                            st.warning("⚠️ Catatan: Input Justifikasi pada baris non-konfirmasi otomatis diabaikan oleh sistem.")
+                                                    
+                                        import time
+                                        time.sleep(1.5)
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Gagal menyimpan log ke Neon Database. Periksa kembali koneksi Anda.")
                                 else:
-                                    st.error("❌ Gagal menyimpan log ke Neon Database. Periksa kembali koneksi Anda.")
-                            else:
-                                st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
+                                    st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
