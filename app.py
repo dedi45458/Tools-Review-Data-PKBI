@@ -993,8 +993,29 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         with col3:
             st.metric(label="Tingkat Akurasi", value=akurasi_teks, delta="Berdasarkan Validasi")
 
-        st.markdown("<br>", unsafe_allow_html=True)
-
+        # =========================================================================
+        # KUSTOMISASI UKURAN HURUF TAB (Agar Seimbang dengan Sub-Tabel)
+        # =========================================================================
+        st.markdown("""
+            <style>
+            /* Menargetkan teks paragraf di dalam komponen Tab Streamlit */
+            .stTabs [data-baseweb="tab"] p {
+                font-size: 1.2rem !important;    /* Mengubah ukuran huruf (Default: ~0.875rem) */
+                font-weight: 600 !important;      /* Membuat teks menjadi lebih tebal/tegas */
+                color: #ffffff !important;        /* Memastikan warna teks tetap kontras */
+            }
+            
+            /* Otomatis memberikan sedikit ruang vertikal agar tidak terlalu rapat dengan konten bawah */
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 8px;
+                margin-bottom: 10px;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        # =========================================================================
+        # DEKLARASI TAB ANDA
+        # =========================================================================
         tab1, tab2 = st.tabs(["📋 Hasil Review Data SR", "📈 Analisis Tren Temuan"])
 
         with tab1:
