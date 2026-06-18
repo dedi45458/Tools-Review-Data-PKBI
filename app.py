@@ -868,7 +868,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 
-        tanggal_hari_ini = datetime.now().strftime('%d %B %Y')
+        tanggal_hari_ini = dt.datetime.now().strftime('%d %B %Y')
         st.markdown(f"""
             <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
                 📅 <b>Executive Review</b> | Tanggal: {tanggal_hari_ini}
