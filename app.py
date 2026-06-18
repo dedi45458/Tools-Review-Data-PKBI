@@ -1182,7 +1182,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         top_5_mutlak_idx = df_mutlak_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
                         df_top_5_mutlak = df_mutlak_all[df_mutlak_all['INDIKATOR KESALAHAN DATA'].isin(top_5_mutlak_idx)]
                         
-                        # Hitung jumlah per kombinasi Indikator + Kelompok Sasaran (Format Panjang/Long-form untuk Scatter)
+                        # Hitung jumlah per kombinasi Indikator + Kelompok Sasaran
                         df_dot_mutlak = df_top_5_mutlak.groupby(['INDIKATOR KESALAHAN DATA', 'Kelompok Sasaran']).size().reset_index(name='Jumlah Kasus')
                         
                         # Membuat Cleveland Dot Plot menggunakan px.scatter
@@ -1191,22 +1191,17 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             x='Jumlah Kasus',
                             y='INDIKATOR KESALAHAN DATA',
                             color='Kelompok Sasaran',
-                            template="plotly_dark", # Memaksa tema gelap resmi Plotly
+                            template="plotly_dark",
                             color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
                         )
                         
                         fig_mutlak.update_traces(
                             marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
-                            hoverlabel=dict(
-                                bgcolor="#0f172a",       # Ikut warna latar belakang config.toml Anda
-                                font_size=12,
-                                font_color="#f8fafc"     # Ikut warna teks config.toml Anda
-                            ),
                             hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
-                            hovertext=df_dot_mutlak['Kelompok Sasaran'] # 👈 Khusus untuk data mutlak
+                            hovertext=df_dot_mutlak['Kelompok Sasaran']
                         )
                         
-                        # Pengaturan Layout & Anti-Kotak Putih
+                        # Pengaturan Layout & Anti-Kotak Putih (Sudah Disatukan)
                         fig_mutlak.update_layout(
                             margin=dict(l=10, r=10, t=10, b=10),
                             paper_bgcolor='rgba(0,0,0,0)', 
@@ -1217,18 +1212,18 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             legend_title_text="Sasaran", 
                             height=280, 
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                            yaxis={'categoryorder':'total ascending'}, # Otomatis urut dari yang terbesar di paling atas
-                            hoverlabel=dict(bgcolor="#1E1E24", font_size=12, font_color="#FFFFFF") # Fix kotak putih
+                            yaxis={'categoryorder':'total ascending'},
+                            hoverlabel=dict(bgcolor="#0f172a", font_size=12, font_color="#f8fafc") # Menggunakan skema warna gelap Anda
                         )
                         fig_mutlak.update_xaxes(showgrid=True, gridcolor='#333333')
-                        fig_mutlak.update_yaxes(showgrid=True, gridcolor='#222222') # Garis pandu horizontal untuk titik
+                        fig_mutlak.update_yaxes(showgrid=True, gridcolor='#222222')
                         
                         st.plotly_chart(fig_mutlak, use_container_width=True, theme=None)
                     else:
                         st.info("✨ Bersih! Tidak ada temuan mutlak terdeteksi.")
                         
                     st.markdown("<br>", unsafe_allow_html=True)
-        
+                
                     # --- VISUALISASI KATEGORI 2: TEMUAN BUTUH KONFIRMASI (DOT PLOT) ---
                     st.markdown("##### 🟨 B. Top 5 Temuan Butuh Klarifikasi (Ada Unsur Justifikasi / Konfirmasi)")
                     if not df_konf_all.empty:
@@ -1251,13 +1246,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         
                         fig_konf.update_traces(
                             marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
-                            hoverlabel=dict(
-                                bgcolor="#0f172a",       # Ikut warna latar belakang config.toml Anda
-                                font_size=12,
-                                font_color="#f8fafc"     # Ikut warna teks config.toml Anda
-                            ),
                             hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
-                            hovertext=df_dot_konf['Kelompok Sasaran'] # 👈 Khusus untuk data konfirmasi
+                            hovertext=df_dot_konf['Kelompok Sasaran']
                         )
                         
                         fig_konf.update_layout(
@@ -1271,7 +1261,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             height=280, 
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                             yaxis={'categoryorder':'total ascending'},
-                            hoverlabel=dict(bgcolor="#1E1E24", font_size=12, font_color="#FFFFFF") # Fix kotak putih
+                            hoverlabel=dict(bgcolor="#0f172a", font_size=12, font_color="#f8fafc")
                         )
                         fig_konf.update_xaxes(showgrid=True, gridcolor='#333333')
                         fig_konf.update_yaxes(showgrid=True, gridcolor='#222222')
@@ -1281,7 +1271,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         st.info("✨ Aman! Tidak ada data yang membutuhkan konfirmasi tambahan.")
                 else:
                     st.info("✨ Tidak ada rincian data kesalahan untuk dianalisa berdasarkan target.")
-        
+                    
             # =========================================================================
             # LINE BREAK / PEMBATAS ELEGAN ANTARA DATA SEKARANG VS DATA HISTORIS
             # =========================================================================
@@ -1318,7 +1308,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             else:
                 st.info("Belum ada data rekap tren di tabel rekap_tren_bulanan.")
         
-        # Menutup Glass Card HTML Container dari Main Layout
+        # Menutup Glass Card HTML Container dari Main Layout (Pastikan ada elemen pembukanya di atas)
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
