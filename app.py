@@ -769,7 +769,7 @@ if tombol_proses:
                                 existing_logs.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
                             
                             # b. Ambil dari hasil_review_penjangkauan 
-                            cur.execute('SELECT LOWER("Lembaga SSR"), LOWER("Tanggal"), LOWER("ID Klien"), LOWER("Indikator Kesalahan Data") FROM hasil_review_penjangkauan;')
+                            cur.execute('SELECT LOWER("Lembaga SSR"), LOWER("Tanggal"), LOWER("ID Klien"), LOWER("Indikator Kesalahan Data") FROM hasil_review_penjangkauan_detil_per_baris;')
                             for r in cur.fetchall():
                                 existing_details.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
                             
