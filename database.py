@@ -122,9 +122,9 @@ def ambil_rekap_tren():
     finally:
         conn.close()
 
-def import_data_rujukan(df_rujukan):
+def import_data_HIV(df_HIV):
     """Mengosongkan tabel rujukan lama dan mengupload ulang data dari Excel secara massal."""
-    df_rujukan.columns = df_rujukan.columns.str.strip()
+    df_HIV.columns = df_HIV.columns.str.strip()
 
     pemetaan = {
         "Lembaga SR": "lembaga_sr",
@@ -147,14 +147,14 @@ def import_data_rujukan(df_rujukan):
         "Hasil Tes HIV": "hasil_tes_hiv"
     }
 
-    df_rujukan.rename(columns=pemetaan, inplace=True)
+    df_HIV.rename(columns=pemetaan, inplace=True)
     
     kolom_db = list(pemetaan.values())
     for col in kolom_db:
-        if col not in df_rujukan.columns:
-            df_rujukan[col] = None 
+        if col not in df_HIV.columns:
+            df_HIV[col] = None 
             
-    df_rujukan = df_rujukan[kolom_db]
+    df_HIV = df_HIV[kolom_db]
 
     conn = dapatkan_koneksi_neon()
     if conn is None: 
@@ -168,7 +168,7 @@ def import_data_rujukan(df_rujukan):
         # Peningkatan: Membuka engine dengan context manager agar otomatis tertutup setelah selesai
         engine = create_engine(st.secrets["neon_db"]["connection_string"])
         with engine.connect() as sql_conn:
-            df_rujukan.to_sql(
+            df_HIV.to_sql(
                 'data_rujukan_hiv_positif', 
                 sql_conn, 
                 if_exists='append', 
