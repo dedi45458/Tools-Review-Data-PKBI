@@ -530,3 +530,67 @@ def buat_tabel_dan_index_layanan():
             cursor.close()
         if conn:
             conn.close()
+
+def import_database_layanan(df):
+    """
+    Fungsi untuk memasukkan/memperbarui data dari Excel ke tabel database_layanan di Neon.
+    """
+    # 1. Normalisasi nama kolom Excel agar case-insensitive dan bebas spasi berlebih
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    
+    # 2. Cari kolom yang sesuai di Excel secara fleksibel
+    col_ssr = next((c for c in df.columns if "lembaga" in c or "ssr" in c), None)
+    col_layanan = next((c for c in df.columns if "nama" in c and "layanan" in c), None)
+    col_jenis = next((c for c in df.columns if "jenis" in c), None)
+    col_kabkota = next((c for c in df.columns if "kab" in c or "kota" in c), None)
+    col_siha = next((c for c in df.columns if "siha" in c), None)
+    
+    # Validasi apakah kolom minimal terpenuhi
+    if not col_ssr or not col_layanan:
+        return False, "Kolom 'Lembaga SSR/IU' atau 'Nama Layanan' tidak ditemukan di file Excel Anda."
+    
+    conn = None
+    cursor = None
+    baris_terinsert = 0
+    
+    try:
+        conn = dapatkan_koneksi_neon()
+        cursor = conn.cursor()
+        
+        # PENTING: Pilih salah satu strategi di bawah ini (A atau B)
+        # STRATEGI A: Hapus data lama lalu ganti baru (Truncate & Reload) -> Direkomendasikan untuk data master/referensi
+        cursor.execute("TRUNCATE TABLE database_layanan RESTART IDENTITY;")
+        
+        # Loop setiap baris di Excel untuk dimasukkan ke database
+        for _, row in df.iterrows():
+            # Tangani nilai NaN dari pandas agar menjadi None (NULL di SQL)
+            val_ssr = str(row[col_ssr]).strip() if pd.notna(row[col_ssr]) else None
+            val_layanan = str(row[col_layanan]).strip() if pd.notna(row[col_layanan]) else None
+            val_jenis = str(row[col_jenis]).strip() if pd.notna(row[col_jenis]) else '-'
+            val_kabkota = str(row[col_kabkota]).strip() if pd.notna(row[col_kabkota]) else '-'
+            val_siha = str(row[col_siha]).strip() if pd.notna(row[col_siha]) else '-'
+            
+            # Lewati jika nama SSR atau nama layanan kosong
+            if not val_ssr or not val_layanan:
+                continue
+                
+            query_insert = """
+            INSERT INTO database_layanan (lembaga_ssr_iu, nama_layanan, jenis, kab_kota, kode_siha)
+            VALUES (%s, %s, %s, %s, %s);
+            """
+            
+            cursor.execute(query_insert, (val_ssr, val_layanan, val_jenis, val_kabkota, val_siha))
+            baris_terinsert += 1
+            
+        conn.commit()
+        return True, f"Database referensi layanan berhasil diperbarui! {baris_terinsert} baris data berhasil diintegrasikan."
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return False, f"Gagal insert ke database: {str(e)}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
