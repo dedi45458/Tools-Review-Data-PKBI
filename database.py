@@ -479,3 +479,54 @@ def ambil_status_storage_neon():
         return None
     finally:
         conn.close()
+        
+
+def buat_tabel_dan_index_layanan():
+    """
+    Fungsi untuk membuat tabel database_layanan sekaligus index kombinasi
+    antara Lembaga SSR/IU dan Nama Layanan di Neon PostgreSQL.
+    """
+    # Query Pembuatan Tabel
+    query_tabel = """
+    CREATE TABLE IF NOT EXISTS database_layanan (
+        no SERIAL PRIMARY KEY,
+        lembaga_ssr_iu VARCHAR(150),
+        nama_layanan VARCHAR(255),
+        jenis VARCHAR(100),
+        kab_kota VARCHAR(100),
+        kode_siha VARCHAR(50)
+    );
+    """
+    
+    # Query Pembuatan Index Kombinasi
+    query_index = """
+    CREATE INDEX IF NOT EXISTS idx_layanan_ssr_nama 
+    ON database_layanan (lembaga_ssr_iu, nama_layanan);
+    """
+    
+    conn = None
+    cursor = None
+    try:
+        conn = dapatkan_koneksi_neon() 
+        cursor = conn.cursor()
+        
+        # 1. Eksekusi pembuatan tabel
+        cursor.execute(query_tabel)
+        
+        # 2. Eksekusi pembuatan index kombinasi
+        cursor.execute(query_index)
+        
+        # Komit semua perubahan
+        conn.commit()
+        print("🎉 Tabel 'database_layanan' dan Index Kombinasi berhasil disiapkan.")
+        return True
+    except Exception as e:
+        print(f"❌ Gagal membuat tabel atau index: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
