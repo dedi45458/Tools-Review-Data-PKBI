@@ -1009,13 +1009,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 
                 df_bawah_raw = st.session_state['df_tabel_bawah'].copy()
                 
-                # 🛠️ PENYEMPURNAAN 1: Pemetaan Pintar Spasi & Kapital (Biar Kolom Tidak Kosong/- Lagi)
+                # 🛠️ PERBAIKAN 1: Ganti 'and' jadi 'or' agar lebih toleran menangkap nama kolom asli
                 rename_dict = {}
                 for col in df_bawah_raw.columns:
                     c_clean = str(col).strip().lower()
-                    if "indikator" in c_clean and "kesalahan" in c_clean:
+                    if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean:
                         rename_dict[col] = "Indikator Kesalahan Data"
-                    elif "validasi" in c_clean and "review" in c_clean:
+                    elif "validasi" in c_clean or "review" in c_clean:
                         rename_dict[col] = "Validasi Hasil Review"
                     elif "justifikasi" in c_clean:
                         rename_dict[col] = "Justifikasi"
@@ -1033,11 +1033,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             
                 df_bawah_view = df_bawah_raw[kolom_susunan].copy()
                         
-                # 🛠️ PENYEMPURNAAN 2: Kosongkan teks Justifikasi jika bukan baris konfirmasi (UI Bersih)
+                # Kosongkan teks Justifikasi jika bukan baris konfirmasi (UI Bersih)
                 for idx, row in df_bawah_view.iterrows():
                     ind_text = str(row['Indikator Kesalahan Data']).lower()
                     if "konfirmasi" not in ind_text:
-                        df_bawah_view.at[idx, 'Justifikasi'] = ""  # Diubah menjadi string kosong agar rapi
+                        df_bawah_view.at[idx, 'Justifikasi'] = ""  
                         
                 df_hasil_edit = st.data_editor(
                     df_bawah_view,
@@ -1075,11 +1075,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                             
                                 is_konfirmasi = "konfirmasi" in ind_text.lower()
                                             
-                                # 🛠️ PENYEMPURNAAN 3: Intersepsi Belakang Layar (Proteksi Data Non-Konfirmasi)
+                                # Intersepsi Belakang Layar (Proteksi Data Non-Konfirmasi)
                                 if not is_konfirmasi:
                                     if text_justifikasi not in ["", "None", "-", "nan"]:
                                         peringatan_justifikasi = True
-                                    text_justifikasi = ""  # Paksa buang inputan ilegal jika bukan baris konfirmasi
+                                    text_justifikasi = ""  
                                 else:
                                     if text_justifikasi in ["None", "-", "nan"]:
                                         text_justifikasi = ""
@@ -1101,7 +1101,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                     indeks_baris_terpilih.append(idx)
                                 
                             if len(list_log_db) > 0:
-                                # Bungkus data ke DataFrame utuh sesuai ekspektasi struktur database.py
                                 df_to_save = pd.DataFrame(list_log_db, columns=[
                                     "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", 
                                     "Nama Kota", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", 
@@ -1122,9 +1121,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                     time.sleep(1.5)
                                     st.rerun()
                                 else:
-                                    st.error("❌ Gagal menyimpan log ke Neon Database. Periksa konfigurasi data.")
+                                    st.error("❌ Gagal menyimpan log ke Neon Database. Periksa struktur tabel Anda.")
                             else:
-                                st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' pada kolom konfirmasi sebelum menyimpan.")
+                                st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
