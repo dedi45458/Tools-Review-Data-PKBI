@@ -285,52 +285,6 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # ==========================================================
-    # INDIKATOR STORAGE NEON DB (PAKET FREE TIER)
-    # ==========================================================
-    storage_info = ambil_status_storage_neon()
-    
-    if storage_info:
-        # Menentukan warna teks & indikator berdasarkan tingkat kepenuhan storage
-        if storage_info['persen_terpakai'] > 85:
-            kondisi_warna = "#ff4b4b"  # Merah jika hampir penuh
-        elif storage_info['persen_terpakai'] > 60:
-            kondisi_warna = "#ffa500"  # Kuning jika mulai terisi banyak
-        else:
-            kondisi_warna = "#38bdf8"  # Biru langit modern jika aman
-            
-        # Tampilan card informasi storage ala glassmorphism
-        html_storage = f"""
-        <div style="
-            background-color: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 12px 14px;
-            margin-bottom: 10px;
-            font-size: 0.82rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        ">
-            <div style="display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 5px;">
-                <span style="color: #cbd5e1; display: flex; align-items: center; gap: 5px;">💾 Storage</span>
-                <span style="color: {kondisi_warna}; font-weight: 700;">{storage_info['persen_terpakai']}%</span>
-            </div>
-            <div style="color: #94a3b8; margin-bottom: 0px;">
-                Tersisa: <strong style="color: #f8fafc;">{storage_info['sisa_mb']} MB</strong> dari {storage_info['total_mb']} MB
-            </div>
-        </div>
-        """
-        st.markdown(html_storage, unsafe_allow_html=True)
-        # Menampilkan progress bar bawaan Streamlit
-        st.progress(storage_info['persen_terpakai'] / 100.0)
-    else:
-        st.markdown("""
-            <div style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 15px; padding: 0 5px;">
-                ⚠️ Gagal memuat status storage database.
-            </div>
-        """, unsafe_allow_html=True)
-        
-    st.markdown("<div style='margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-top: 15px;'></div>", unsafe_allow_html=True)
-    
     # --- PENAMBAHAN MENU NAVIGASI ---
     menu_pilihan = st.radio(
         "Navigasi Menu", 
@@ -413,6 +367,52 @@ with st.sidebar:
 
         st.markdown("""<div style="margin-top: 35px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>""", unsafe_allow_html=True)
         tombol_proses = st.button("🚀 Jalankan Validasi", type="primary", use_container_width=True)
+
+        # ==========================================================
+        # INDIKATOR STORAGE NEON DB (PAKET FREE TIER)
+        # ==========================================================
+        storage_info = ambil_status_storage_neon()
+        
+        if storage_info:
+            # Menentukan warna teks & indikator berdasarkan tingkat kepenuhan storage
+            if storage_info['persen_terpakai'] > 85:
+                kondisi_warna = "#ff4b4b"  # Merah jika hampir penuh
+            elif storage_info['persen_terpakai'] > 60:
+                kondisi_warna = "#ffa500"  # Kuning jika mulai terisi banyak
+            else:
+                kondisi_warna = "#38bdf8"  # Biru langit modern jika aman
+                
+            # Tampilan card informasi storage ala glassmorphism
+            html_storage = f"""
+            <div style="
+                background-color: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                padding: 12px 14px;
+                margin-bottom: 10px;
+                font-size: 0.82rem;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            ">
+                <div style="display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 5px;">
+                    <span style="color: #cbd5e1; display: flex; align-items: center; gap: 5px;">💾 Storage</span>
+                    <span style="color: {kondisi_warna}; font-weight: 700;">{storage_info['persen_terpakai']}%</span>
+                </div>
+                <div style="color: #94a3b8; margin-bottom: 0px;">
+                    Tersisa: <strong style="color: #f8fafc;">{storage_info['sisa_mb']} MB</strong> dari {storage_info['total_mb']} MB
+                </div>
+            </div>
+            """
+            st.markdown(html_storage, unsafe_allow_html=True)
+            # Menampilkan progress bar bawaan Streamlit
+            st.progress(storage_info['persen_terpakai'] / 100.0)
+        else:
+            st.markdown("""
+                <div style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 15px; padding: 0 5px;">
+                    ⚠️ Gagal memuat status storage database.
+                </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown("<div style='margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-top: 15px;'></div>", unsafe_allow_html=True)
 
 # ==========================================================
 # 3. ENGINE VALIDASI UTAMA (VERSI SEMPURNA & DINAMIS + INTEGRASI NOTIFIKASI)
