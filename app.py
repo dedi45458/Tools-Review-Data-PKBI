@@ -1047,7 +1047,7 @@ if tombol_proses:
                 
                 st.info("✨ Proses selesai: Tidak ditemukan indikator kesalahan data pada file yang Anda unggah.")
 
-            # AUTO-REFRESH UI DENGAN DATA DARI DB
+            # AUTO-REFRESH UI DENGAN DATA DARI DB (KOREKSI SINKRONISASI MEMORY KEY)
             try:
                 from database import ambil_agregasi_penjangkauan_terakhir, ambil_agregasi_rujukan_terakhir, ambil_hasil_review_utama_terakhir, ambil_metrik_akurasi_terakhir
                 metrik_db, ts_metrik = ambil_metrik_akurasi_terakhir()
@@ -1058,12 +1058,21 @@ if tombol_proses:
                 df_rjk_db, ts_rjk = ambil_agregasi_rujukan_terakhir()
                 df_utama_db, ts_utama = ambil_hasil_review_utama_terakhir()
                 
+                # 🔄 SINKRONISASI KEY MEMORY UI
                 st.session_state['df_tabel_atas'] = df_pjj_db 
                 st.session_state['df_tabel_penjangkauan'] = df_pjj_db
+                
+                # ✨ DIUBAH: Mengisi kedua key agar sinkron dengan fungsi render UI Tab 1 Anda
+                st.session_state['df_rujukan'] = df_rjk_db
                 st.session_state['df_tabel_rujukan'] = df_rjk_db
+                
                 st.session_state['df_tabel_bawah'] = df_utama_db
                 st.session_state['tanggal_terakhir_review'] = ts_utama
                 st.session_state['tanggal_terakhir_bawah'] = ts_utama
+                
+                # ✨ TAMBAHAN: Mengamankan string tanggal untuk badge rujukan
+                if ts_rjk:
+                    st.session_state['tanggal_terakhir_rujukan_str'] = ts_rjk.strftime('%d-%m-%Y pukul %H:%M WIB') if hasattr(ts_rjk, 'strftime') else str(ts_rjk)
 
             except Exception as e:
                 st.warning(f"⚠️ Berhasil simpan data, namun gagal me-refresh visualisasi dashboard UI ({e})")
