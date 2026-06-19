@@ -936,15 +936,20 @@ if tombol_proses:
                 st.session_state['temuan_rujukan'] = total_temuan_rjk
                 
                 # 🔥 SINKRONISASI KE DATABASE NEON
-                try:
-                    from database import simpan_metrik_akurasi_db
-                    if total_proses_pjj > 0: 
-                        simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
-                    if total_proses_rjk > 0: 
-                        simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
-                except Exception as e:
-                    st.error(f"Gagal mencatat log ke database: {e}")
-
+                if not st.session_state.get('db_tercatat_batch', False):
+                    try:
+                        from database import simpan_metrik_akurasi_db
+                        
+                        if total_proses_pjj > 0: 
+                            simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
+                        if total_proses_rjk > 0: 
+                            simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
+                            
+                        st.success("✅ Sinkronisasi metrik akurasi ke database Neon berhasil dilakukan!")
+                        st.session_state['db_tercatat_batch'] = True
+                                
+                    except Exception as e:
+                        st.error(f"Gagal memproses verifikasi database: {e}")
                 # =========================================================================
                 # 🔥 PERBAIKAN TOTAL: STANDARISASI NAMA KOLOM & CLEANSING DATA (HURUF KAPITAL)
                 # =========================================================================
