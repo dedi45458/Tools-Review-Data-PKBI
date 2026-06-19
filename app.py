@@ -107,35 +107,38 @@ if 'total_entri' not in st.session_state: st.session_state['total_entri'] = 0
 if 'proses_selesai' not in st.session_state: st.session_state['proses_selesai'] = False
 if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = []
 
+# 🔥 Pemicu untuk memaksa baca ulang data dari DB ke semua tabel setelah tombol validasi selesai diproses
+pemicu_baca_ulang = st.session_state.get('proses_selesai', False)
+
 # --- 1. REKAP HASIL REVIEW DATA PENJANGKAUAN SSR (Tabel 1) ---
-if 'df_penjangkauan' not in st.session_state or st.session_state['df_penjangkauan'] is None:
+if ('df_penjangkauan' not in st.session_state or st.session_state['df_penjangkauan'] is None or pemicu_baca_ulang):
     try:
         df_pj, ts_pj = ambil_agregasi_penjangkauan_terakhir()
         if df_pj is not None and not df_pj.empty:
             st.session_state['df_penjangkauan'] = df_pj
+            # 👇 ALIAS: Memastikan UI versi lama juga menerima datanya
+            st.session_state['df_tabel_atas'] = df_pj 
+            st.session_state['df_tabel_penjangkauan'] = df_pj 
             st.session_state['ts_terakhir_penjangkauan'] = ts_pj
         else:
             st.session_state['df_penjangkauan'] = pd.DataFrame()
+            st.session_state['df_tabel_atas'] = pd.DataFrame()
             st.session_state['ts_terakhir_penjangkauan'] = datetime.now()
     except Exception as e:
         st.session_state['df_penjangkauan'] = pd.DataFrame()
+        st.session_state['df_tabel_atas'] = pd.DataFrame()
         st.session_state['ts_terakhir_penjangkauan'] = datetime.now()
 
 # --- 2. REKAP HASIL REVIEW DATA RUJUKAN SSR (Tabel 2) ---
-# Tambahkan pengecekan 'proses_selesai' agar otomatis mengambil data baru setelah klik tombol validasi
-pemicu_baca_ulang = st.session_state.get('proses_selesai', False)
-
-if ('df_rujukan' not in st.session_state 
-    or st.session_state['df_rujukan'] is None 
-    or pemicu_baca_ulang):
-    
+if ('df_rujukan' not in st.session_state or st.session_state['df_rujukan'] is None or pemicu_baca_ulang):
     try:
         df_rj, ts_rj = ambil_agregasi_rujukan_terakhir()
         if df_rj is not None and not df_rj.empty:
             st.session_state['df_rujukan'] = df_rj
+            # 👇 ALIAS: Memastikan UI versi lama juga menerima datanya
+            st.session_state['df_tabel_rujukan'] = df_rj 
             st.session_state['ts_terakhir_rujukan'] = ts_rj
         else:
-            # Jika benar-benar kosong dari DB, set kosongan agar tidak error
             st.session_state['df_rujukan'] = pd.DataFrame()
             st.session_state['ts_terakhir_rujukan'] = datetime.now()
     except Exception as e:
@@ -143,17 +146,21 @@ if ('df_rujukan' not in st.session_state
         st.session_state['ts_terakhir_rujukan'] = datetime.now()
 
 # --- 3. HASIL REVIEW VALIDASI DATA GABUNGAN UTAMA (Tabel 3) ---
-if 'df_review_utama' not in st.session_state or st.session_state['df_review_utama'] is None:
+if ('df_review_utama' not in st.session_state or st.session_state['df_review_utama'] is None or pemicu_baca_ulang):
     try:
         df_ut, ts_ut = ambil_hasil_review_utama_terakhir()
         if df_ut is not None and not df_ut.empty:
             st.session_state['df_review_utama'] = df_ut
+            # 👇 ALIAS SANGAT PENTING: Karena UI tabel bawah biasanya menggunakan nama ini
+            st.session_state['df_tabel_bawah'] = df_ut 
             st.session_state['ts_terakhir_utama'] = ts_ut
         else:
             st.session_state['df_review_utama'] = pd.DataFrame()
+            st.session_state['df_tabel_bawah'] = pd.DataFrame()
             st.session_state['ts_terakhir_utama'] = datetime.now()
     except Exception as e:
         st.session_state['df_review_utama'] = pd.DataFrame()
+        st.session_state['df_tabel_bawah'] = pd.DataFrame()
         st.session_state['ts_terakhir_utama'] = datetime.now()
 
 # --- B. INISIALISASI KEYWORD MEDSOS ---
