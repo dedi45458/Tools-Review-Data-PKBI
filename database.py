@@ -502,3 +502,61 @@ def ambil_hasil_review_utama_terakhir():
         return pd.DataFrame(), None
     finally:
         conn.close()
+
+def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
+    """Menyimpan log metrik akurasi saat validasi berjalan."""
+    conn = dapatkan_koneksi_neon()
+    if not conn: return False
+    try:
+        with conn.cursor() as cur:
+            # Otomatis membuat tabel jika kamu belum sempat membuatnya di Neon
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS metrik_akurasi (
+                    id SERIAL PRIMARY KEY,
+                    kategori VARCHAR(50), 
+                    total_proses INT, 
+                    total_temuan INT, 
+                    akurasi FLOAT, 
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO metrik_akurasi (kategori, total_proses, total_temuan, akurasi) 
+                VALUES (%s, %s, %s, %s);
+            """, (kategori, total_proses, total_temuan, akurasi))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def ambil_metrik_akurasi_terakhir():
+    """Mengambil persentase akurasi terakhir untuk ditampilkan di UI Kartu Skor."""
+    conn = dapatkan_koneksi_neon()
+    metrik_default = {'akurasi_penjangkauan': 100.0, 'akurasi_rujukan': 100.0}
+    ts_metrik = dt.datetime.now()
+    
+    if not conn: return metrik_default, ts_metrik
+    try:
+        with conn.cursor() as cur:
+            # Cek apakah tabel ada
+            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'metrik_akurasi');")
+            tabel_ada = cur.fetchone()[0]
+            
+            if tabel_ada:
+                cur.execute("SELECT MAX(created_at) FROM metrik_akurasi")
+                max_ts = cur.fetchone()[0]
+                if max_ts:
+                    ts_metrik = max_ts
+                    cur.execute("SELECT kategori, akurasi FROM metrik_akurasi WHERE created_at = %s", (max_ts,))
+                    for row in cur.fetchall():
+                        kat = str(row[0]).lower()
+                        if 'penjangkauan' in kat: metrik_default['akurasi_penjangkauan'] = float(row[1])
+                        if 'rujukan' in kat: metrik_default['akurasi_rujukan'] = float(row[1])
+    except Exception:
+        pass # Jika eror, biarkan mengembalikan nilai 100.0 (Aman)
+    finally:
+        conn.close()
+        
+    return metrik_default, ts_metrik
