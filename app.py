@@ -107,16 +107,17 @@ if 'total_entri' not in st.session_state: st.session_state['total_entri'] = 0
 if 'proses_selesai' not in st.session_state: st.session_state['proses_selesai'] = False
 if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = []
 
-# 🔥 Pemicu untuk memaksa baca ulang data dari DB ke semua tabel setelah tombol validasi selesai diproses
+# Pemicu untuk memaksa baca ulang data dari DB setelah tombol validasi selesai diproses
 pemicu_baca_ulang = st.session_state.get('proses_selesai', False)
 
 # --- 1. REKAP HASIL REVIEW DATA PENJANGKAUAN SSR (Tabel 1) ---
 if ('df_penjangkauan' not in st.session_state or st.session_state['df_penjangkauan'] is None or pemicu_baca_ulang):
     try:
+        from database import ambil_agregasi_penjangkauan_terakhir
         df_pj, ts_pj = ambil_agregasi_penjangkauan_terakhir()
         if df_pj is not None and not df_pj.empty:
             st.session_state['df_penjangkauan'] = df_pj
-            # 👇 ALIAS: Memastikan UI versi lama juga menerima datanya
+            # ALIAS: Mengisi nama variabel lama agar dibaca oleh komponen UI lama
             st.session_state['df_tabel_atas'] = df_pj 
             st.session_state['df_tabel_penjangkauan'] = df_pj 
             st.session_state['ts_terakhir_penjangkauan'] = ts_pj
@@ -132,10 +133,10 @@ if ('df_penjangkauan' not in st.session_state or st.session_state['df_penjangkau
 # --- 2. REKAP HASIL REVIEW DATA RUJUKAN SSR (Tabel 2) ---
 if ('df_rujukan' not in st.session_state or st.session_state['df_rujukan'] is None or pemicu_baca_ulang):
     try:
+        from database import ambil_agregasi_rujukan_terakhir
         df_rj, ts_rj = ambil_agregasi_rujukan_terakhir()
         if df_rj is not None and not df_rj.empty:
             st.session_state['df_rujukan'] = df_rj
-            # 👇 ALIAS: Memastikan UI versi lama juga menerima datanya
             st.session_state['df_tabel_rujukan'] = df_rj 
             st.session_state['ts_terakhir_rujukan'] = ts_rj
         else:
@@ -148,10 +149,11 @@ if ('df_rujukan' not in st.session_state or st.session_state['df_rujukan'] is No
 # --- 3. HASIL REVIEW VALIDASI DATA GABUNGAN UTAMA (Tabel 3) ---
 if ('df_review_utama' not in st.session_state or st.session_state['df_review_utama'] is None or pemicu_baca_ulang):
     try:
+        from database import ambil_hasil_review_utama_terakhir
         df_ut, ts_ut = ambil_hasil_review_utama_terakhir()
         if df_ut is not None and not df_ut.empty:
             st.session_state['df_review_utama'] = df_ut
-            # 👇 ALIAS SANGAT PENTING: Karena UI tabel bawah biasanya menggunakan nama ini
+            # ALIAS UTAMA: Mengisi data ke variabel tabel bawah agar UI-nya tidak kosong
             st.session_state['df_tabel_bawah'] = df_ut 
             st.session_state['ts_terakhir_utama'] = ts_ut
         else:
@@ -165,10 +167,13 @@ if ('df_review_utama' not in st.session_state or st.session_state['df_review_uta
 
 # --- B. INISIALISASI KEYWORD MEDSOS ---
 if 'medsoc_keywords' not in st.session_state:
-    st.session_state['medsoc_keywords'] = ambil_keyword_medsos_db()
+    try:
+        from database import ambil_keyword_medsos_db
+        st.session_state['medsoc_keywords'] = ambil_keyword_medsos_db()
+    except Exception:
+        st.session_state['medsoc_keywords'] = []
 
 def ambil_keyword_medsos():
-    """Mengambil daftar keyword medsos aktif dari session state"""
     keywords = st.session_state.get('medsoc_keywords', [])
     return sorted(keywords) if keywords else []
 
