@@ -15,13 +15,21 @@ from database import (
     hitung_dan_ambil_log_db,     
     ambil_keyword_medsos_db,     
     tambah_keyword_medsos_db,
-    simpan_agregasi_ke_neon,
-    ambil_agregasi_terakhir_dari_neon,
     ambil_status_storage_neon,
-    ambil_data_rujukan_hiv_positif,  # 🔥 DITAMBAHKAN UNTUK REFERENSI RUJUKAN
-    ambil_database_layanan,          # 🔥 DITAMBAHKAN UNTUK REFERENSI LAYANAN
-    simpan_agregasi_rujukan_db,
-    simpan_hasil_review_utama_db
+    
+    # 🛠️ REFERENSI DATA MASTER
+    ambil_data_rujukan_hiv_positif,  
+    ambil_database_layanan,          
+    
+    # 🛠️ PROSES SIMPAN DATA REVIEWS
+    simpan_agregasi_ke_neon,          # Untuk Penjangkauan
+    simpan_agregasi_rujukan_db,       # Untuk Rujukan
+    simpan_hasil_review_utama_db,     # Untuk Gabungan Utama
+    
+    # 🔥 PENYEMPURNAAN: AMBIL DATA TERAKHIR SINKRON DENGAN APP STATE
+    ambil_agregasi_penjangkauan_terakhir,  # <-- Menggantikan ambil_agregasi_terakhir_dari_neon
+    ambil_agregasi_rujukan_terakhir,       # <-- BARU: Untuk Tabel Rekap Rujukan SSR
+    ambil_hasil_review_utama_terakhir      # <-- BARU: Untuk Tabel Validasi Utama
 )
 
 # ==========================================================
@@ -90,45 +98,49 @@ set_modern_theme()
 # ==========================================================
 if 'total_entri' not in st.session_state: st.session_state['total_entri'] = 0
 if 'proses_selesai' not in st.session_state: st.session_state['proses_selesai'] = False
-if 'df_tabel_bawah' not in st.session_state: st.session_state['df_tabel_bawah'] = None
 if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = []
 
-# --- A. INISIALISASI OTOMATIS AMBIL DATA AGREGASI TERAKHIR DARI NEON DB ---
-# Jika key belum ada ATAU nilainya masih kosong, tarik dari Neon DB
-if 'df_tabel_atas' not in st.session_state or st.session_state['df_tabel_atas'] is None:
+# --- 1. REKAP HASIL REVIEW DATA PENJANGKAUAN SSR (Tabel 1) ---
+if 'df_penjangkauan' not in st.session_state or st.session_state['df_penjangkauan'] is None:
     try:
-        # Panggil fungsi penarik data dari database.py
-        df_dari_db, max_date = ambil_agregasi_terakhir_dari_neon()
-        
-        if df_dari_db is not None and not df_dari_db.empty:
-            st.session_state['df_tabel_atas'] = df_dari_db
-            st.session_state['tanggal_terakhir_review'] = max_date
+        df_pj, ts_pj = ambil_agregasi_penjangkauan_terakhir()
+        if df_pj is not None and not df_pj.empty:
+            st.session_state['df_penjangkauan'] = df_pj
+            st.session_state['ts_terakhir_penjangkauan'] = ts_pj
         else:
-            # Jika tabel kosong, set datetime.now() agar tidak error saat di-format di UI
-            st.session_state['df_tabel_atas'] = pd.DataFrame()
-            st.session_state['tanggal_terakhir_review'] = datetime.now()
+            st.session_state['df_penjangkauan'] = pd.DataFrame()
+            st.session_state['ts_terakhir_penjangkauan'] = datetime.now()
     except Exception as e:
-        # Pengaman jika database offline
-        st.session_state['df_tabel_atas'] = pd.DataFrame()
-        st.session_state['tanggal_terakhir_review'] = datetime.now()
-        
-# --- B. INISIALISASI OTOMATIS TABEL DETIL BAWAH ---
-if 'df_tabel_bawah' not in st.session_state or st.session_state['df_tabel_bawah'] is None:
+        st.session_state['df_penjangkauan'] = pd.DataFrame()
+        st.session_state['ts_terakhir_penjangkauan'] = datetime.now()
+
+# --- 2. REKAP HASIL REVIEW DATA RUJUKAN SSR (Tabel 2) ---
+if 'df_rujukan' not in st.session_state or st.session_state['df_rujukan'] is None:
     try:
-        # Panggil fungsi penarik detil dari database.py
-        df_detil_db, max_ts_bawah = ambil_detil_terakhir_dari_neon()
-        
-        if df_detil_db is not None and not df_detil_db.empty:
-            st.session_state['df_tabel_bawah'] = df_detil_db
-            st.session_state['tanggal_terakhir_bawah'] = max_ts_bawah
+        df_rj, ts_rj = ambil_agregasi_rujukan_terakhir()
+        if df_rj is not None and not df_rj.empty:
+            st.session_state['df_rujukan'] = df_rj
+            st.session_state['ts_terakhir_rujukan'] = ts_rj
         else:
-            # Jika tabel kosong, set datetime.now() agar tidak error saat di-format di UI
-            st.session_state['df_tabel_bawah'] = pd.DataFrame()
-            st.session_state['tanggal_terakhir_bawah'] = datetime.now()
+            st.session_state['df_rujukan'] = pd.DataFrame()
+            st.session_state['ts_terakhir_rujukan'] = datetime.now()
     except Exception as e:
-        # Pengaman jika database offline
-        st.session_state['df_tabel_bawah'] = pd.DataFrame()
-        st.session_state['tanggal_terakhir_bawah'] = datetime.now()
+        st.session_state['df_rujukan'] = pd.DataFrame()
+        st.session_state['ts_terakhir_rujukan'] = datetime.now()
+
+# --- 3. HASIL REVIEW VALIDASI DATA GABUNGAN UTAMA (Tabel 3) ---
+if 'df_review_utama' not in st.session_state or st.session_state['df_review_utama'] is None:
+    try:
+        df_ut, ts_ut = ambil_hasil_review_utama_terakhir()
+        if df_ut is not None and not df_ut.empty:
+            st.session_state['df_review_utama'] = df_ut
+            st.session_state['ts_terakhir_utama'] = ts_ut
+        else:
+            st.session_state['df_review_utama'] = pd.DataFrame()
+            st.session_state['ts_terakhir_utama'] = datetime.now()
+    except Exception as e:
+        st.session_state['df_review_utama'] = pd.DataFrame()
+        st.session_state['ts_terakhir_utama'] = datetime.now()
 
 # --- B. INISIALISASI KEYWORD MEDSOS ---
 if 'medsoc_keywords' not in st.session_state:
