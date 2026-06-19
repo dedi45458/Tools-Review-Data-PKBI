@@ -560,3 +560,114 @@ def ambil_metrik_akurasi_terakhir():
         conn.close()
         
     return metrik_default, ts_metrik
+
+# ==============================================================================
+# KATEGORI 6: FUNGSI SINKRONISASI 3 TABEL & METRIK AKURASI BARU
+# ==============================================================================
+
+def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3):
+    """Menyimpan data hasil review ke 3 tabel secara bersamaan (Database Transaction)."""
+    conn = dapatkan_koneksi_neon()
+    if not conn: return False
+    
+    try:
+        with conn.cursor() as cur:
+            tanggal_hari_ini = dt.datetime.now().date()
+
+            # 1. TABEL PENJANGKAUAN
+            # Di UI, list_tabel_1 dikirim dengan format: (ssr_name, ind_err, hitung_kesalahan)
+            # Di DB, kita butuh: (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
+            if list_tabel_1:
+                list_1_lengkap = [(tanggal_hari_ini, row[0], row[1], row[2]) for row in list_tabel_1]
+                cur.executemany("""
+                    INSERT INTO agregasi_hasil_review_penjangkauan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
+                    VALUES (%s, %s, %s, %s)
+                """, list_1_lengkap)
+
+            # 2. TABEL RUJUKAN
+            if list_tabel_2:
+                cur.executemany("""
+                    INSERT INTO agregasi_hasil_review_rujukan
+                    (lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan_data, validasi_hasil_review, justifikasi)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, list_tabel_2)
+
+            # 3. TABEL UTAMA (MASTER)
+            if list_tabel_3:
+                cur.executemany("""
+                    INSERT INTO hasil_review_data
+                    (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, list_tabel_3)
+
+        # Jika semua berhasil, simpan ke database
+        conn.commit()
+        return True
+
+    except Exception as e:
+        # Jika ada SATU saja yang gagal, batalkan semua (rollback) agar data tidak belang
+        conn.rollback()
+        import streamlit as st
+        st.error(f"Gagal transaksi multi-tabel: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
+    """Menyimpan log metrik akurasi saat validasi berjalan."""
+    conn = dapatkan_koneksi_neon()
+    if not conn: return False
+    try:
+        with conn.cursor() as cur:
+            # Otomatis membuat tabel jika kamu belum sempat membuatnya di Neon
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS metrik_akurasi (
+                    id SERIAL PRIMARY KEY,
+                    kategori VARCHAR(50), 
+                    total_proses INT, 
+                    total_temuan INT, 
+                    akurasi FLOAT, 
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO metrik_akurasi (kategori, total_proses, total_temuan, akurasi) 
+                VALUES (%s, %s, %s, %s);
+            """, (kategori, total_proses, total_temuan, akurasi))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+def ambil_metrik_akurasi_terakhir():
+    """Mengambil persentase akurasi terakhir untuk ditampilkan di UI Kartu Skor."""
+    conn = dapatkan_koneksi_neon()
+    metrik_default = {'akurasi_penjangkauan': 100.0, 'akurasi_rujukan': 100.0}
+    ts_metrik = dt.datetime.now()
+    
+    if not conn: return metrik_default, ts_metrik
+    try:
+        with conn.cursor() as cur:
+            # Cek apakah tabel ada
+            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'metrik_akurasi');")
+            tabel_ada = cur.fetchone()[0]
+            
+            if tabel_ada:
+                cur.execute("SELECT MAX(created_at) FROM metrik_akurasi")
+                max_ts = cur.fetchone()[0]
+                if max_ts:
+                    ts_metrik = max_ts
+                    cur.execute("SELECT kategori, akurasi FROM metrik_akurasi WHERE created_at = %s", (max_ts,))
+                    for row in cur.fetchall():
+                        kat = str(row[0]).lower()
+                        if 'penjangkauan' in kat: metrik_default['akurasi_penjangkauan'] = float(row[1])
+                        if 'rujukan' in kat: metrik_default['akurasi_rujukan'] = float(row[1])
+    except Exception:
+        pass # Jika eror, biarkan mengembalikan nilai 100.0 (Aman)
+    finally:
+        conn.close()
+        
+    return metrik_default, ts_metrik
