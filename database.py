@@ -645,17 +645,15 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
     finally:
         if conn: conn.close()
 
-import datetime as dt
 
 def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
-    """Menyimpan log metrik akurasi disesuaikan dengan kolom asli di Neon Console."""
+    """Menyimpan metrik ke tabel akurasi_review_data di Neon secara aman."""
     conn = dapatkan_koneksi_neon()
     if not conn: 
         return False
     try:
         with conn.cursor() as cur:
-            # Menggunakan nama kolom yang sesuai dengan screenshot Neon Console Anda:
-            # total_data_diproses, total_baris_temuan, tingkat_akurasi (sesuaikan nama kolom terakhir jika berbeda)
+            # Menggunakan susunan kolom yang benar sesuai visual tabel Neon Anda
             cur.execute("""
                 INSERT INTO akurasi_review_data (
                     kategori, 
@@ -665,49 +663,50 @@ def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
                 ) 
                 VALUES (%s, %s, %s, %s);
             """, (kategori, total_proses, total_temuan, akurasi))
-            
         conn.commit()
         return True
     except Exception as e:
         conn.rollback()
-        print(f"Error Database: {e}") # Anda bisa menghapus print ini di produksi, berguna untuk debug
-        return False
+        raise e  # Di-raise agar bisa terbaca jika ada error lain
     finally:
         conn.close()
 
-
 def ambil_metrik_akurasi_terakhir():
-    """Mengambil persentase akurasi terakhir dari tabel akurasi_review_data."""
+    """Mengambil data metrik terakhir untuk UI Kartu Skor dari Neon."""
     conn = dapatkan_koneksi_neon()
-    metrik_default = {'akurasi_penjangkauan': 100.0, 'akurasi_rujukan': 100.0}
+    # Nilai default jika tabel kosong atau database putus
+    metrik_default = {
+        'akurasi_penjangkauan': 100.0, 'temuan_penjangkauan': 0, 'total_pjj': 0,
+        'akurasi_rujukan': 100.0, 'temuan_rujukan': 0, 'total_rjk': 0
+    }
     ts_metrik = dt.datetime.now()
     
     if not conn: 
         return metrik_default, ts_metrik
     try:
         with conn.cursor() as cur:
-            # Cek apakah tabel akurasi_review_data sudah ada di database
             cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'akurasi_review_data');")
-            tabel_ada = cur.fetchone()[0]
-            
-            if tabel_ada:
-                # Ambil maksimal 2 data terbaru (1 penjangkauan, 1 rujukan dari batch terakhir)
+            if cur.fetchone()[0]:
+                # Mengambil kolom yang ada secara eksplisit
                 cur.execute("""
-                    SELECT kategori, akurasi, created_at 
+                    SELECT kategori, total_data_diproses, total_baris_temuan, tingkat_akurasi, created_at 
                     FROM akurasi_review_data 
                     ORDER BY created_at DESC 
                     LIMIT 2
                 """)
                 rows = cur.fetchall()
                 if rows:
-                    # Ambil timestamp dari baris pertama sebagai penanda waktu update terbaru
-                    ts_metrik = rows[0][2] 
+                    ts_metrik = rows[0][4]  # Indeks ke-4 adalah created_at
                     for row in rows:
                         kat = str(row[0]).lower()
-                        if 'penjangkauan' in kat: 
-                            metrik_default['akurasi_penjangkauan'] = float(row[1])
-                        if 'rujukan' in kat: 
-                            metrik_default['akurasi_rujukan'] = float(row[1])
+                        if 'penjangkauan' in kat:
+                            metrik_default['total_pjj'] = int(row[1])
+                            metrik_default['temuan_penjangkauan'] = int(row[2])
+                            metrik_default['akurasi_penjangkauan'] = float(row[3])
+                        elif 'rujukan' in kat:
+                            metrik_default['total_rjk'] = int(row[1])
+                            metrik_default['temuan_rujukan'] = int(row[2])
+                            metrik_default['akurasi_rujukan'] = float(row[3])
     except Exception:
         pass
     finally:
