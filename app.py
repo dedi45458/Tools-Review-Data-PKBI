@@ -1045,6 +1045,16 @@ if tombol_proses:
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
+                # 🔵 Tambahan: Reset ke 0 jika masuk ke kondisi else (data kosong/tidak valid)
+                st.session_state['total_entri_penjangkauan'] = 0
+                st.session_state['total_entri_rujukan'] = 0
+
+            # 🛠️ 🔵 BARIS BARU: Simpan nilai total baris ke session state sebelum rerun
+            # Catatan: Pastikan nama 'df_penjangkauan' & 'df_rujukan' sesuai dengan nama DataFrame operasional Anda saat dibaca di atas
+            if 'df_penjangkauan' in locals():
+                st.session_state['total_entri_penjangkauan'] = len(df_penjangkauan)
+            if 'df_rujukan' in locals():
+                st.session_state['total_entri_rujukan'] = len(df_rujukan)
 
             st.session_state['proses_selesai'] = True
             
