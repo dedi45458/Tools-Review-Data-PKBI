@@ -1219,7 +1219,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 align-items: center;
                 gap: 6px;
                 background-color: rgba(124, 58, 237, 0.12);
-                color: #7c3aed;
+                color: #ffffff;
                 padding: 6px 14px;
                 border-radius: 20px;
                 border: 1px solid rgba(124, 58, 237, 0.25);
@@ -1307,7 +1307,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 align-items: center;
                 gap: 6px;
                 background-color: rgba(124, 58, 237, 0.12);
-                color: #7c3aed;
+                color: #ffffff;
                 padding: 6px 14px;
                 border-radius: 20px;
                 border: 1px solid rgba(124, 58, 237, 0.25);
@@ -1409,7 +1409,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     align-items: center;
                     gap: 6px;
                     background-color: rgba(124, 58, 237, 0.12);
-                    color: #7c3aed;
+                    color: #ffffff;
                     padding: 6px 14px;
                     border-radius: 20px;
                     border: 1px solid rgba(124, 58, 237, 0.25);
