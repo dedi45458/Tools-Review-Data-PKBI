@@ -421,7 +421,8 @@ def simpan_agregasi_rujukan_db(data_input):
         if conn: conn.close()
 
 def ambil_agregasi_rujukan_terakhir():
-    """🔥 BARU: Mengambil seluruh baris data rujukan dari batch upload terakhir berdasarkan MAX(created_at)"""
+    """Mengambil seluruh baris data rujukan dari batch upload terakhir berdasarkan MAX(created_at).
+    Kolom di-alias agar otomatis berubah menjadi huruf kapital sesuai kebutuhan UI."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
     try:
@@ -430,9 +431,20 @@ def ambil_agregasi_rujukan_terakhir():
             max_timestamp = cur.fetchone()[0]
             if not max_timestamp: return pd.DataFrame(), None
             
+            # Query disesuaikan dengan nama kolom asli DB kamu, tapi di-output sebagai format UI
             query = """
-                SELECT lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, 
-                       id_klien, nik, tipe_sasaran, indikator_kesalahan_data, validasi_hasil_review, justifikasi
+                SELECT 
+                    lembaga_ssr AS "LEMBAGA SSR", 
+                    kode_petugas AS "KODE PETUGAS", 
+                    nama_kota AS "NAMA KOTA", 
+                    nama_layanan AS "NAMA LAYANAN", 
+                    tanggal AS "TANGGAL", 
+                    id_klien AS "ID KLIEN", 
+                    nik AS "NIK", 
+                    tipe_sasaran AS "TIPE SASARAN", 
+                    indikator_kesalahan_data AS "INDIKATOR KESALAHAN DATA", 
+                    validasi_hasil_review AS "VALIDASI HASIL REVIEW", 
+                    justifikasi AS "JUSTIFIKASI"
                 FROM agregasi_hasil_review_rujukan
                 WHERE created_at = %s
             """
@@ -480,7 +492,8 @@ def simpan_hasil_review_utama_db(data_input):
         if conn: conn.close()
 
 def ambil_hasil_review_utama_terakhir():
-    """🔥 BARU: Mengambil detail data review gabungan utama berdasarkan MAX(created_at)"""
+    """Mengambil detail data review gabungan utama berdasarkan MAX(created_at).
+    Kolom di-alias agar otomatis berubah menjadi huruf kapital sesuai kebutuhan UI."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
     try:
@@ -489,9 +502,21 @@ def ambil_hasil_review_utama_terakhir():
             max_timestamp = cur.fetchone()[0]
             if not max_timestamp: return pd.DataFrame(), None
             
+            # Query disesuaikan dengan skema tabel hasil_review_data milikmu
             query = """
-                SELECT kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, 
-                       tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi
+                SELECT 
+                    kategori_data AS "KATEGORI DATA", 
+                    lembaga_ssr AS "LEMBAGA SSR", 
+                    kode_petugas AS "KODE PETUGAS", 
+                    nama_kota AS "NAMA KOTA", 
+                    nama_layanan AS "NAMA LAYANAN", 
+                    tanggal AS "TANGGAL", 
+                    id_klien AS "ID KLIEN", 
+                    nik AS "NIK", 
+                    tipe_sasaran AS "TIPE SASARAN", 
+                    indikator_kesalahan AS "INDIKATOR KESALAHAN DATA", 
+                    validasi_hasil_review AS "VALIDASI HASIL REVIEW", 
+                    justifikasi AS "JUSTIFIKASI"
                 FROM hasil_review_data
                 WHERE created_at = %s
             """
