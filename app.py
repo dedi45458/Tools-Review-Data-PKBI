@@ -1497,6 +1497,14 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         rename_dict[col] = "Kode Petugas"
                     elif "kota" in c_clean or "kabupaten" in c_clean:
                         rename_dict[col] = "Nama Kota"
+                    elif "tanggal" in c_clean:
+                        rename_dict[col] = "Tanggal"
+                    elif "id klien" in c_clean or "id_klien" in c_clean:
+                        rename_dict[col] = "ID Klien"
+                    elif "nik" == c_clean:
+                        rename_dict[col] = "NIK"
+                    elif "sasaran" in c_clean:
+                        rename_dict[col] = "Tipe Sasaran"
                         
                 if rename_dict:
                     df_master = df_master.rename(columns=rename_dict)
