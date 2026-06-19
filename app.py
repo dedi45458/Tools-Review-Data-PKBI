@@ -897,7 +897,7 @@ if tombol_proses:
                 except Exception: pass
 
                 # =========================================================================
-                # BAGIAN EKSEKUSI UTAMA (Taruh ini di akhir fungsi pemrosesan/validasi data)
+                # BAGIAN EKSEKUSI UTAMA (Sudah diproteksi dari duplikasi)
                 # =========================================================================
                 
                 # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Simpan total entri ke memory Streamlit
@@ -924,19 +924,33 @@ if tombol_proses:
                 total_temuan_pjj = len(df_pjj_raw)
                 total_temuan_rjk = len(df_rjk_raw)
                 
-                # KALKULASI AKURASI (Di luar blok 'if all_errs' agar akurasi 100% tetap terhitung!)
+                # KALKULASI AKURASI
                 akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
                 akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
                 
-                # 🔥 SINKRONISASI KE DATABASE NEON (Sekarang berjalan mutlak jika ada data yang diproses)
-                try:
-                    from database import simpan_metrik_akurasi_db
-                    if total_proses_pjj > 0: 
-                        simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
-                    if total_proses_rjk > 0: 
-                        simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
-                except Exception: 
-                    pass
+                # 🛡️ PENCEGAHAN DUPLIKASI MENGGUNAKAN SESSION STATE FLAG
+                if 'db_tercatat' not in st.session_state:
+                    st.session_state['db_tercatat'] = False
+                
+                # 🔥 SINKRONISASI KE DATABASE NEON (Hanya berjalan sekali per sesi validasi baru)
+                if not st.session_state['db_tercatat']:
+                    try:
+                        from database import simpan_metrik_akurasi_db
+                        
+                        sukses_pjj = True
+                        sukses_rjk = True
+                        
+                        if total_proses_pjj > 0: 
+                            sukses_pjj = simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
+                        if total_proses_rjk > 0: 
+                            sukses_rjk = simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
+                            
+                        # Jika kedua/salah satu insert berhasil, tandai flag menjadi True agar tidak menyimpan lagi saat rerun
+                        if sukses_pjj or sukses_rjk:
+                            st.session_state['db_tercatat'] = True
+                            
+                    except Exception: 
+                        pass
 
                 # =========================================================================
                 # 🔥 PERBAIKAN TOTAL: STANDARISASI NAMA KOLOM & CLEANSING DATA (HURUF KAPITAL)
