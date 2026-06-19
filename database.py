@@ -389,7 +389,7 @@ def ambil_agregasi_penjangkauan_terakhir():
 # --- Bagian B: Tabel 2 (agregasi_hasil_review_rujukan) ---
 
 def simpan_agregasi_rujukan_db(data_input):
-    """Menyimpan data mandiri khusus untuk tabel rujukan (Mendukung DataFrame/List)"""
+    """Menyimpan data agregasi hasil review rujukan ke database (Mendukung DataFrame/List)"""
     if data_input is None: return False
     
     # Konversi DataFrame ke List of Tuples dan tangani nilai kosong (NaN -> None)
@@ -405,10 +405,11 @@ def simpan_agregasi_rujukan_db(data_input):
     if not conn: return False
     try:
         with conn.cursor() as cur:
+            # 🔥 SINKRONISASI: Kolom disesuaikan dengan struktur tabel asli database
             query = """
                 INSERT INTO agregasi_hasil_review_rujukan 
-                (lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan_data, validasi_hasil_review, justifikasi)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
+                VALUES (%s, %s, %s, %s);
             """
             cur.executemany(query, list_data)
             conn.commit()
@@ -421,41 +422,42 @@ def simpan_agregasi_rujukan_db(data_input):
         if conn: conn.close()
 
 def ambil_agregasi_rujukan_terakhir():
-    """🔥 SINKRON: Mengambil seluruh baris data rujukan dari batch upload terakhir 
-    menggunakan buffer interval 5 detik agar seluruh data dalam 1 batch terangkut."""
+    """🔥 SINKRON: Mengambil seluruh baris data rujukan dari batch agregasi terakhir 
+    menggunakan buffer interval 5 detik berdasarkan kolom tanggal_dibuat."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
     try:
-        # Menggunakan subquery dengan - INTERVAL '5 second' untuk mengantisipasi jeda mikrodetik upload
+        # 🔥 SINKRONISASI: Nama kolom SELECT diubah ke versi baru & pencarian menggunakan tanggal_dibuat
         query = """
             SELECT 
-                lembaga_ssr AS "LEMBAGA SSR", 
-                kode_petugas AS "KODE PETUGAS", 
-                nama_kota AS "NAMA KOTA", 
-                nama_layanan AS "NAMA LAYANAN", 
-                tanggal AS "TANGGAL", 
-                id_klien AS "ID KLIEN", 
-                nik AS "NIK", 
-                tipe_sasaran AS "TIPE SASARAN", 
-                indikator_kesalahan_data AS "INDIKATOR KESALAHAN DATA", 
-                validasi_hasil_review AS "VALIDASI HASIL REVIEW", 
-                justifikasi AS "JUSTIFIKASI"
+                nama_ssr AS "LEMBAGA SSR", 
+                tanggal_review AS "TANGGAL REVIEW", 
+                indikator_kesalahan AS "INDIKATOR KESALAHAN DATA", 
+                jumlah_kesalahan AS "JUMLAH KESALAHAN",
+                tanggal_dibuat
             FROM agregasi_hasil_review_rujukan
-            WHERE created_at >= (SELECT MAX(created_at) FROM agregasi_hasil_review_rujukan) - INTERVAL '5 second'
+            WHERE tanggal_dibuat >= (SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review_rujukan) - INTERVAL '5 second'
         """
         df = pd.read_sql(query, conn)
         
-        # Mengambil nilai timestamp asli untuk informasi di UI jika dibutuhkan
-        with conn.cursor() as cur:
-            cur.execute("SELECT MAX(created_at) FROM agregasi_hasil_review_rujukan")
-            max_timestamp = cur.fetchone()[0]
+        # Mengambil nilai timestamp asli untuk informasi di UI tanggal badge terakhir
+        max_timestamp = None
+        if not df.empty:
+            max_timestamp = df['tanggal_dibuat'].max()
+            # Drop kolom tanggal_dibuat agar tidak mengotori render visual tabel di Streamlit
+            df = df.drop(columns=['tanggal_dibuat'])
+        else:
+            with conn.cursor() as cur:
+                cur.execute("SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review_rujukan")
+                res = cur.fetchone()
+                if res: max_timestamp = res[0]
             
         return df, max_timestamp
     except Exception as e:
         st.error(f"Gagal memuat rekap rujukan terakhir: {e}")
         return pd.DataFrame(), None
     finally:
-        conn.close()
+        if conn: conn.close()
 
 
 # --- Bagian C: Tabel 3 (hasil_review_data) ---
