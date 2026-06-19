@@ -1227,7 +1227,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 font-weight: 500;
                 margin-bottom: 18px;
             ">
-                🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format}</span>
+                🔮 Tanggal review data: <span style="font-weight: 700; margin-left: 3px;">{tgl_format}</span>
             </div>
             """
             st.markdown(badge_html, unsafe_allow_html=True)
@@ -1315,7 +1315,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 font-weight: 500;
                 margin-bottom: 18px;
             ">
-                🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_badge}</span>
+                🔮 Tanggal review data: <span style="font-weight: 700; margin-left: 3px;">{tgl_badge}</span>
             </div>
             """
             st.markdown(badge_rujukan_html, unsafe_allow_html=True)
@@ -1417,7 +1417,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     font-weight: 500;
                     margin-bottom: 15px;
                 ">
-                    🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format_bawah}</span>
+                    🔮 Tanggal review datal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format_bawah}</span>
                 </div>
                 """
                 st.markdown(badge_gabungan_html, unsafe_allow_html=True)
