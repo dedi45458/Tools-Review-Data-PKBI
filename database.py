@@ -645,28 +645,24 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
     finally:
         if conn: conn.close()
 
+import datetime as dt
+
 def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
-    """Menyimpan log metrik akurasi ke tabel akurasi_review_data."""
+    """Menyimpan log metrik akurasi disesuaikan dengan kolom asli di Neon Console."""
     conn = dapatkan_koneksi_neon()
     if not conn: 
         return False
     try:
         with conn.cursor() as cur:
-            # 1. Pastikan tabel akurasi_review_data dibuat terlebih dahulu
+            # Menggunakan nama kolom yang sesuai dengan screenshot Neon Console Anda:
+            # total_data_diproses, total_baris_temuan, tingkat_akurasi (sesuaikan nama kolom terakhir jika berbeda)
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS akurasi_review_data (
-                    id SERIAL PRIMARY KEY,
-                    kategori VARCHAR(50), 
-                    total_proses INT, 
-                    total_temuan INT, 
-                    akurasi FLOAT, 
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            
-            # 2. Lakukan insert data baru ke tabel akurasi_review_data
-            cur.execute("""
-                INSERT INTO akurasi_review_data (kategori, total_proses, total_temuan, akurasi) 
+                INSERT INTO akurasi_review_data (
+                    kategori, 
+                    total_data_diproses, 
+                    total_baris_temuan, 
+                    tingkat_akurasi
+                ) 
                 VALUES (%s, %s, %s, %s);
             """, (kategori, total_proses, total_temuan, akurasi))
             
@@ -674,7 +670,7 @@ def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
         return True
     except Exception as e:
         conn.rollback()
-        # print(f"Error saat menyimpan data: {e}") # Debugging opsional
+        print(f"Error Database: {e}") # Anda bisa menghapus print ini di produksi, berguna untuk debug
         return False
     finally:
         conn.close()
