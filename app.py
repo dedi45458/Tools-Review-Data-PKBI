@@ -142,28 +142,6 @@ if ('df_rujukan' not in st.session_state
         st.session_state['df_rujukan'] = pd.DataFrame()
         st.session_state['ts_terakhir_rujukan'] = datetime.now()
 
-# 📊 PROSES RENDER TABEL DI UI STREAMLIT
-st.markdown("### 📋 Rekap Hasil Review Rujukan SSR")
-
-if not st.session_state['df_rujukan'].empty:
-    # Menampilkan informasi timestamp data terakhir yang ditarik
-    ts_format = st.session_state['ts_terakhir_rujukan']
-    if hasattr(ts_format, 'strftime'):
-        ts_teks = ts_format.strftime('%d/%m/%Y %H:%M:%S')
-    else:
-        ts_teks = str(ts_format)
-        
-    st.caption(f"✨ Menampilkan data batch terakhir (Koneksi Neon Aktif | Sinkronisasi: {ts_teks})")
-    
-    # Render komponen dataframe interaktif Streamlit
-    st.dataframe(
-        st.session_state['df_rujukan'],
-        use_container_width=True,
-        hide_index=True
-    )
-else:
-    st.info("💡 Belum ada data agregasi rujukan yang tersedia atau berhasil dimuat untuk batch ini.")
-
 # --- 3. HASIL REVIEW VALIDASI DATA GABUNGAN UTAMA (Tabel 3) ---
 if 'df_review_utama' not in st.session_state or st.session_state['df_review_utama'] is None:
     try:
@@ -1259,12 +1237,27 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         
         
             # =========================================================================
-            # 🔵 SEKSI 2: RENDER HASIL REVIEW DATA RUJUKAN (SUDAH BENAR)
+            # 🔵 SEKSI 2: RENDER HASIL REVIEW DATA RUJUKAN (SUDAH BENAR & SINKRON NEON)
             # =========================================================================
             st.markdown("<hr style='border: 1px solid #e2e8f0; margin: 40px 0;'>", unsafe_allow_html=True)
             st.markdown("#### 📋 Rekap Hasil Review Data Rujukan SSR")
             
-            if tanggal_terakhir:
+            # 🔥 SINKRONISASI OTOMATIS: Ambil data agregasi rujukan terbaru langsung dari database jika validasi baru selesai
+            if st.session_state.get('proses_selesai', False) or 'df_rujukan' not in st.session_state:
+                try:
+                    df_rj, ts_rj = ambil_agregasi_rujukan_terakhir()
+                    if df_rj is not None and not df_rj.empty:
+                        st.session_state['df_rujukan'] = df_rj
+                        if ts_rj:
+                            # Jika ts_rj berupa datetime objek, ubah jadi string tanggal saja untuk tgl_format
+                            st.session_state['tanggal_terakhir_rujukan_str'] = ts_rj.strftime('%d %B %Y') if hasattr(ts_rj, 'strftime') else str(ts_rj)
+                except Exception as e:
+                    pass
+
+            # Menggunakan tanggal dinamis hasil tarikan database terakhir
+            tgl_badge = st.session_state.get('tanggal_terakhir_rujukan_str', tanggal_terakhir if 'tanggal_terakhir' in locals() else "-")
+            
+            if tgl_badge:
                 badge_rujukan_html = f"""
                 <div style="
                     display: inline-flex;
@@ -1279,22 +1272,40 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     font-weight: 500;
                     margin-bottom: 18px;
                 ">
-                    🔗 Review Data Rujukan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_format}</span>
+                    🔗 Review Data Rujukan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_badge}</span>
                 </div>
                 """
                 st.markdown(badge_rujukan_html, unsafe_allow_html=True)
                 
-            if df_atas_view is not None and not df_atas_view.empty:
-                df_render_ruj = df_atas_view.copy()
+            # Menentukan fallback data: Prioritaskan isi database (st.session_state['df_rujukan']) lalu df_atas_view
+            df_sumber = st.session_state.get('df_rujukan', pd.DataFrame())
+            if df_sumber.empty and df_atas_view is not None:
+                df_sumber = df_atas_view.copy()
+
+            if df_sumber is not None and not df_sumber.empty:
+                df_render_ruj = df_sumber.copy()
                 
+                # Standarisasi nama kolom / index agar kapital
                 if df_render_ruj.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render_ruj.columns:
                     df_render_ruj = df_render_ruj.reset_index()
+                
+                # Pengaman: Jika database mengembalikan huruf kecil 'indikator_kesalahan_data', ganti nama kolomnya
+                if 'indikator_kesalahan_data' in df_render_ruj.columns:
+                    df_render_ruj = df_render_ruj.rename(columns={'indikator_kesalahan_data': 'INDIKATOR KESALAHAN DATA'})
                 
                 # Filter HANYA untuk indikator rujukan
                 df_render_ruj = df_render_ruj[df_render_ruj['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)].copy()
                 
                 if not df_render_ruj.empty:
                     kolom_indikator = 'INDIKATOR KESALAHAN DATA'
+                    
+                    # Cek jika kolom agregasi 'Jumlah per indikator' belum terbentuk (bawaan dari DB mentah)
+                    if 'Jumlah per indikator' not in df_render_ruj.columns and 'LEMBAGA SSR' in df_render_ruj.columns:
+                        # Jika formatnya baris mentah, lakukan pivot/agregasi agar berbentuk matriks tabel atas
+                        df_render_ruj = df_render_ruj.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
+                        df_render_ruj['Jumlah per indikator'] = df_render_ruj.sum(axis=1)
+                        df_render_ruj = df_render_ruj.reset_index()
+                        
                     kolom_ssr_ruj = [c for c in df_render_ruj.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
                     
                     for col in kolom_ssr_ruj:
@@ -1305,9 +1316,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     df_final_ruj = df_render_ruj[[c for c in kolom_final_ruj if c in df_render_ruj.columns]].copy()
                     
                     # Recalculate % khusus kelompok rujukan agar total porsinya pas 100%
-                    total_error_rujukan = df_final_ruj['Jumlah per indikator'].sum()
+                    total_error_rujukan = df_final_ruj['Jumlah per indikator'].sum() if 'Jumlah per indikator' in df_final_ruj.columns else 0
                     if total_error_rujukan > 0:
                         df_final_ruj['%'] = (df_final_ruj['Jumlah per indikator'] / total_error_rujukan) * 100
+                    else:
+                        df_final_ruj['%'] = 0.0
                     
                     df_display_ruj = df_final_ruj.copy()
                     for col in ssr_aktif_ruj:
