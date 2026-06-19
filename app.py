@@ -898,27 +898,37 @@ if tombol_proses:
                 except Exception: pass
 
                 # =========================================================================
-                # 🔥 PERBAIKAN: STANDARISASI NAMA KOLOM UI JADI HURUF KAPITAL SEMUA
+                # 🔥 PERBAIKAN TOTAL: STANDARISASI NAMA KOLOM & CLEANSING DATA (HURUF KAPITAL)
                 # =========================================================================
                 rename_map = {}
                 for c in df_bawah.columns:
                     c_clean = str(c).strip().upper()
-                    if 'LEMBAGA SSR' in c_clean or 'NAMA SSR' in c_clean: rename_map[c] = 'LEMBAGA SSR'
+                    if 'KATEGORI' in c_clean: rename_map[c] = 'KATEGORI DATA'
+                    elif 'LEMBAGA SSR' in c_clean or 'NAMA SSR' in c_clean: rename_map[c] = 'LEMBAGA SSR'
                     elif 'KODE PETUGAS' in c_clean: rename_map[c] = 'KODE PETUGAS'
                     elif 'NAMA KOTA' in c_clean or 'KOTA' in c_clean: rename_map[c] = 'NAMA KOTA'
                     elif 'NAMA LAYANAN' in c_clean or 'LAYANAN' in c_clean: rename_map[c] = 'NAMA LAYANAN'
                     elif 'TANGGAL' in c_clean: rename_map[c] = 'TANGGAL'
-                    elif 'ID KLIEN' in c_clean: rename_map[c] = 'ID KLIEN'
+                    elif 'ID KLIEN' in c_clean or 'KLIEN' in c_clean: rename_map[c] = 'ID KLIEN'
                     elif 'NIK' in c_clean: rename_map[c] = 'NIK'
-                    elif 'TIPE SASARAN' in c_clean: rename_map[c] = 'TIPE SASARAN'
+                    elif 'TIPE SASARAN' in c_clean or 'SASARAN' in c_clean: rename_map[c] = 'TIPE SASARAN'
                     elif 'INDIKATOR KESALAHAN' in c_clean: rename_map[c] = 'INDIKATOR KESALAHAN DATA'
                     elif 'VALIDASI' in c_clean: rename_map[c] = 'VALIDASI HASIL REVIEW'
                     elif 'JUSTIFIKASI' in c_clean: rename_map[c] = 'JUSTIFIKASI'
                 
                 df_bawah = df_bawah.rename(columns=rename_map)
                 
-                for col in ['Kode Petugas', 'Nama Kota', 'Nama Layanan', 'NIK', 'Tipe Sasaran', 'Validasi Hasil Review', 'Justifikasi']:
+                # 1. Pastikan kolom wajib ada (Gunakan HURUF KAPITAL)
+                kolom_wajib = ['KATEGORI DATA', 'KODE PETUGAS', 'NAMA KOTA', 'NAMA LAYANAN', 'NIK', 'TIPE SASARAN', 'VALIDASI HASIL REVIEW', 'JUSTIFIKASI']
+                for col in kolom_wajib:
                     if col not in df_bawah.columns: df_bawah[col] = "-"
+
+                # 2. Proses Cleansing (Hapus spasi berlebih, hilangkan .0 pada tipe sasaran)
+                df_bawah['TIPE SASARAN'] = df_bawah['TIPE SASARAN'].astype(str).str.replace('.0', '', regex=False).str.strip()
+                for col in ['TANGGAL', 'ID KLIEN', 'NAMA LAYANAN', 'TIPE SASARAN']:
+                    if col in df_bawah.columns:
+                        df_bawah[col] = df_bawah[col].fillna('-').astype(str).str.strip()
+                        df_bawah[col] = df_bawah[col].replace({'nan': '-', 'None': '-', '': '-'})
 
                 # FILTER DUPLIKAT DARI DATABASE NEON
                 existing_master_keys = set()
@@ -935,11 +945,12 @@ if tombol_proses:
 
                 indices_to_drop = []
                 for idx, row in df_bawah.iterrows():
-                    kat = str(row.get('Kategori Data', '')).strip().lower()
-                    ssr = str(row.get('Lembaga SSR', '')).strip().lower()
-                    tgl = str(row.get('Tanggal', '')).strip().lower() 
-                    id_klien = str(row.get('ID Klien', '')).strip().lower()
-                    ind = str(row.get('Indikator Kesalahan Data', '')).strip().lower()
+                    # Ambil data menggunakan key KAPITAL
+                    kat = str(row.get('KATEGORI DATA', '')).strip().lower()
+                    ssr = str(row.get('LEMBAGA SSR', '')).strip().lower()
+                    tgl = str(row.get('TANGGAL', '')).strip().lower() 
+                    id_klien = str(row.get('ID KLIEN', '')).strip().lower()
+                    ind = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
                     if (kat, ssr, tgl, id_klien, ind) in existing_master_keys:
                         indices_to_drop.append(idx)
                 
@@ -953,45 +964,45 @@ if tombol_proses:
                     if df_bawah.empty:
                         st.info("ℹ️ Seluruh data kesalahan yang diupload sudah tersimpan di database Neon sebelumnya.", icon="ℹ️")
                     else:
-                        # 1. TABEL PENJANGKAUAN (Hanya agregasi)
-                        df_pjj_only = df_bawah[df_bawah['Kategori Data'] == 'Penjangkauan']
+                        # 1. TABEL PENJANGKAUAN (Hanya agregasi) - Gunakan KATEGORI DATA KAPITAL
+                        df_pjj_only = df_bawah[df_bawah['KATEGORI DATA'].str.title() == 'Penjangkauan']
                         list_insert_tabel_1 = []
                         if not df_pjj_only.empty:
                             DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state.get('aturan_kustom', []))]
-                            active_ssrs_pjj = sorted(list(df_pjj_only['Lembaga SSR'].dropna().unique()))
+                            active_ssrs_pjj = sorted(list(df_pjj_only['LEMBAGA SSR'].dropna().unique()))
                             for ind_err in DAFTAR_INDIKATOR_AKTIF:
                                 for ssr_name in active_ssrs_pjj:
-                                    hitung_kesalahan = len(df_pjj_only[(df_pjj_only['Indikator Kesalahan Data'] == ind_err) & (df_pjj_only['Lembaga SSR'] == ssr_name)])
+                                    hitung_kesalahan = len(df_pjj_only[(df_pjj_only['INDIKATOR KESALAHAN DATA'] == ind_err) & (df_pjj_only['LEMBAGA SSR'] == ssr_name)])
                                     if hitung_kesalahan > 0:
                                         list_insert_tabel_1.append((ssr_name, ind_err, hitung_kesalahan))
 
                         # 2. TABEL RUJUKAN
-                        df_rjk_only = df_bawah[df_bawah['Kategori Data'] == 'Rujukan']
+                        df_rjk_only = df_bawah[df_bawah['KATEGORI DATA'].str.title() == 'Rujukan']
                         list_insert_tabel_2 = []
                         for _, row_rjk in df_rjk_only.iterrows():
-                            tgl_raw = str(row_rjk.get('Tanggal', '')).strip()
+                            tgl_raw = str(row_rjk.get('TANGGAL', '')).strip()
                             tgl_clean = tgl_raw if tgl_raw != '-' else None
-                            val_review = str(row_rjk.get('Validasi Hasil Review', '')).strip().lower()
+                            val_review = str(row_rjk.get('VALIDASI HASIL REVIEW', '')).strip().lower()
                             is_valid = True if val_review in ['true', 'yes', '1', 'ya'] else False
 
                             list_insert_tabel_2.append((
-                                str(row_rjk.get('Lembaga SSR', '-')), str(row_rjk.get('Kode Petugas', '-')),
-                                str(row_rjk.get('Nama Kota', '-')), str(row_rjk.get('Nama Layanan', '-')),
-                                tgl_clean, str(row_rjk.get('ID Klien', '-')), str(row_rjk.get('NIK', '-')),
-                                str(row_rjk.get('Tipe Sasaran', '-')), str(row_rjk.get('Indikator Kesalahan Data', '-')),
-                                is_valid, str(row_rjk.get('Justifikasi', '-'))
+                                str(row_rjk.get('LEMBAGA SSR', '-')), str(row_rjk.get('KODE PETUGAS', '-')),
+                                str(row_rjk.get('NAMA KOTA', '-')), str(row_rjk.get('NAMA LAYANAN', '-')),
+                                tgl_clean, str(row_rjk.get('ID KLIEN', '-')), str(row_rjk.get('NIK', '-')),
+                                str(row_rjk.get('TIPE SASARAN', '-')), str(row_rjk.get('INDIKATOR KESALAHAN DATA', '-')),
+                                is_valid, str(row_rjk.get('JUSTIFIKASI', '-'))
                             ))
 
                         # 3. TABEL UTAMA MASTER
                         list_insert_tabel_3 = []
                         for _, row_all in df_bawah.iterrows():
                             list_insert_tabel_3.append((
-                                str(row_all.get('Kategori Data', '-')), str(row_all.get('Lembaga SSR', '-')),
-                                str(row_all.get('Kode Petugas', '-')), str(row_all.get('Nama Kota', '-')),
-                                str(row_all.get('Nama Layanan', '-')), str(row_all.get('Tanggal', '-')),
-                                str(row_all.get('ID Klien', '-')), str(row_all.get('NIK', '-')),
-                                str(row_all.get('Tipe Sasaran', '-')), str(row_all.get('Indikator Kesalahan Data', '-')),
-                                str(row_all.get('Validasi Hasil Review', '-')), str(row_all.get('Justifikasi', '-'))
+                                str(row_all.get('KATEGORI DATA', '-')), str(row_all.get('LEMBAGA SSR', '-')),
+                                str(row_all.get('KODE PETUGAS', '-')), str(row_all.get('NAMA KOTA', '-')),
+                                str(row_all.get('NAMA LAYANAN', '-')), str(row_all.get('TANGGAL', '-')),
+                                str(row_all.get('ID KLIEN', '-')), str(row_all.get('NIK', '-')),
+                                str(row_all.get('TIPE SASARAN', '-')), str(row_all.get('INDIKATOR KESALAHAN DATA', '-')),
+                                str(row_all.get('VALIDASI HASIL REVIEW', '-')), str(row_all.get('JUSTIFIKASI', '-'))
                             ))
 
                         # EKSEKUSI PENYIMPANAN
