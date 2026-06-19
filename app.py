@@ -988,22 +988,32 @@ if tombol_proses:
                                     if hitung_kesalahan > 0:
                                         list_insert_tabel_1.append((ssr_name, ind_err, hitung_kesalahan))
 
-                        # 2. TABEL RUJUKAN
-                        df_rjk_only = df_bawah[df_bawah['KATEGORI DATA'].str.title() == 'Rujukan']
+                        # =========================================================================
+                        # 2. TABEL RUJUKAN (hanya agregasi)
+                        # =========================================================================
+                        df_rjk_only = df_bawah[df_bawah['KATEGORI DATA'].str.title() == 'Rujukan'].copy()
                         list_insert_tabel_2 = []
-                        for _, row_rjk in df_rjk_only.iterrows():
-                            tgl_raw = str(row_rjk.get('TANGGAL', '')).strip()
-                            tgl_clean = tgl_raw if tgl_raw != '-' else None
-                            val_review = str(row_rjk.get('VALIDASI HASIL REVIEW', '')).strip().lower()
-                            is_valid = True if val_review in ['true', 'yes', '1', 'ya'] else False
 
-                            list_insert_tabel_2.append((
-                                str(row_rjk.get('LEMBAGA SSR', '-')), str(row_rjk.get('KODE PETUGAS', '-')),
-                                str(row_rjk.get('NAMA KOTA', '-')), str(row_rjk.get('NAMA LAYANAN', '-')),
-                                tgl_clean, str(row_rjk.get('ID KLIEN', '-')), str(row_rjk.get('NIK', '-')),
-                                str(row_rjk.get('TIPE SASARAN', '-')), str(row_rjk.get('INDIKATOR KESALAHAN DATA', '-')),
-                                is_valid, str(row_rjk.get('JUSTIFIKASI', '-'))
-                            ))
+                        if not df_rjk_only.empty:
+                            # 🔄 Normalisasi nama kolom penampung agar seragam sebelum digrouping
+                            if 'INDIKATOR KESALAHAN DATA' not in df_rjk_only.columns and 'Indikator Kesalahan Data' in df_rjk_only.columns:
+                                df_rjk_only = df_rjk_only.rename(columns={'Indikator Kesalahan Data': 'INDIKATOR KESALAHAN DATA'})
+                            
+                            # 📊 Melakukan Agregasi (Menghitung jumlah_kesalahan per kombinasi SSR & Indikator)
+                            df_agregasi = df_rjk_only.groupby(['LEMBAGA SSR', 'INDIKATOR KESALAHAN DATA']).size().reset_index(name='JUMLAH KESALAHAN')
+                            
+                            # 📆 Ambil tanggal saat ini menggunakan zona waktu lokal komputer/app (WIB)
+                            from datetime import datetime
+                            tanggal_skr = datetime.now().date() # Akan dibaca sebagai DATE oleh PostgreSQL
+
+                            # 🚀 Ekstrak hasil hitungan ke format tuple (4 kolom cocok dengan skema DDL)
+                            for _, row_aggr in df_agregasi.iterrows():
+                                list_insert_tabel_2.append((
+                                    tanggal_skr,                                        # 1. tanggal_review
+                                    str(row_aggr.get('LEMBAGA SSR', '-')).strip(),       # 2. nama_ssr
+                                    str(row_aggr.get('INDIKATOR KESALAHAN DATA', '-')).strip(), # 3. indikator_kesalahan
+                                    int(row_aggr.get('JUMLAH KESALAHAN', 0))           # 4. jumlah_kesalahan
+                                ))
 
                         # 3. TABEL UTAMA MASTER
                         list_insert_tabel_3 = []
