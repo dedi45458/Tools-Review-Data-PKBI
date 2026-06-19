@@ -897,10 +897,10 @@ if tombol_proses:
                 except Exception: pass
 
                 # =========================================================================
-                # BAGIAN EKSEKUSI UTAMA (Sudah diproteksi dari duplikasi)
+                # BAGIAN EKSEKUSI UTAMA (Sudah Diperbaiki & Disinkronkan)
                 # =========================================================================
                 
-                # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Simpan total entri ke memory Streamlit
+                # 🎯 Simpan total entri ke memory Streamlit
                 st.session_state['total_entri'] = total_records
                 st.session_state['total_entri_penjangkauan'] = total_proses_pjj
                 st.session_state['total_entri_rujukan'] = total_proses_rjk
@@ -912,11 +912,12 @@ if tombol_proses:
                 if all_errs:
                     df_bawah = pd.concat(all_errs, ignore_index=True)
                     
-                    # PILAH DATA BERDASARKAN KATEGORI JIKA ADA ERROR
-                    df_pjj_raw = df_bawah[df_bawah['Kategori Data'] == 'Penjangkauan'] if not df_bawah.empty else pd.DataFrame()
-                    df_rjk_raw = df_bawah[df_bawah['Kategori Data'] == 'Rujukan'] if not df_bawah.empty else pd.DataFrame()
+                    # ⚠️ PERHATIKAN: Pastikan string 'Penjangkauan' dan 'Rujukan' sesuai dengan isi di file Excel/CSV data Anda
+                    if not df_bawah.empty and 'Kategori Data' in df_bawah.columns:
+                        df_pjj_raw = df_bawah[df_bawah['Kategori Data'].str.lower() == 'penjangkauan']
+                        df_rjk_raw = df_bawah[df_bawah['Kategori Data'].str.lower() == 'rujukan']
                 
-                # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Tetap simpan ke session state (meski kosong)
+                # 🎯 Simpan tabel temuan spesifik ke memory Streamlit
                 st.session_state['df_err_penj'] = df_pjj_raw
                 st.session_state['df_err_ruj'] = df_rjk_raw
                 
@@ -928,29 +929,21 @@ if tombol_proses:
                 akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
                 akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
                 
-                # 🛡️ PENCEGAHAN DUPLIKASI MENGGUNAKAN SESSION STATE FLAG
-                if 'db_tercatat' not in st.session_state:
-                    st.session_state['db_tercatat'] = False
+                # 🎯 INJEKSI UNTUK KARTU SKOR UI: Simpan nilai langsung ke session state agar UI langsung ter-update
+                st.session_state['akurasi_penjangkauan'] = akurasi_pjj
+                st.session_state['akurasi_rujukan'] = akurasi_rjk
+                st.session_state['temuan_penjangkauan'] = total_temuan_pjj
+                st.session_state['temuan_rujukan'] = total_temuan_rjk
                 
-                # 🔥 SINKRONISASI KE DATABASE NEON (Hanya berjalan sekali per sesi validasi baru)
-                if not st.session_state['db_tercatat']:
-                    try:
-                        from database import simpan_metrik_akurasi_db
-                        
-                        sukses_pjj = True
-                        sukses_rjk = True
-                        
-                        if total_proses_pjj > 0: 
-                            sukses_pjj = simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
-                        if total_proses_rjk > 0: 
-                            sukses_rjk = simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
-                            
-                        # Jika kedua/salah satu insert berhasil, tandai flag menjadi True agar tidak menyimpan lagi saat rerun
-                        if sukses_pjj or sukses_rjk:
-                            st.session_state['db_tercatat'] = True
-                            
-                    except Exception: 
-                        pass
+                # 🔥 SINKRONISASI KE DATABASE NEON
+                try:
+                    from database import simpan_metrik_akurasi_db
+                    if total_proses_pjj > 0: 
+                        simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
+                    if total_proses_rjk > 0: 
+                        simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
+                except Exception as e:
+                    st.error(f"Gagal mencatat log ke database: {e}")
 
                 # =========================================================================
                 # 🔥 PERBAIKAN TOTAL: STANDARISASI NAMA KOLOM & CLEANSING DATA (HURUF KAPITAL)
