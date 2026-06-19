@@ -897,21 +897,24 @@ if tombol_proses:
                     if total_proses_rjk > 0: simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
                 except Exception: pass
 
-                # STANDARISASI NAMA KOLOM UI
+                # =========================================================================
+                # 🔥 PERBAIKAN: STANDARISASI NAMA KOLOM UI JADI HURUF KAPITAL SEMUA
+                # =========================================================================
                 rename_map = {}
                 for c in df_bawah.columns:
                     c_clean = str(c).strip().upper()
-                    if 'LEMBAGA SSR' in c_clean or 'NAMA SSR' in c_clean: rename_map[c] = 'Lembaga SSR'
-                    elif 'KODE PETUGAS' in c_clean: rename_map[c] = 'Kode Petugas'
-                    elif 'NAMA KOTA' in c_clean or 'KOTA' in c_clean: rename_map[c] = 'Nama Kota'
-                    elif 'NAMA LAYANAN' in c_clean or 'LAYANAN' in c_clean: rename_map[c] = 'Nama Layanan'
-                    elif 'TANGGAL' in c_clean: rename_map[c] = 'Tanggal'
-                    elif 'ID KLIEN' in c_clean: rename_map[c] = 'ID Klien'
+                    if 'LEMBAGA SSR' in c_clean or 'NAMA SSR' in c_clean: rename_map[c] = 'LEMBAGA SSR'
+                    elif 'KODE PETUGAS' in c_clean: rename_map[c] = 'KODE PETUGAS'
+                    elif 'NAMA KOTA' in c_clean or 'KOTA' in c_clean: rename_map[c] = 'NAMA KOTA'
+                    elif 'NAMA LAYANAN' in c_clean or 'LAYANAN' in c_clean: rename_map[c] = 'NAMA LAYANAN'
+                    elif 'TANGGAL' in c_clean: rename_map[c] = 'TANGGAL'
+                    elif 'ID KLIEN' in c_clean: rename_map[c] = 'ID KLIEN'
                     elif 'NIK' in c_clean: rename_map[c] = 'NIK'
-                    elif 'TIPE SASARAN' in c_clean: rename_map[c] = 'Tipe Sasaran'
-                    elif 'INDIKATOR KESALAHAN' in c_clean: rename_map[c] = 'Indikator Kesalahan Data'
-                    elif 'VALIDASI' in c_clean: rename_map[c] = 'Validasi Hasil Review'
-                    elif 'JUSTIFIKASI' in c_clean: rename_map[c] = 'Justifikasi'
+                    elif 'TIPE SASARAN' in c_clean: rename_map[c] = 'TIPE SASARAN'
+                    elif 'INDIKATOR KESALAHAN' in c_clean: rename_map[c] = 'INDIKATOR KESALAHAN DATA'
+                    elif 'VALIDASI' in c_clean: rename_map[c] = 'VALIDASI HASIL REVIEW'
+                    elif 'JUSTIFIKASI' in c_clean: rename_map[c] = 'JUSTIFIKASI'
+                
                 df_bawah = df_bawah.rename(columns=rename_map)
                 
                 for col in ['Kode Petugas', 'Nama Kota', 'Nama Layanan', 'NIK', 'Tipe Sasaran', 'Validasi Hasil Review', 'Justifikasi']:
