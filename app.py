@@ -1396,10 +1396,14 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 unsafe_allow_html=True
             )
             
-            # 1. Validasi Awal Keberadaan Data
-            tanggal_terakhir_bawah = st.session_state.get('tanggal_terakhir_bawah', None)
+            # --- 1. VALIDASI AWAL KEBERADAAN DATA (DILONGGARKAN & DIBERI FALLBACK) ---
+            # Mengambil data utama dengan fallback ganda agar jika di-refresh tetap aman
+            df_master_source = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
             
-            if tanggal_terakhir_bawah and st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
+            if df_master_source is not None and not df_master_source.empty:
+                
+                # Mengambil tanggal dengan aman (jika None, beri fallback tanggal hari ini / teks default)
+                tanggal_terakhir_bawah = st.session_state.get('tanggal_terakhir_bawah', st.session_state.get('ts_terakhir_utama', "-"))
                 
                 # Ambil format tanggal untuk Badge Informasi
                 if hasattr(tanggal_terakhir_bawah, 'strftime'):
@@ -1427,7 +1431,10 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 st.markdown(badge_gabungan_html, unsafe_allow_html=True)
             
                 # 2. Duplikasi & Normalisasi Kolom secara Global
-                df_master = st.session_state['df_tabel_bawah'].copy()
+                df_master = df_master_source.copy()
+                
+                # PENGAMAN: Paksa semua kolom menjadi penulisan string standar sebelum pencocokan nama
+                df_master.columns = [str(c).strip() for c in df_master.columns]
                 
                 rename_dict = {}
                 for col in df_master.columns:
@@ -1451,10 +1458,12 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     df_master = df_master.rename(columns=rename_dict)
             
                 # 3. 🔥 IMPLEMENTASI BARU: Penentuan Kategori Data Otomatis 🔥
-                # (Pastikan variabel list `ind_rujukan` sudah terdefinisi di bagian atas aplikasi Anda)
-                df_master["Kategori Data"] = df_master["Indikator Kesalahan Data"].apply(
-                    lambda x: "Rujukan" if str(x) in ind_rujukan else "Penjangkauan"
-                )
+                if "Indikator Kesalahan Data" in df_master.columns:
+                    df_master["Kategori Data"] = df_master["Indikator Kesalahan Data"].apply(
+                        lambda x: "Rujukan" if str(x) in ind_rujukan else "Penjangkauan"
+                    )
+                else:
+                    df_master["Kategori Data"] = "Penjangkauan"
             
                 # 4. Susunan Struktur Kolom Universal Baru
                 kolom_susunan_gabungan = [
@@ -1565,16 +1574,18 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                             text_justifikasi    # TEXT
                                         ))
                                         # Catat indeks dataframe asli untuk dipotong dari session state jika sukses
+                                        indeks_baris_terpilesh = idx
                                         indeks_baris_terpilih.append(idx)
             
                                 # Kirim ke Neon Database jika ada baris yang memenuhi kriteria simpan
                                 if len(list_log_db) > 0:
                                     if simpan_log_ke_neon(list_log_db):
                                         
-                                        # Potong baris yang sukses disimpan berdasarkan indeks asli session_state
-                                        df_sekarang = st.session_state['df_tabel_bawah']
-                                        df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
-                                        st.session_state['df_tabel_bawah'] = df_sisa
+                                        # Update kedua penampung session state agar tersinkronisasi bersih
+                                        if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None:
+                                            st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(indeks_baris_terpilih).reset_index(drop=True)
+                                        if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
+                                            st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(indeks_baris_terpilih).reset_index(drop=True)
                                         
                                         st.success(f"🎉 Sukses memindahkan {len(list_log_db)} baris data ke tabel log_validasi_review!")
                                         
