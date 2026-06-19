@@ -17,8 +17,6 @@ from database import (
     tambah_keyword_medsos_db,
     simpan_agregasi_ke_neon,
     ambil_agregasi_terakhir_dari_neon,
-    simpan_detil_review_ke_neon,       # 🔥 WAJIB TAMBAHKAN BARIS INI
-    ambil_detil_terakhir_dari_neon,      # 🔥 WAJIB TAMBAHKAN BARIS INI
     ambil_status_storage_neon,
     ambil_data_rujukan_hiv_positif,  # 🔥 DITAMBAHKAN UNTUK REFERENSI RUJUKAN
     ambil_database_layanan           # 🔥 DITAMBAHKAN UNTUK REFERENSI LAYANAN
