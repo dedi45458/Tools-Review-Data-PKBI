@@ -793,12 +793,14 @@ if tombol_proses:
         st.error("⚠️ Silakan unggah berkas Raw Data terlebih dahulu di sidebar!")
     else:
         with st.spinner("Sedang memproses validasi data & sinkronisasi database terintegrasi..."):
-            # 🛠️ PERBAIKAN SMAN: Cegah NameError jika file_referensi tidak diupload/diisi
-            file_ref_input = st.session_state.get('file_referensi', None) if 'file_referensi' not in locals() else file_referensi
+            
+            # 🛠️ SOLUSI ERROR 1: Tangkap uploader referensi dengan aman
+            # Pastikan "uploader_master_tunggal" adalah 'key' dari st.file_uploader Anda di sidebar
+            file_referensi_aman = st.session_state.get('uploader_master_tunggal', None)
             df_ref = None
-            if file_ref_input is not None:
+            if file_referensi_aman is not None:
                 try: 
-                    df_ref = pd.read_excel(file_ref_input)
+                    df_ref = pd.read_excel(file_referensi_aman)
                 except Exception: 
                     pass
             
@@ -809,98 +811,69 @@ if tombol_proses:
             total_records = 0
             all_errs = []
             
-            # 📊 VARIABEL BARU: Untuk Menghitung KPI Akurasi Dashboard Atas
             total_proses_pjj = 0
             total_proses_rjk = 0
             
-            # 1. Tarik dataset prasyarat dari Database Neon untuk validasi lintas kolom
-            set_nik_rkt, set_ssr_id_rkt = set(), set()
-            set_prep_vld = set()
-            
+            set_nik_rkt, set_ssr_id_rkt, set_prep_vld = set(), set(), set()
             try:
                 from database import ambil_set_reaktif_sebelumnya, ambil_set_layanan_prep_valid
                 set_nik_rkt, set_ssr_id_rkt = ambil_set_reaktif_sebelumnya()
                 set_prep_vld = ambil_set_layanan_prep_valid()
             except Exception as e:
-                st.warning(f"⚠️ Catatan: Gagal menarik data riwayat reaktif/PrEP dari DB ({str(e)}). Menggunakan set kosong.")
+                pass # Abaikan jika data historis belum ada
 
-            # 2. Iterasi & Ekstraksi Awal untuk Set Cross-Check Penjangkauan
             for f in files_review:
                 try:
                     temp_df = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     col_upper = [str(c).upper() for c in temp_df.columns]
-                    # Jika ini file penjangkauan (bukan rujukan)
                     if not any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS']):
                         for _, row in temp_df.iterrows():
                             ssr = str(row.get('Lembaga SSR', '')).strip().upper()
                             idk = str(row.get('ID Klien', '')).replace("'", "").strip()
-                            if ssr and idk: 
-                                set_penjangkauan.add(f"{ssr}_{idk}")
-                except Exception:
-                    pass
+                            if ssr and idk: set_penjangkauan.add(f"{ssr}_{idk}")
+                except Exception: pass
 
-            # 3. Jalankan Review Data & Hitung Total Baris yang Diproses Per Kategori
             for f in files_review:
                 try:
                     df_target = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     total_records += len(df_target)
                     
-                    # Deteksi kategori file berdasarkan keberadaan kolom khas rujukan
                     col_upper = [str(c).upper() for c in df_target.columns]
                     is_rujukan = any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
                     
-                    # 📊 Hitung total data masuk asli sebelum disaring
-                    if is_rujukan:
-                        total_proses_rjk += len(df_target)
-                    else:
-                        total_proses_pjj += len(df_target)
+                    if is_rujukan: total_proses_rjk += len(df_target)
+                    else: total_proses_pjj += len(df_target)
                     
                     df_res = jalankan_review_data(
                         df_target, df_ref, nama_file=f.name,
                         set_ssr_id_penjangkauan=set_penjangkauan,
-                        set_nik_reaktif=set_nik_rkt,
-                        set_ssr_id_reaktif=set_ssr_id_rkt,
-                        set_prep_valid=set_prep_vld
+                        set_nik_reaktif=set_nik_rkt, set_ssr_id_reaktif=set_ssr_id_rkt, set_prep_valid=set_prep_vld
                     )
                     
                     if not df_res.empty:
                         df_res['Kategori Data'] = 'Rujukan' if is_rujukan else 'Penjangkauan'
                         all_errs.append(df_res)
-                except Exception: 
-                    pass
+                except Exception: pass
 
             st.session_state['total_entri'] = total_records
 
             if all_errs:
-                # Menggabungkan seluruh data mentah hasil deteksi awal
                 df_bawah = pd.concat(all_errs, ignore_index=True)
                 
-                # 📊 HITUNG TOTAL TEMUAN DAN TINGKAT AKURASI ASLI SEBELUM DROP DUPLIKAT
+                # SIMPAN LOG AKURASI
                 df_pjj_raw = df_bawah[df_bawah['Kategori Data'] == 'Penjangkauan'] if not df_bawah.empty else pd.DataFrame()
                 df_rjk_raw = df_bawah[df_bawah['Kategori Data'] == 'Rujukan'] if not df_bawah.empty else pd.DataFrame()
-                
                 total_temuan_pjj = len(df_pjj_raw)
                 total_temuan_rjk = len(df_rjk_raw)
+                akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
+                akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
                 
-                # Rumus Akurasi: ((Total Proses - Total Temuan) / Total Proses) * 100
-                akurasi_pjj = round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2) if total_proses_pjj > 0 else 100.00
-                akurasi_rjk = round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2) if total_proses_rjk > 0 else 100.00
-                
-                # Keamanan batas bawah 0%
-                akurasi_pjj = max(0.00, akurasi_pjj)
-                akurasi_rjk = max(0.00, akurasi_rjk)
-                
-                # 📊 SIMPAN LOG AKURASI BARU KE DATABASE NEON
                 try:
                     from database import simpan_metrik_akurasi_db
-                    if total_proses_pjj > 0:
-                        simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
-                    if total_proses_rjk > 0:
-                        simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
-                except Exception as e:
-                    st.warning(f"⚠️ Gagal menyimpan ringkasan metrik akurasi ke database: {e}")
+                    if total_proses_pjj > 0: simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
+                    if total_proses_rjk > 0: simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
+                except Exception: pass
 
-                # Normalisasi Nama Kolom secara Seragam
                 rename_map = {}
                 for c in df_bawah.columns:
                     c_clean = str(c).strip().upper()
@@ -915,16 +888,12 @@ if tombol_proses:
                     elif 'INDIKATOR KESALAHAN' in c_clean: rename_map[c] = 'Indikator Kesalahan Data'
                     elif 'VALIDASI' in c_clean: rename_map[c] = 'Validasi Hasil Review'
                     elif 'JUSTIFIKASI' in c_clean: rename_map[c] = 'Justifikasi'
-                
                 df_bawah = df_bawah.rename(columns=rename_map)
                 
                 for col in ['Kode Petugas', 'Nama Kota', 'Nama Layanan', 'NIK', 'Tipe Sasaran', 'Validasi Hasil Review', 'Justifikasi']:
-                    if col not in df_bawah.columns:
-                        df_bawah[col] = "-"
+                    if col not in df_bawah.columns: df_bawah[col] = "-"
 
-                # -----------------------------------------------------------------
-                # FILTRASI DATA GABUNGAN BARU VS DATA LAMA (ANTI DUPLIKAT MASTER)
-                # -----------------------------------------------------------------
+                # FILTER DUPLIKAT
                 existing_master_keys = set()
                 try:
                     from database import dapatkan_koneksi_neon
@@ -935,8 +904,7 @@ if tombol_proses:
                             for r in cur.fetchall():
                                 existing_master_keys.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip(), str(r[4]).strip()))
                         conn.close()
-                except Exception as e:
-                    st.warning(f"⚠️ Gagal memuat indeks pembanding dari database ({str(e)}). Menggunakan mode bypass.")
+                except Exception: pass
 
                 indices_to_drop = []
                 for idx, row in df_bawah.iterrows():
@@ -945,24 +913,20 @@ if tombol_proses:
                     tgl = str(row.get('Tanggal', '')).strip().lower() 
                     id_klien = str(row.get('ID Klien', '')).strip().lower()
                     ind = str(row.get('Indikator Kesalahan Data', '')).strip().lower()
-                    
-                    master_key = (kat, ssr, tgl, id_klien, ind)
-                    if master_key in existing_master_keys:
+                    if (kat, ssr, tgl, id_klien, ind) in existing_master_keys:
                         indices_to_drop.append(idx)
                 
                 if indices_to_drop:
                     df_bawah = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
 
-                # -----------------------------------------------------------------
-                # SINKRONISASI TRANSMISI KE 3 TABEL DATABASE
-                # -----------------------------------------------------------------
+                # SINKRONISASI KE 3 TABEL
                 try:
                     from database import simpan_paket_validasi_ke_tiga_tabel
                     
                     if df_bawah.empty:
                         st.info("ℹ️ Seluruh data kesalahan yang diupload sudah tersimpan di database Neon sebelumnya.", icon="ℹ️")
                     else:
-                        # --- TABEL 1: Penjangkauan ---
+                        # 1. TABEL PENJANGKAUAN (Hanya agregasi)
                         df_pjj_only = df_bawah[df_bawah['Kategori Data'] == 'Penjangkauan']
                         list_insert_tabel_1 = []
                         if not df_pjj_only.empty:
@@ -974,23 +938,30 @@ if tombol_proses:
                                     if hitung_kesalahan > 0:
                                         list_insert_tabel_1.append((ssr_name, ind_err, hitung_kesalahan))
 
-                        # --- TABEL 2: Rujukan ---
+                        # 2. TABEL RUJUKAN (Hanya untuk kategori Rujukan)
                         df_rjk_only = df_bawah[df_bawah['Kategori Data'] == 'Rujukan']
                         list_insert_tabel_2 = []
                         for _, row_rjk in df_rjk_only.iterrows():
-                            try: tgl_clean = pd.to_datetime(row_rjk.get('Tanggal')).date()
-                            except Exception: tgl_clean = None
+                            # Pastikan format tanggal sesuai SQL
+                            tgl_raw = str(row_rjk.get('Tanggal', '')).strip()
+                            tgl_clean = tgl_raw if tgl_raw != '-' else None
+                            
+                            # 🛠️ SOLUSI ERROR 2: Pastikan nilai validasi dikonversi ke Boolean (True/False)
+                            val_review = str(row_rjk.get('Validasi Hasil Review', '')).strip().lower()
+                            is_valid = True if val_review in ['true', 'yes', '1', 'ya'] else False
+
                             list_insert_tabel_2.append((
                                 str(row_rjk.get('Lembaga SSR', '-')), str(row_rjk.get('Kode Petugas', '-')),
                                 str(row_rjk.get('Nama Kota', '-')), str(row_rjk.get('Nama Layanan', '-')),
                                 tgl_clean, str(row_rjk.get('ID Klien', '-')), str(row_rjk.get('NIK', '-')),
                                 str(row_rjk.get('Tipe Sasaran', '-')), str(row_rjk.get('Indikator Kesalahan Data', '-')),
-                                False, str(row_rjk.get('Justifikasi', '-'))
+                                is_valid, str(row_rjk.get('Justifikasi', '-'))
                             ))
 
-                        # --- TABEL 3: Gabungan Master ---
+                        # 3. TABEL UTAMA (Gabungan Penjangkauan & Rujukan)
                         list_insert_tabel_3 = []
                         for _, row_all in df_bawah.iterrows():
+                            # Di tabel master, validasi_hasil_review bertipe TEXT (berdasarkan skema SQL sebelumnya)
                             list_insert_tabel_3.append((
                                 str(row_all.get('Kategori Data', '-')), str(row_all.get('Lembaga SSR', '-')),
                                 str(row_all.get('Kode Petugas', '-')), str(row_all.get('Nama Kota', '-')),
@@ -1000,43 +971,38 @@ if tombol_proses:
                                 str(row_all.get('Validasi Hasil Review', '-')), str(row_all.get('Justifikasi', '-'))
                             ))
 
+                        # EKSEKUSI
                         sukses = simpan_paket_validasi_ke_tiga_tabel(list_insert_tabel_1, list_insert_tabel_2, list_insert_tabel_3)
                         if sukses:
                             st.toast("💾 Sinkronisasi aman ke 3 tabel Cloud Neon Database berhasil!", icon="✅")
                         else:
-                            st.error("❌ Terjadi kesalahan teknis transaksi multi-tabel.")
+                            st.error("❌ Terjadi kesalahan teknis transaksi multi-tabel. Data gagal disimpan.")
 
                 except Exception as e:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database (Sistem Crash): {str(e)}")
             
             else:
+                st.session_state['df_tabel_atas'] = pd.DataFrame()
+                st.session_state['df_tabel_bawah'] = pd.DataFrame()
                 st.info("✨ Proses selesai: Tidak ditemukan indikator kesalahan data pada file yang Anda unggah.")
 
-            # -----------------------------------------------------------------
-            # 🔥 PENYEMPURNAAN SINKRONISASI UI STATE SETELAH PROSES SELESAI
-            # -----------------------------------------------------------------
+            # AUTO-REFRESH UI
             try:
-                from database import (
-                    ambil_agregasi_penjangkauan_terakhir,
-                    ambil_agregasi_rujukan_terakhir,
-                    ambil_hasil_review_utama_terakhir,
-                    ambil_metrik_akurasi_terakhir
-                )
-                
-                # 1. Tarik Metrik Ringkasan Terupdate untuk Dashboard Atas
+                from database import ambil_agregasi_penjangkauan_terakhir, ambil_agregasi_rujukan_terakhir, ambil_hasil_review_utama_terakhir, ambil_metrik_akurasi_terakhir
                 metrik_db, ts_metrik = ambil_metrik_akurasi_terakhir()
                 st.session_state['metrik_akurasi'] = metrik_db
                 st.session_state['ts_metrik_terakhir'] = ts_metrik
                 
-                # 2. Tarik Data Tabel Terupdate agar langsung muncul otomatis di UI
                 df_pjj_db, ts_pjj = ambil_agregasi_penjangkauan_terakhir()
                 df_rjk_db, ts_rjk = ambil_agregasi_rujukan_terakhir()
                 df_utama_db, ts_utama = ambil_hasil_review_utama_terakhir()
                 
+                st.session_state['df_tabel_atas'] = df_pjj_db # Tetap pertahankan nama kunci df_tabel_atas untuk UI lama
                 st.session_state['df_tabel_penjangkauan'] = df_pjj_db
                 st.session_state['df_tabel_rujukan'] = df_rjk_db
                 st.session_state['df_tabel_bawah'] = df_utama_db
                 st.session_state['tanggal_terakhir_review'] = ts_utama
+                st.session_state['tanggal_terakhir_bawah'] = ts_utama
 
             except Exception as e:
                 st.warning(f"⚠️ Berhasil simpan data, namun gagal me-refresh visualisasi dashboard UI ({e})")
