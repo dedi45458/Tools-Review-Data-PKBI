@@ -421,35 +421,36 @@ def simpan_agregasi_rujukan_db(data_input):
         if conn: conn.close()
 
 def ambil_agregasi_rujukan_terakhir():
-    """Mengambil seluruh baris data rujukan dari batch upload terakhir berdasarkan MAX(created_at).
-    Kolom di-alias agar otomatis berubah menjadi huruf kapital sesuai kebutuhan UI."""
+    """🔥 SINKRON: Mengambil seluruh baris data rujukan dari batch upload terakhir 
+    menggunakan buffer interval 5 detik agar seluruh data dalam 1 batch terangkut."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
     try:
+        # Menggunakan subquery dengan - INTERVAL '5 second' untuk mengantisipasi jeda mikrodetik upload
+        query = """
+            SELECT 
+                lembaga_ssr AS "LEMBAGA SSR", 
+                kode_petugas AS "KODE PETUGAS", 
+                nama_kota AS "NAMA KOTA", 
+                nama_layanan AS "NAMA LAYANAN", 
+                tanggal AS "TANGGAL", 
+                id_klien AS "ID KLIEN", 
+                nik AS "NIK", 
+                tipe_sasaran AS "TIPE SASARAN", 
+                indikator_kesalahan_data AS "INDIKATOR KESALAHAN DATA", 
+                validasi_hasil_review AS "VALIDASI HASIL REVIEW", 
+                justifikasi AS "JUSTIFIKASI"
+            FROM agregasi_hasil_review_rujukan
+            WHERE created_at >= (SELECT MAX(created_at) FROM agregasi_hasil_review_rujukan) - INTERVAL '5 second'
+        """
+        df = pd.read_sql(query, conn)
+        
+        # Mengambil nilai timestamp asli untuk informasi di UI jika dibutuhkan
         with conn.cursor() as cur:
             cur.execute("SELECT MAX(created_at) FROM agregasi_hasil_review_rujukan")
             max_timestamp = cur.fetchone()[0]
-            if not max_timestamp: return pd.DataFrame(), None
             
-            # Query disesuaikan dengan nama kolom asli DB kamu, tapi di-output sebagai format UI
-            query = """
-                SELECT 
-                    lembaga_ssr AS "LEMBAGA SSR", 
-                    kode_petugas AS "KODE PETUGAS", 
-                    nama_kota AS "NAMA KOTA", 
-                    nama_layanan AS "NAMA LAYANAN", 
-                    tanggal AS "TANGGAL", 
-                    id_klien AS "ID KLIEN", 
-                    nik AS "NIK", 
-                    tipe_sasaran AS "TIPE SASARAN", 
-                    indikator_kesalahan_data AS "INDIKATOR KESALAHAN DATA", 
-                    validasi_hasil_review AS "VALIDASI HASIL REVIEW", 
-                    justifikasi AS "JUSTIFIKASI"
-                FROM agregasi_hasil_review_rujukan
-                WHERE created_at = %s
-            """
-            df = pd.read_sql(query, conn, params=(max_timestamp,))
-            return df, max_timestamp
+        return df, max_timestamp
     except Exception as e:
         st.error(f"Gagal memuat rekap rujukan terakhir: {e}")
         return pd.DataFrame(), None
@@ -492,36 +493,34 @@ def simpan_hasil_review_utama_db(data_input):
         if conn: conn.close()
 
 def ambil_hasil_review_utama_terakhir():
-    """Mengambil detail data review gabungan utama berdasarkan MAX(created_at).
-    Kolom di-alias agar otomatis berubah menjadi huruf kapital sesuai kebutuhan UI."""
+    """🔥 SINKRON: Mengambil detail data review gabungan utama dari batch terakhir."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
     try:
+        query = """
+            SELECT 
+                kategori_data AS "KATEGORI DATA", 
+                lembaga_ssr AS "LEMBAGA SSR", 
+                kode_petugas AS "KODE PETUGAS", 
+                nama_kota AS "NAMA KOTA", 
+                nama_layanan AS "NAMA LAYANAN", 
+                tanggal AS "TANGGAL", 
+                id_klien AS "ID KLIEN", 
+                nik AS "NIK", 
+                tipe_sasaran AS "TIPE SASARAN", 
+                indikator_kesalahan AS "INDIKATOR KESALAHAN DATA", 
+                validasi_hasil_review AS "VALIDASI HASIL REVIEW", 
+                justifikasi AS "JUSTIFIKASI"
+            FROM hasil_review_data
+            WHERE created_at >= (SELECT MAX(created_at) FROM hasil_review_data) - INTERVAL '5 second'
+        """
+        df = pd.read_sql(query, conn)
+        
         with conn.cursor() as cur:
             cur.execute("SELECT MAX(created_at) FROM hasil_review_data")
             max_timestamp = cur.fetchone()[0]
-            if not max_timestamp: return pd.DataFrame(), None
             
-            # Query disesuaikan dengan skema tabel hasil_review_data milikmu
-            query = """
-                SELECT 
-                    kategori_data AS "KATEGORI DATA", 
-                    lembaga_ssr AS "LEMBAGA SSR", 
-                    kode_petugas AS "KODE PETUGAS", 
-                    nama_kota AS "NAMA KOTA", 
-                    nama_layanan AS "NAMA LAYANAN", 
-                    tanggal AS "TANGGAL", 
-                    id_klien AS "ID KLIEN", 
-                    nik AS "NIK", 
-                    tipe_sasaran AS "TIPE SASARAN", 
-                    indikator_kesalahan AS "INDIKATOR KESALAHAN DATA", 
-                    validasi_hasil_review AS "VALIDASI HASIL REVIEW", 
-                    justifikasi AS "JUSTIFIKASI"
-                FROM hasil_review_data
-                WHERE created_at = %s
-            """
-            df = pd.read_sql(query, conn, params=(max_timestamp,))
-            return df, max_timestamp
+        return df, max_timestamp
     except Exception as e:
         st.error(f"Gagal memuat hasil review utama gabungan terakhir: {e}")
         return pd.DataFrame(), None
