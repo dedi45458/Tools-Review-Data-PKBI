@@ -674,7 +674,7 @@ def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
 
 
 def ambil_metrik_akurasi_terakhir():
-    """Mengambil persentase akurasi terakhir untuk ditampilkan di UI Kartu Skor."""
+    """Mengambil persentase akurasi terakhir menggunakan urutan DESC (Lebih Cepat & Aman)."""
     conn = dapatkan_koneksi_neon()
     metrik_default = {'akurasi_penjangkauan': 100.0, 'akurasi_rujukan': 100.0}
     ts_metrik = dt.datetime.now()
@@ -682,22 +682,26 @@ def ambil_metrik_akurasi_terakhir():
     if not conn: return metrik_default, ts_metrik
     try:
         with conn.cursor() as cur:
-            # Cek apakah tabel ada
             cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'metrik_akurasi');")
             tabel_ada = cur.fetchone()[0]
             
             if tabel_ada:
-                cur.execute("SELECT MAX(created_at) FROM metrik_akurasi")
-                max_ts = cur.fetchone()[0]
-                if max_ts:
-                    ts_metrik = max_ts
-                    cur.execute("SELECT kategori, akurasi FROM metrik_akurasi WHERE created_at = %s", (max_ts,))
-                    for row in cur.fetchall():
+                # Ambil 2 data terbaru (1 penjangkauan, 1 rujukan dari batch terakhir)
+                cur.execute("""
+                    SELECT kategori, akurasi, created_at 
+                    FROM metrik_akurasi 
+                    ORDER BY created_at DESC 
+                    LIMIT 2
+                """)
+                rows = cur.fetchall()
+                if rows:
+                    ts_metrik = rows[0][2] # Ambil timestamp dari data paling baru
+                    for row in rows:
                         kat = str(row[0]).lower()
                         if 'penjangkauan' in kat: metrik_default['akurasi_penjangkauan'] = float(row[1])
                         if 'rujukan' in kat: metrik_default['akurasi_rujukan'] = float(row[1])
     except Exception:
-        pass # Jika eror, biarkan mengembalikan nilai 100.0 (Aman)
+        pass
     finally:
         conn.close()
         
