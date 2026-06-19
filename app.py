@@ -1327,14 +1327,19 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         if col in df_display_ruj.columns:
                             df_display_ruj[col] = df_display_ruj[col].astype(str).replace({'0': '-', '0.0': '-'})
                     
+                    # =========================================================================
+                    # 🔥 PERBAIKAN: CONFIG COLUMN CONFIG UNTUK STRUKTUR DATA KAPITAL
+                    # =========================================================================
                     column_config_ruj = {
                         kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
                         "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
-                        "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
-                    }
+                        "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")}
+                    
+                    # Mapping dinamis untuk setiap nama kolom SSR yang aktif (Semua otomatis kapital)
                     for col in ssr_aktif_ruj:
-                        column_config_ruj[col] = st.column_config.TextColumn(col, width="small")
-                
+                        column_config_ruj[col] = st.column_config.TextColumn(str(col).upper(), width="small")
+                    
+                    # Render tabel ke layar secara fisik tanpa index bawaan pandas
                     st.dataframe(df_display_ruj, use_container_width=True, column_config=column_config_ruj, hide_index=True)
                 else:
                     st.info("✅ Tidak ada temuan kesalahan untuk Data Rujukan.")
