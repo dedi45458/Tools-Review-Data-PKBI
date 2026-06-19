@@ -1088,34 +1088,38 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         tot_err_ruj = 0
         
         # Hitung baris temuan secara dinamis jika data hasil review tersedia
-        if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-            df_semua_error = st.session_state['df_tabel_bawah'].copy()
+        # 🔥 PERBAIKAN 1: Tambahkan fallback ke 'df_review_utama' agar sinkron dengan seksi render tabel
+        df_semua_error = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama'))
+        
+        if df_semua_error is not None and not df_semua_error.empty:
+            df_semua_error = df_semua_error.copy()
             
-            # 🛡️ PROTEKSI KEYERROR: Sinkronisasi nama kolom seandainya sudah di-rename sebelumnya
-            if 'Indikator Kesalahan Data' in df_semua_error.columns and 'INDIKATOR KESALAHAN DATA' not in df_semua_error.columns:
-                df_semua_error = df_semua_error.rename(columns={'Indikator Kesalahan Data': 'INDIKATOR KESALAHAN DATA'})
+            # 🛡️ PROTEKSI KEYERROR: Normalisasi nama kolom sebelum konversi huruf kapital global
+            rename_dict_awal = {}
+            for col in df_semua_error.columns:
+                c_clean = str(col).strip().lower()
+                if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean:
+                    rename_dict_awal[col] = "INDIKATOR KESALAHAN DATA"
+                elif "lembaga" in c_clean or "ssr" in c_clean:
+                    rename_dict_awal[col] = "LEMBAGA SSR"
+                elif "tanggal" in c_clean:
+                    rename_dict_awal[col] = "TANGGAL"
+                elif "id klien" in c_clean or "id_klien" in c_clean:
+                    rename_dict_awal[col] = "ID KLIEN"
             
-            # Memisahkan error berdasarkan jenis file (Bisa dicek dari aturan mana yang terpicu)
+            if rename_dict_awal:
+                df_semua_error = df_semua_error.rename(columns=rename_dict_awal)
+            
             # Menggunakan try-except sebagai fallback jika ATURAN_VALIDASI_RUJUKAN belum di-declare secara global
             try:
                 ind_rujukan = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
             except NameError:
                 ind_rujukan = [] # Fallback aman jika list aturan rujukan tidak terbaca
                 
-            # =========================================================================
-            # 🔥 PENGAMAN STRUKTUR KOLOM SEBELUM FILTER BARIS 1072
-            # =========================================================================
-            if df_semua_error is not None and not df_semua_error.empty:
-                # Paksa semua nama kolom menjadi HURUF KAPITAL tanpa spasi liar
-                df_semua_error.columns = [str(col).strip().upper() for col in df_semua_error.columns]
-                
-                # Antisipasi jika di database/session state namanya masih menggunakan format lama
-                if 'INDIKATOR KESALAHAN' in df_semua_error.columns and 'INDIKATOR KESALAHAN DATA' not in df_semua_error.columns:
-                    df_semua_error = df_semua_error.rename(columns={'INDIKATOR KESALAHAN': 'INDIKATOR KESALAHAN DATA'})
-                elif 'INDIKATOR_KESALAHAN' in df_semua_error.columns:
-                    df_semua_error = df_semua_error.rename(columns={'INDIKATOR_KESALAHAN': 'INDIKATOR KESALAHAN DATA'})
+            # Paksa semua nama kolom menjadi HURUF KAPITAL tanpa spasi liar untuk query internal berikutnya
+            df_semua_error.columns = [str(col).strip().upper() for col in df_semua_error.columns]
 
-            # Baris 1072 asli kamu (Sekarang dijamin aman dari KeyError)
+            # Baris mask_rujukan aman dari KeyError
             mask_rujukan = df_semua_error['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)
             
             # Eliminasi duplikasi baris fisik agar akurasi dihitung per entri data (bukan per jenis error)
@@ -1124,6 +1128,10 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             
             tot_err_penj = len(df_err_penj_unik)
             tot_err_ruj = len(df_err_ruj_unik)
+            
+            # 🔥 PERBAIKAN 2: Pastikan session state 'df_tabel_bawah' terisi kembali agar dibaca oleh komponen tabel editor
+            if 'df_tabel_bawah' not in st.session_state or st.session_state['df_tabel_bawah'] is None:
+                st.session_state['df_tabel_bawah'] = df_semua_error
 
         # Perhitungan Akurasi masing-masing entri
         akurasi_penj = 100.0 if tot_data_penj == 0 else max(0, 100 - (tot_err_penj / tot_data_penj * 100))
