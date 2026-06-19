@@ -26,10 +26,17 @@ from database import (
     simpan_agregasi_rujukan_db,       # Untuk Rujukan
     simpan_hasil_review_utama_db,     # Untuk Gabungan Utama
     
-    # 🔥 PENYEMPURNAAN: AMBIL DATA TERAKHIR SINKRON DENGAN APP STATE
-    ambil_agregasi_penjangkauan_terakhir,  # <-- Menggantikan ambil_agregasi_terakhir_dari_neon
-    ambil_agregasi_rujukan_terakhir,       # <-- BARU: Untuk Tabel Rekap Rujukan SSR
-    ambil_hasil_review_utama_terakhir      # <-- BARU: Untuk Tabel Validasi Utama
+    # ⚡ BARU: TRANSAKSI MULTI-TABEL SEKALIGUS
+    simpan_paket_validasi_ke_tiga_tabel, 
+    
+    # 📊 BARU: METRIK AKURASI KARTU SKOR GANDA
+    simpan_metrik_akurasi_db,
+    ambil_metrik_akurasi_terakhir,
+    
+    # 🔥 AMBIL DATA TERAKHIR SINKRON DENGAN APP STATE
+    ambil_agregasi_penjangkauan_terakhir,  
+    ambil_agregasi_rujukan_terakhir,       
+    ambil_hasil_review_utama_terakhir      
 )
 
 # ==========================================================
