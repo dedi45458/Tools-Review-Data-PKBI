@@ -1585,7 +1585,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     df_bawah['Kelompok Sasaran'] = df_bawah['TIPE SASARAN'].map(map_sasaran).fillna(df_bawah['TIPE SASARAN'])
                     
                     # Pengaman Duplikat
-                    df_bawah = df_bawah.drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien", "INDIKATOR KESALAHAN DATA"])
+                    df_bawah = df_bawah.drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KLIEN", "INDIKATOR KESALAHAN DATA"])
                     
                     # Memisahkan Kategori (Mutlak vs Konfirmasi)
                     is_konfirmasi = df_bawah['INDIKATOR KESALAHAN DATA'].str.contains(r'\(konfirmasi\)', case=False, na=False)
