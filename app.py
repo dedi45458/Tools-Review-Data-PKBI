@@ -1576,13 +1576,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.markdown("#### 📊 Sebaran Titik Kesalahan Berdasarkan Kelompok Sasaran")
                     
                     # Standarisasi Tipe Sasaran & Mapping Label
-                    df_bawah['Tipe Sasaran'] = df_bawah['Tipe Sasaran'].astype(str).str.replace('.0', '', regex=False).str.strip()
+                    df_bawah['TIPE SASARAN'] = df_bawah['TIPE SASARAN'].astype(str).str.replace('.0', '', regex=False).str.strip()
                     map_sasaran = {
                         '1304': '1304 (MSM)',
                         '1301': '1301 (TG)',
                         '1401': '1401 (PWID)'
                     }
-                    df_bawah['Kelompok Sasaran'] = df_bawah['Tipe Sasaran'].map(map_sasaran).fillna(df_bawah['Tipe Sasaran'])
+                    df_bawah['Kelompok Sasaran'] = df_bawah['TIPE SASARAN'].map(map_sasaran).fillna(df_bawah['TIPE SASARAN'])
                     
                     # Pengaman Duplikat
                     df_bawah = df_bawah.drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien", "INDIKATOR KESALAHAN DATA"])
