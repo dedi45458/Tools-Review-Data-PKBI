@@ -773,14 +773,14 @@ def jalankan_review_data(
     return pd.DataFrame(list_kesalahan)
 
     
-# ==========================================================
-# 4. LOGIKA TOMBOL EKSEKUSI (VERSI ADJUSTMENT KOMBINASI AGREGASI)
-# ==========================================================
+# =========================================================================
+# 4. LOGIKA TOMBOL EKSEKUSI (VERSI PENYELARASAN 3 TABEL NEON DATABASE)
+# =========================================================================
 if tombol_proses:
     if not files_review:
         st.error("⚠️ Silakan unggah berkas Raw Data terlebih dahulu di sidebar!")
     else:
-        with st.spinner("Sedang memproses validasi data & sinkronisasi database..."):
+        with st.spinner("Sedang memproses validasi data & sinkronisasi database terintegrasi..."):
             df_ref = None
             if file_referensi:
                 try: 
@@ -791,32 +791,11 @@ if tombol_proses:
             # -----------------------------------------------------------------
             # 🔥 LANGKAH UTAMA: PRE-PROCESSING & KUMPULKAN PARAMETER CROSS-CHECK
             # -----------------------------------------------------------------
-            
-            # 1. PISAHKAN DAN BACA SEMUA FILE UNTUK PILAH PENJANGKAUAN VS RUJUKAN
-            df_all_penjangkauan = pd.DataFrame()
-            df_all_rujukan = pd.DataFrame()
-            
-            for f in files_review:
-                try:
-                    temp_df = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
-                    col_upper = [str(c).upper() for c in temp_df.columns]
-                    if any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS']):
-                        df_all_rujukan = pd.concat([df_all_rujukan, temp_df], ignore_index=True)
-                    else:
-                        df_all_penjangkauan = pd.concat([df_all_penjangkauan, temp_df], ignore_index=True)
-                except Exception:
-                    pass
-
-            # 2. EKSTRAKSI SET CROSS-CHECK PENJANGKAUAN
             set_penjangkauan = set()
-            if not df_all_penjangkauan.empty:
-                for _, row in df_all_penjangkauan.iterrows():
-                    ssr = str(row.get('Lembaga SSR', '')).strip().upper()
-                    idk = str(row.get('ID Klien', '')).replace("'", "").strip()
-                    if ssr and idk: 
-                        set_penjangkauan.add(f"{ssr}_{idk}")
+            total_records = 0
+            all_errs = []
             
-            # 3. TARIK DATASET PRASYARAT DARI DATABASE NEON
+            # 1. Tarik dataset prasyarat dari Database Neon untuk validasi lintas kolom
             set_nik_rkt, set_ssr_id_rkt = set(), set()
             set_prep_vld = set()
             
@@ -827,16 +806,31 @@ if tombol_proses:
             except Exception as e:
                 st.warning(f"⚠️ Catatan: Gagal menarik data riwayat reaktif/PrEP dari DB ({str(e)}). Menggunakan set kosong.")
 
-            # 4. JALANKAN VALIDASI SATU PER SATU DENGAN PARAMETER LENGKAP
-            all_errs, total_records = [], 0
-            detected_ssrs = set()
+            # 2. Iterasi & Ekstraksi Awal untuk Set Cross-Check Penjangkauan
+            for f in files_review:
+                try:
+                    temp_df = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
+                    col_upper = [str(c).upper() for c in temp_df.columns]
+                    # Jika ini file penjangkauan (bukan rujukan)
+                    if not any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS']):
+                        for _, row in temp_df.iterrows():
+                            ssr = str(row.get('Lembaga SSR', '')).strip().upper()
+                            idk = str(row.get('ID Klien', '')).replace("'", "").strip()
+                            if ssr and idk: 
+                                set_penjangkauan.add(f"{ssr}_{idk}")
+                except Exception:
+                    pass
 
+            # 3. Jalankan Review Data & Sematkan Kategori Data Langsung Per Baris
             for f in files_review:
                 try:
                     df_target = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     total_records += len(df_target)
                     
-                    # Panggil fungsi review data dengan parameter ekstra untuk cross-check lintas tabel/database
+                    # Deteksi kategori file berdasarkan keberadaan kolom khas rujukan
+                    col_upper = [str(c).upper() for c in df_target.columns]
+                    is_rujukan = any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
+                    
                     df_res = jalankan_review_data(
                         df_target, df_ref, nama_file=f.name,
                         set_ssr_id_penjangkauan=set_penjangkauan,
@@ -846,8 +840,9 @@ if tombol_proses:
                     )
                     
                     if not df_res.empty:
+                        # 🌟 KUNCI UTAMA: Sematkan kategori data agar tidak tertukar di database nntinya
+                        df_res['Kategori Data'] = 'Rujukan' if is_rujukan else 'Penjangkauan'
                         all_errs.append(df_res)
-                        detected_ssrs.update(df_res['Lembaga SSR'].unique())
                 except Exception: 
                     pass
 
@@ -857,207 +852,164 @@ if tombol_proses:
                 # Menggabungkan seluruh data mentah hasil deteksi awal
                 df_bawah = pd.concat(all_errs, ignore_index=True)
                 
-                # -----------------------------------------------------------------
-                # 🔥 LANGKAH 1: TARIK SELURUH INDEKS PEMBANDING DARI DB 🔥
-                # -----------------------------------------------------------------
-                existing_logs = set()         # Dari log_validasi_review
-                existing_details = set()      # Dari hasil_review_penjangkauan
-                existing_aggregations = set() # Dari agregasi_hasil_review (4 Parameter)
+                # Normalisasi Nama Kolom secara Seragam (Antisipasi Case-Insensitive Excel)
+                rename_map = {}
+                for c in df_bawah.columns:
+                    c_clean = str(c).strip().upper()
+                    if 'LEMBAGA SSR' in c_clean or 'NAMA SSR' in c_clean: rename_map[c] = 'Lembaga SSR'
+                    elif 'KODE PETUGAS' in c_clean: rename_map[c] = 'Kode Petugas'
+                    elif 'NAMA KOTA' in c_clean or 'KOTA' in c_clean: rename_map[c] = 'Nama Kota'
+                    elif 'NAMA LAYANAN' in c_clean or 'LAYANAN' in c_clean: rename_map[c] = 'Nama Layanan'
+                    elif 'TANGGAL' in c_clean: rename_map[c] = 'Tanggal'
+                    elif 'ID KLIEN' in c_clean: rename_map[c] = 'ID Klien'
+                    elif 'NIK' in c_clean: rename_map[c] = 'NIK'
+                    elif 'TIPE SASARAN' in c_clean: rename_map[c] = 'Tipe Sasaran'
+                    elif 'INDIKATOR KESALAHAN' in c_clean: rename_map[c] = 'Indikator Kesalahan Data'
+                    elif 'VALIDASI' in c_clean: rename_map[c] = 'Validasi Hasil Review'
+                    elif 'JUSTIFIKASI' in c_clean: rename_map[c] = 'Justifikasi'
                 
-                hari_ini_str = datetime.now().date().isoformat() # Format 'YYYY-MM-DD' untuk pencocokan tanggal_dibuat
+                df_bawah = df_bawah.rename(columns=rename_map)
+                
+                # Mengisi nilai default jika ada kolom struktural faskes/rujukan kosong di file penjangkauan
+                for col in ['Kode Petugas', 'Nama Kota', 'Nama Layanan', 'NIK', 'Tipe Sasaran', 'Validasi Hasil Review', 'Justifikasi']:
+                    if col not in df_bawah.columns:
+                        df_bawah[col] = "-"
+
+                # -----------------------------------------------------------------
+                # 🔥 LANGKAH 1: TARIK INDEKS FILTER DUPLIKAT DARI TABEL MASTER DB 🔥
+                # -----------------------------------------------------------------
+                existing_master_keys = set()
+                hari_ini_str = datetime.now().date().isoformat()
                 
                 try:
                     from database import dapatkan_koneksi_neon
                     conn = dapatkan_koneksi_neon()
                     if conn:
                         with conn.cursor() as cur:
-                            # a. Ambil dari log_validasi_review
-                            cur.execute("SELECT LOWER(Lembaga_SSR), LOWER(Tanggal), LOWER(ID_Klien), LOWER(Indikator_Kesalahan_Data) FROM log_validasi_review;")
+                            cur.execute("SELECT LOWER(kategori_data), LOWER(lembaga_ssr), LOWER(tanggal), LOWER(id_klien), LOWER(indikator_kesalahan) FROM hasil_review_data;")
                             for r in cur.fetchall():
-                                existing_logs.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
-                            
-                            # b. Ambil dari hasil_review_penjangkauan 
-                            cur.execute('SELECT LOWER("Lembaga SSR"), LOWER("Tanggal"), LOWER("ID Klien"), LOWER("Indikator Kesalahan Data") FROM hasil_review_penjangkauan_detil_per_baris;')
-                            for r in cur.fetchall():
-                                existing_details.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip()))
-                            
-                            # c. Ambil dari agregasi_hasil_review MENGGUNAKAN KOLOM: tanggal_dibuat, nama_ssr, indikator_kesalahan, jumlah_kesalahan
-                            cur.execute('SELECT tanggal_dibuat, LOWER(nama_ssr), LOWER(indikator_kesalahan), jumlah_kesalahan FROM agregasi_hasil_review_penjangkauan;')
-                            for r in cur.fetchall():
-                                # Ekstrak part tanggal saja dari objek TIMESTAMP tanggal_dibuat
-                                tgl_dibuat_str = r[0].date().isoformat() if hasattr(r[0], 'date') else str(r[0]).split()[0]
-                                existing_aggregations.add((tgl_dibuat_str.strip(), str(r[1]).strip(), str(r[2]).strip(), int(r[3])))
+                                existing_master_keys.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip(), str(r[4]).strip()))
                         conn.close()
                 except Exception as e:
-                    st.warning(f"⚠️ Catatan: Gagal memuat indeks pembanding lengkap dari DB ({str(e)}). Sistem beralih ke mode aman.")
+                    st.warning(f"⚠️ Gagal memuat indeks pembanding dari database ({str(e)}). Menggunakan mode bypass.")
 
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 2: FILTRASI TOTAL TABEL DETIL (TABEL BAWAH) 🔥
+                # 🔥 LANGKAH 2: FILTRASI DATA GABUNGAN BARU VS DATA LAMA (ANTI DUPLIKAT) 🔥
                 # -----------------------------------------------------------------
-                if 'Validasi Hasil Review' not in df_bawah.columns:
-                    df_bawah['Validasi Hasil Review'] = ""
-                
                 indices_to_drop = []
                 for idx, row in df_bawah.iterrows():
+                    kat = str(row.get('Kategori Data', '')).strip().lower()
                     ssr = str(row.get('Lembaga SSR', '')).strip().lower()
                     tgl = str(row.get('Tanggal', '')).strip().lower() 
                     id_klien = str(row.get('ID Klien', '')).strip().lower()
-                    ind = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
+                    ind = str(row.get('Indikator Kesalahan Data', '')).strip().lower()
                     
-                    key = (ssr, tgl, id_klien, ind)
-                    
-                    # Jika sudah ada di tabel hasil_review_penjangkauan -> DROP TOTAL
-                    if key in existing_details:
+                    master_key = (kat, ssr, tgl, id_klien, ind)
+                    if master_key in existing_master_keys:
                         indices_to_drop.append(idx)
-                        continue
-                    
-                    # Jika ada di log_validasi_review -> Cek Aturan Justifikasi
-                    if key in existing_logs:
-                        if "konfirmasi" in ind:
-                            indices_to_drop.append(idx)
-                        else:
-                            df_bawah.at[idx, 'Validasi Hasil Review'] = "kesalahan pada ID yang sama (belum direvisi)"
                 
                 if indices_to_drop:
                     df_bawah = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
-                
-                # -----------------------------------------------------------------
-                # 🔥 LANGKAH 3: HITUNG REKAP (TABEL ATAS) & FILTER DUPLIKAT AGREGASI BARU 🔥
-                # -----------------------------------------------------------------
-                detected_ssrs = set(df_bawah['Lembaga SSR'].unique()) if not df_bawah.empty else set()
-                active_ssrs = sorted(list(detected_ssrs))
-                total_seluruh_kesalahan = len(df_bawah)
-                DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state['aturan_kustom'])]
-                
-                matrix_rows = []
-                for ind in DAFTAR_INDIKATOR_AKTIF:
-                    r_dict = {"INDIKATOR KESALAHAN DATA": ind}
-                    total_ind_err = 0
-                    for ssr in active_ssrs:
-                        c = len(df_bawah[(df_bawah['INDIKATOR KESALAHAN DATA'] == ind) & (df_bawah['Lembaga SSR'] == ssr)])
-                        r_dict[ssr] = c
-                        total_ind_err += c
-                    
-                    r_dict["Jumlah per indikator"] = total_ind_err
-                    r_dict["%"] = (total_ind_err / total_seluruh_kesalahan * 100) if total_seluruh_kesalahan > 0 else 0.0
-                    matrix_rows.append(r_dict)
-                
-                df_atas = pd.DataFrame(matrix_rows)
-                df_atas = df_atas[df_atas['Jumlah per indikator'] > 0]
-                
-                # 🔥 IMPLEMENTASI BARU: Cek duplikasi berdasarkan 4 parameter
-                if not df_atas.empty:
-                    for idx, row in df_atas.iterrows():
-                        ind_name = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
-                        for ssr in active_ssrs:
-                            ssr_name = str(ssr).strip().lower()
-                            jumlah_hitung_baru = int(row.get(ssr, 0))
-                            
-                            if jumlah_hitung_baru == 0:
-                                continue
-                            
-                            # Kombinasi Kunci: (tanggal_dibuat, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                            agg_key = (hari_ini_str, ssr_name, ind_name, jumlah_hitung_baru)
-                            
-                            if agg_key in existing_aggregations:
-                                # Jika kombinasi 4 parameter ini COCOK dengan yang ada di DB, nolkan nilai kolom SSR tersebut
-                                df_atas.at[idx, ssr] = 0
-                    
-                    # Hitung ulang total dan persentase setelah penyaringan nilai duplikat
-                    df_atas['Jumlah per indikator'] = [sum(row[ssr] for ssr in active_ssrs) for idx, row in df_atas.iterrows()]
-                    df_atas = df_atas[df_atas['Jumlah per indikator'] > 0] 
-                    
-                    total_sisa_agregat = df_atas['Jumlah per indikator'].sum()
-                    if total_sisa_agregat > 0:
-                        df_atas['%'] = (df_atas['Jumlah per indikator'] / total_sisa_agregat * 100)
-                    else:
-                        df_atas['%'] = 0.0
 
-                if not df_atas.empty:
-                    df_atas.set_index("INDIKATOR KESALAHAN DATA", inplace=True)
-                else:
-                    df_atas = pd.DataFrame(columns=["Jumlah per indikator", "%"])
-                
-                if "INDIKATOR KESALAHAN DATA" in df_bawah.columns:
-                    df_bawah = df_bawah.rename(columns={"INDIKATOR KESALAHAN DATA": "Indikator Kesalahan Data"})
-                
                 # -----------------------------------------------------------------
-                # 🔥 LANGKAH 4: SINKRONISASI KE NEON DB (VERSI CERDAS DETECTION) 🔥
+                # 🔥 LANGKAH 3: STRUKTURISASI DATA UNTUK SINKRONISASI 3 TABEL DB 🔥
                 # -----------------------------------------------------------------
                 try:
-                    from database import (
-                        simpan_agregasi_ke_neon, 
-                        simpan_detil_review_ke_neon,
-                        ambil_agregasi_terakhir_dari_neon,
-                        ambil_detil_terakhir_dari_neon
-                    )
+                    from database import simpan_paket_validasi_ke_tiga_tabel
                     
-                    # SITUASI 1: JIKA DATA TERNYATA SUDAH PERNAH DIUPLOAD (KOSONG SETELAH FILTER)
                     if df_bawah.empty:
-                        st.info("ℹ️ Seluruh data yang diupload sudah ada dan tersimpan di database Neon (Tidak ada data baru yang dimasukkan).", icon="ℹ️")
-                        
-                        # Ambil riwayat historis terakhir resmi dari DB Neon agar visualisasi dashboard tetap muncul
-                        df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
-                        df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
-                        
-                        if not df_atas_db.empty:
-                            st.session_state['df_tabel_atas'] = df_atas_db
-                            st.session_state['tanggal_terakhir_review'] = ts_atas_db
-                        if not df_bawah_db.empty:
-                            st.session_state['df_tabel_bawah'] = df_bawah_db
-                            st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
-                    
-                    # SITUASI 2: ADA DATA BARU YANG UNIK UNTUK DISIMPAN
+                        st.info("ℹ️ Seluruh data kesalahan yang diupload sudah tersimpan di database Neon sebelumnya (0 baris baru dimasukkan).", icon="ℹ️")
                     else:
-                        df_to_db_atas = df_atas.copy().reset_index()
-                        sukses_simpan_atas = simpan_agregasi_ke_neon(df_to_db_atas)
-                        sukses_simpan_bawah = simpan_detil_review_ke_neon(df_bawah)
+                        # --- SOSIALISASI TABEL 1: Agregasi Hasil Review Penjangkauan ---
+                        df_pjj_only = df_bawah[df_bawah['Kategori Data'] == 'Penjangkauan']
+                        list_insert_tabel_1 = []
                         
-                        # Berhasil Masuk Cloud Database
-                        if sukses_simpan_atas and sukses_simpan_bawah:
-                            st.toast("💾 Data baru berhasil disinkronisasi dengan aturan kombinasi baru!", icon="✅")
+                        if not df_pjj_only.empty:
+                            DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state.get('aturan_kustom', []))]
+                            active_ssrs_pjj = sorted(list(df_pjj_only['Lembaga SSR'].dropna().unique()))
                             
-                            df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
-                            df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
-                            
-                            if not df_atas_db.empty:
-                                st.session_state['df_tabel_atas'] = df_atas_db
-                                st.session_state['tanggal_terakhir_review'] = ts_atas_db
-                            if not df_bawah_db.empty:
-                                st.session_state['df_tabel_bawah'] = df_bawah_db
-                                st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
+                            for ind_err in DAFTAR_INDIKATOR_AKTIF:
+                                for ssr_name in active_ssrs_pjj:
+                                    hitung_kesalahan = len(df_pjj_only[(df_pjj_only['Indikator Kesalahan Data'] == ind_err) & (df_pjj_only['Lembaga SSR'] == ssr_name)])
+                                    if hitung_kesalahan > 0:
+                                        list_insert_tabel_1.append((
+                                            ssr_name,
+                                            ind_err,
+                                            hitung_kesalahan
+                                        ))
+
+                        # --- SOSIALISASI TABEL 2: Detil Hasil Review Rujukan ---
+                        df_rjk_only = df_bawah[df_bawah['Kategori Data'] == 'Rujukan']
+                        list_insert_tabel_2 = []
                         
-                        # Gagal karena Masalah Teknis / Koneksi DB Putus
+                        for _, row_rjk in df_rjk_only.iterrows():
+                            # Konversi tanggal ke objek date YYYY-MM-DD secara aman untuk tipe SQL DATE
+                            try:
+                                tgl_clean = pd.to_datetime(row_rjk.get('Tanggal')).date()
+                            except Exception:
+                                tgl_clean = None
+                                
+                            list_insert_tabel_2.append((
+                                str(row_rjk.get('Lembaga SSR', '-')),
+                                str(row_rjk.get('Kode Petugas', '-')),
+                                str(row_rjk.get('Nama Kota', '-')),
+                                str(row_rjk.get('Nama Layanan', '-')),
+                                tgl_clean,
+                                str(row_rjk.get('ID Klien', '-')),
+                                str(row_rjk.get('NIK', '-')),
+                                str(row_rjk.get('Tipe Sasaran', '-')),
+                                str(row_rjk.get('Indikator Kesalahan Data', '-')),
+                                False, # Default boolean validasi_hasil_review = FALSE sesuai skema Anda
+                                str(row_rjk.get('Justifikasi', '-'))
+                            ))
+
+                        # --- SOSIALISASI TABEL 3: Gabungan Hasil Review Master ---
+                        list_insert_tabel_3 = []
+                        for _, row_all in df_bawah.iterrows():
+                            list_insert_tabel_3.append((
+                                str(row_all.get('Kategori Data', '-')),
+                                str(row_all.get('Lembaga SSR', '-')),
+                                str(row_all.get('Kode Petugas', '-')),
+                                str(row_all.get('Nama Kota', '-')),
+                                str(row_all.get('Nama Layanan', '-')),
+                                str(row_all.get('Tanggal', '-')),
+                                str(row_all.get('ID Klien', '-')),
+                                str(row_all.get('NIK', '-')),
+                                str(row_all.get('Tipe Sasaran', '-')),
+                                str(row_all.get('Indikator Kesalahan Data', '-')),
+                                str(row_all.get('Validasi Hasil Review', '-')),
+                                str(row_all.get('Justifikasi', '-'))
+                            ))
+
+                        # EKSEKUSI BERSAMA DALAM SATU METODE DATABASE TRASAKSIONAL
+                        sukses = simpan_paket_validasi_ke_tiga_tabel(list_insert_tabel_1, list_insert_tabel_2, list_insert_tabel_3)
+                        
+                        if sukses:
+                            st.toast("💾 Berhasil melakukan sinkronisasi aman ke 3 tabel tujuan Cloud Neon Database!", icon="✅")
                         else:
-                            st.session_state['df_tabel_atas'] = df_atas
-                            st.session_state['df_tabel_bawah'] = df_bawah
-                            st.session_state['tanggal_terakhir_review'] = datetime.now()
-                            st.session_state['tanggal_terakhir_bawah'] = datetime.now()
-                            st.error("❌ Gagal Sinkronisasi: Terjadi gangguan koneksi ke DB Neon. Data disimpan sementara di session lokal.")
-                            
+                            st.error("❌ Terjadi kesalahan teknis saat menjalankan query INSERT multi-tabel ke Cloud Database.")
+
+                    # Ambil snapshot histori terakhir dari DB Neon untuk kebutuhan UI Dashboard state
+                    from database import ambil_agregasi_terakhir_dari_neon, ambil_detil_terakhir_dari_neon
+                    df_atas_db, ts_atas_db = ambil_agregasi_terakhir_dari_neon()
+                    df_bawah_db, ts_bawah_db = ambil_detil_terakhir_dari_neon()
+                    
+                    if not df_atas_db.empty:
+                        st.session_state['df_tabel_atas'] = df_atas_db
+                        st.session_state['tanggal_terakhir_review'] = ts_atas_db
+                    if not df_bawah_db.empty:
+                        st.session_state['df_tabel_bawah'] = df_bawah_db
+                        st.session_state['tanggal_terakhir_bawah'] = ts_bawah_db
+
                 except Exception as e:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database (Sistem Crash): {str(e)}")
-                    st.session_state['df_tabel_atas'] = df_atas
-                    st.session_state['df_tabel_bawah'] = df_bawah
-                    st.session_state['tanggal_terakhir_review'] = datetime.now()
-                    st.session_state['tanggal_terakhir_bawah'] = datetime.now()
-                    
+            
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
-                # 🔵 Tambahan: Reset ke 0 jika masuk ke kondisi else (data kosong/tidak valid)
-                st.session_state['total_entri_penjangkauan'] = 0
-                st.session_state['total_entri_rujukan'] = 0
-
-            # 🛠️ 🔵 BARIS BARU: Simpan nilai total baris ke session state sebelum rerun
-            # Catatan: Pastikan nama 'df_penjangkauan' & 'df_rujukan' sesuai dengan nama DataFrame operasional Anda saat dibaca di atas
-            if 'df_penjangkauan' in locals():
-                st.session_state['total_entri_penjangkauan'] = len(df_penjangkauan)
-            if 'df_rujukan' in locals():
-                st.session_state['total_entri_rujukan'] = len(df_rujukan)
+                st.info("✨ Proses selesai: Tidak ditemukan indikator kesalahan data pada file yang Anda unggah.")
 
             st.session_state['proses_selesai'] = True
-            
             import time
             time.sleep(1.5) 
             st.rerun()
@@ -1177,22 +1129,26 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         tab1, tab2 = st.tabs(["📋 Hasil Review Data SR", "📈 Analisis Tren Temuan"])
 
         with tab1:
-            st.markdown("#### 📋 Rekap Hasil Review Data Penjangkauan SSR")
-            
-            # Menarik instan data rekapitulasi yang sudah dipersiapkan di awal aplikasi tadi
+            # Ambil list indikator rujukan terlebih dahulu untuk keperluan filter di kedua seksi
+            try:
+                ind_rujukan = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
+            except NameError:
+                ind_rujukan = [] # Fallback aman jika variabel belum terdefinisi
+                
             df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame())
             tanggal_terakhir = st.session_state.get('tanggal_terakhir_review', None)
-                    
+        
             # =========================================================================
-            # 📅 TAMPILKAN BADGE KAPSUL PAS SEUKURAN KALIMAT (HTML Inline-Block)
+            # 🟢 SEKSI 1: RENDER HASIL REVIEW DATA PENJANGKAUAN (SUDAH DI-FILTER)
             # =========================================================================
+            st.markdown("#### 📋 Rekap Hasil Review Data Penjangkauan SSR")
+            
             if tanggal_terakhir:
                 if hasattr(tanggal_terakhir, 'strftime'):
                     tgl_format = tanggal_terakhir.strftime("%d-%m-%Y pukul %H:%M WIB")
                 else:
                     tgl_format = str(tanggal_terakhir)
                     
-                # Menggunakan inline-flex agar lebar kotak otomatis pas mengikuti panjang teksnya saja
                 badge_html = f"""
                 <div style="
                     display: inline-flex;
@@ -1212,121 +1168,166 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 """
                 st.markdown(badge_html, unsafe_allow_html=True)
                 
-            # =========================================================================
-            # 🛠️ PROSES RENDERING MATRIKS UI STREAMLIT
-            # =========================================================================
-            # Cek apakah DataFrame valid dan memiliki baris data temuan
             if df_atas_view is not None and not df_atas_view.empty:
                 df_render = df_atas_view.copy()
                 
-                # Bongkar indeks database jika terkunci sebagai nama kolom kesalahan
                 if df_render.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render.columns:
                     df_render = df_render.reset_index()
                     
-                kolom_indikator = 'INDIKATOR KESALAHAN DATA'
-                kolom_ssr = [c for c in df_render.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
+                # 🔥 PERBAIKAN LOGIKA: Saring agar HANYA menampilkan indikator Penjangkauan (Bukan Rujukan)
+                df_render = df_render[~df_render['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)].copy()
                 
-                # Bersihkan tipe data angka agar menjamin akurasi penjumlahan
-                for col in kolom_ssr:
-                    df_render[col] = pd.to_numeric(df_render[col], errors='coerce').fillna(0).astype(int)
+                if not df_render.empty:
+                    kolom_indikator = 'INDIKATOR KESALAHAN DATA'
+                    kolom_ssr = [c for c in df_render.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
+                    
+                    for col in kolom_ssr:
+                        df_render[col] = pd.to_numeric(df_render[col], errors='coerce').fillna(0).astype(int)
+                    
+                    ssr_aktif = [col for col in kolom_ssr if df_render[col].sum() > 0]
+                    kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
+                    df_final = df_render[[c for c in kolom_final if c in df_render.columns]].copy()
+                    
+                    # Recalculate % dan Total jika diperlukan agar akurat per kategori
+                    total_error_penjangkauan = df_final['Jumlah per indikator'].sum()
+                    if total_error_penjangkauan > 0:
+                        df_final['%'] = (df_final['Jumlah per indikator'] / total_error_penjangkauan) * 100
+                    
+                    df_display = df_final.copy()
+                    for col in ssr_aktif:
+                        if col in df_display.columns:
+                            df_display[col] = df_display[col].astype(str).replace({'0': '-', '0.0': '-'})
+                    
+                    column_config = {
+                        kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
+                        "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
+                        "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
+                    }
+                    for col in ssr_aktif:
+                        column_config[col] = st.column_config.TextColumn(col, width="small")
                 
-                # Saring hanya kolom SSR yang memiliki data temuan saja
-                ssr_aktif = [col for col in kolom_ssr if df_render[col].sum() > 0]
-                kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
-                df_final = df_render[[c for c in kolom_final if c in df_render.columns]].copy()
-                
-                # Penggantian visual angka 0 menjadi simbol '-' khusus untuk kolom nama SSR
-                df_display = df_final.copy()
-                for col in ssr_aktif:
-                    if col in df_display.columns:
-                        df_display[col] = df_display[col].astype(str).replace({'0': '-', '0.0': '-'})
-                
-                # Konfigurasi penataan lebar dan format kolom Streamlit
-                column_config = {
-                    kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
-                    "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
-                    "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
-                }
-                for col in ssr_aktif:
-                    column_config[col] = st.column_config.TextColumn(col, width="small")
-            
-                # Tampilkan ke layar UI
-                st.dataframe(
-                    df_display, 
-                    use_container_width=True, 
-                    column_config=column_config, 
-                    hide_index=True
-                )
-            else:
-                st.info("✨ Belum ada data review dalam database Neon. Silakan lakukan proses validasi baru via unggah file Excel di sidebar.")
-
-
-            # =========================================================================
-            # TABEL HASIL REVIEW PENJANGKAUAN DETIL PER BARIS
-            # =========================================================================
-            st.markdown("### 🔍 Hasil Review Penjangkauan")
-            st.markdown("<small style='color: #888;'>💡 Kolom Justifikasi hanya dapat diisi jika indikator kesalahan mengandung kata 'konfirmasi'. Kolom lain dikunci.</small>", unsafe_allow_html=True)
-                        
-            tanggal_terakhir_bawah = st.session_state.get('tanggal_terakhir_bawah', None)
-            if tanggal_terakhir_bawah and st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-                if hasattr(tanggal_terakhir_bawah, 'strftime'):
-                    tgl_format_bawah = tanggal_terakhir_bawah.strftime("%d-%m-%Y pukul %H:%M WIB")
+                    st.dataframe(df_display, use_container_width=True, column_config=column_config, hide_index=True)
                 else:
-                    tgl_format_bawah = str(tanggal_terakhir_bawah)
-                                
-                badge_bawah_html = f"""
+                    st.info("✅ Tidak ada temuan kesalahan untuk Data Penjangkauan.")
+            else:
+                st.info("✨ Belum ada data review dalam database Neon.")
+        
+        
+            # =========================================================================
+            # 🔵 SEKSI 2: RENDER HASIL REVIEW DATA RUJUKAN (SUDAH BENAR)
+            # =========================================================================
+            st.markdown("<hr style='border: 1px solid #e2e8f0; margin: 40px 0;'>", unsafe_allow_html=True)
+            st.markdown("#### 📋 Rekap Hasil Review Data Rujukan SSR")
+            
+            if tanggal_terakhir:
+                badge_rujukan_html = f"""
                 <div style="
                     display: inline-flex;
                     align-items: center;
                     gap: 6px;
-                    background-color: rgba(28, 131, 225, 0.12);
-                    color: #1c83e1;
+                    background-color: rgba(16, 185, 129, 0.12); /* Warna Emerald/Hijau */
+                    color: #10B981;
                     padding: 6px 14px;
                     border-radius: 20px;
-                    border: 1px solid rgba(28, 131, 225, 0.25);
+                    border: 1px solid rgba(16, 185, 129, 0.25);
                     font-size: 0.88rem;
                     font-weight: 500;
-                    margin-bottom: 12px;
+                    margin-bottom: 18px;
                 ">
-                    ℹ️ Hasil Review Data Penjangkauan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_format_bawah}</span>
+                    🔗 Review Data Rujukan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_format}</span>
                 </div>
                 """
-                st.markdown(badge_bawah_html, unsafe_allow_html=True)
-            
-            # 🔥 IMPLEMENTASI BARU: KOMPONEN FILTER NAMA LEMBAGA SSR 🔥
-            pilihan_ssr = "Semua"
-            if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-                # Mendeteksi nama kolom SSR secara fleksibel (case-insensitive)
-                df_sumber = st.session_state['df_tabel_bawah']
-                kolom_ssr_asli = next((c for c in df_sumber.columns if "lembaga" in str(c).lower() or "ssr" in str(c).lower()), None)
+                st.markdown(badge_rujukan_html, unsafe_allow_html=True)
                 
-                if kolom_ssr_asli:
-                    # Ambil daftar unik SSR, buang nilai kosong, urutkan alfabetis
-                    list_ssr_unik = sorted(df_sumber[kolom_ssr_asli].dropna().unique().tolist())
+            if df_atas_view is not None and not df_atas_view.empty:
+                df_render_ruj = df_atas_view.copy()
+                
+                if df_render_ruj.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render_ruj.columns:
+                    df_render_ruj = df_render_ruj.reset_index()
+                
+                # Filter HANYA untuk indikator rujukan
+                df_render_ruj = df_render_ruj[df_render_ruj['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)].copy()
+                
+                if not df_render_ruj.empty:
+                    kolom_indikator = 'INDIKATOR KESALAHAN DATA'
+                    kolom_ssr_ruj = [c for c in df_render_ruj.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
                     
-                    # Buat kolom layout agar filter terlihat rapi tidak terlalu lebar
-                    col_filter, _ = st.columns([1, 2])
-                    with col_filter:
-                        pilihan_ssr = st.selectbox(
-                            "🎯 Pilih Lembaga SSR:",
-                            options=["Semua"] + list_ssr_unik,
-                            index=0,
-                            help="Pilih nama SSR tertentu untuk mempercepat pencarian data yang akan dikonfirmasi."
-                        )
-                        st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+                    for col in kolom_ssr_ruj:
+                        df_render_ruj[col] = pd.to_numeric(df_render_ruj[col], errors='coerce').fillna(0).astype(int)
+                    
+                    ssr_aktif_ruj = [col for col in kolom_ssr_ruj if df_render_ruj[col].sum() > 0]
+                    kolom_final_ruj = [kolom_indikator] + ssr_aktif_ruj + ['Jumlah per indikator', '%']
+                    df_final_ruj = df_render_ruj[[c for c in kolom_final_ruj if c in df_render_ruj.columns]].copy()
+                    
+                    # Recalculate % khusus kelompok rujukan agar total porsinya pas 100%
+                    total_error_rujukan = df_final_ruj['Jumlah per indikator'].sum()
+                    if total_error_rujukan > 0:
+                        df_final_ruj['%'] = (df_final_ruj['Jumlah per indikator'] / total_error_rujukan) * 100
+                    
+                    df_display_ruj = df_final_ruj.copy()
+                    for col in ssr_aktif_ruj:
+                        if col in df_display_ruj.columns:
+                            df_display_ruj[col] = df_display_ruj[col].astype(str).replace({'0': '-', '0.0': '-'})
+                    
+                    column_config_ruj = {
+                        kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
+                        "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
+                        "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
+                    }
+                    for col in ssr_aktif_ruj:
+                        column_config_ruj[col] = st.column_config.TextColumn(col, width="small")
+                
+                    st.dataframe(df_display_ruj, use_container_width=True, column_config=column_config_ruj, hide_index=True)
+                else:
+                    st.info("✅ Tidak ada temuan kesalahan untuk Data Rujukan.")
+            else:
+                st.info("✨ Belum ada data review dalam database Neon.")
+
+
+            # =========================================================================
+            # TABEL GABUNGAN: HASIL REVIEW PENJANGKAUAN & RUJUKAN (ONE-TABLE EDITOR)
+            # =========================================================================
+            st.markdown("### 🔍 Hasil Review Validasi Data (Penjangkauan & Rujukan)")
+            st.markdown(
+                "<small style='color: #888;'>💡 Kolom Justifikasi hanya dapat diisi jika indikator kesalahan mengandung kata 'konfirmasi'. Kolom lain dikunci secara otomatis.</small>", 
+                unsafe_allow_html=True
+            )
             
-            # Render data editor jika data tersedia
-            if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-                kolom_susunan = [
-                    "Pilih", "Lembaga SSR", "Tanggal", "ID Klien", "Kode Petugas", "Nama Kota", 
-                    "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", "Validasi Hasil Review", "Justifikasi"
-                ]
+            # 1. Validasi Awal Keberadaan Data
+            tanggal_terakhir_bawah = st.session_state.get('tanggal_terakhir_bawah', None)
+            
+            if tanggal_terakhir_bawah and st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
                 
-                df_bawah_raw = st.session_state['df_tabel_bawah'].copy()
+                # Ambil format tanggal untuk Badge Informasi
+                if hasattr(tanggal_terakhir_bawah, 'strftime'):
+                    tgl_format_bawah = tanggal_terakhir_bawah.strftime("%d-%m-%Y pukul %H:%M WIB")
+                else:
+                    tgl_format_bawah = str(tanggal_terakhir_bawah)
+                    
+                badge_gabungan_html = f"""
+                <div style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    background-color: rgba(124, 58, 237, 0.12);
+                    color: #7c3aed;
+                    padding: 6px 14px;
+                    border-radius: 20px;
+                    border: 1px solid rgba(124, 58, 237, 0.25);
+                    font-size: 0.88rem;
+                    font-weight: 500;
+                    margin-bottom: 15px;
+                ">
+                    🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format_bawah}</span>
+                </div>
+                """
+                st.markdown(badge_gabungan_html, unsafe_allow_html=True)
+            
+                # 2. Duplikasi & Normalisasi Kolom secara Global
+                df_master = st.session_state['df_tabel_bawah'].copy()
                 
-                # 🛠️ PERBAIKAN 1: Ganti 'and' jadi 'or' agar lebih tolerant menangkap nama kolom asli
                 rename_dict = {}
-                for col in df_bawah_raw.columns:
+                for col in df_master.columns:
                     c_clean = str(col).strip().lower()
                     if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean:
                         rename_dict[col] = "Indikator Kesalahan Data"
@@ -1335,120 +1336,157 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     elif "justifikasi" in c_clean:
                         rename_dict[col] = "Justifikasi"
                     elif "lembaga" in c_clean or "ssr" in c_clean:
-                        rename_dict[col] = "Lembaga SSR" # Seragamkan nama kolom lembaga ke standar susunan
+                        rename_dict[col] = "Lembaga SSR"
+                    elif "layanan" in c_clean:
+                        rename_dict[col] = "Nama Layanan"
+                    elif "petugas" in c_clean:
+                        rename_dict[col] = "Kode Petugas"
+                    elif "kota" in c_clean or "kabupaten" in c_clean:
+                        rename_dict[col] = "Nama Kota"
                         
                 if rename_dict:
-                    df_bawah_raw = df_bawah_raw.rename(columns=rename_dict)
-                
-                # Safety Check untuk kolom penunjang UI yang absen
-                for col in kolom_susunan:
-                    if col not in df_bawah_raw.columns:
+                    df_master = df_master.rename(columns=rename_dict)
+            
+                # 3. 🔥 IMPLEMENTASI BARU: Penentuan Kategori Data Otomatis 🔥
+                # (Pastikan variabel list `ind_rujukan` sudah terdefinisi di bagian atas aplikasi Anda)
+                df_master["Kategori Data"] = df_master["Indikator Kesalahan Data"].apply(
+                    lambda x: "Rujukan" if str(x) in ind_rujukan else "Penjangkauan"
+                )
+            
+                # 4. Susunan Struktur Kolom Universal Baru
+                kolom_susunan_gabungan = [
+                    "Pilih", "Kategori Data", "Lembaga SSR", "Kode Petugas", "Nama Kota", "Nama Layanan", 
+                    "Tanggal", "ID Klien", "NIK", "Tipe Sasaran", 
+                    "Indikator Kesalahan Data", "Validasi Hasil Review", "Justifikasi"
+                ]
+            
+                # Safety Check: Isi nilai default jika ada kolom struktural yang absen dari file sumber
+                for col in kolom_susunan_gabungan:
+                    if col not in df_master.columns:
                         if col == "Pilih":
-                            df_bawah_raw["Pilih"] = False
+                            df_master["Pilih"] = False
                         else:
-                            df_bawah_raw[col] = "-"
+                            df_master[col] = "-"
+            
+                # 5. Filter Komponen Tunggal Berdasarkan Lembaga SSR
+                pilihan_ssr = "Semua"
+                list_ssr_unik = sorted(df_master["Lembaga SSR"].dropna().unique().tolist())
                 
-                # 🔥 PROSES FILTRASI TAMPILAN BERDASARKAN FILTER SELECTBOX 🔥
+                col_filter, _ = st.columns([1, 2])
+                with col_filter:
+                    pilihan_ssr = st.selectbox(
+                        "🎯 Pilih Lembaga SSR (Semua Kategori):",
+                        options=["Semua"] + list_ssr_unik,
+                        index=0,
+                        help="Menyaring seluruh data Penjangkauan dan Rujukan berdasarkan Lembaga SSR yang dipilih."
+                    )
+                    st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+            
+                # Jalankan filter selectbox jika bukan "Semua"
                 if pilihan_ssr != "Semua":
-                    df_bawah_raw = df_bawah_raw[df_bawah_raw["Lembaga SSR"] == pilihan_ssr]
-                            
-                df_bawah_view = df_bawah_raw[kolom_susunan].copy()
-                        
-                # Kosongkan teks Justifikasi jika bukan baris konfirmasi (UI Bersih)
-                for idx, row in df_bawah_view.iterrows():
-                    ind_text = str(row['Indikator Kesalahan Data']).lower()
-                    if "konfirmasi" not in ind_text:
-                        df_bawah_view.at[idx, 'Justifikasi'] = ""  
-                
-                # Beri info jika setelah di-filter datanya ternyata kosong
-                if df_bawah_view.empty:
+                    df_master = df_master[df_master["Lembaga SSR"] == pilihan_ssr]
+            
+                # Ambil view kolom sesuai urutan susunan global
+                df_view_gabungan = df_master[kolom_susunan_gabungan].copy()
+            
+                # 6. Intersepsi Tampilan: Bersihkan Justifikasi jika bukan tipe 'konfirmasi'
+                for idx, row in df_view_gabungan.iterrows():
+                    if "konfirmasi" not in str(row['Indikator Kesalahan Data']).lower():
+                        df_view_gabungan.at[idx, 'Justifikasi'] = ""
+            
+                # 7. Render Data Editor Tunggal
+                if df_view_gabungan.empty:
                     st.info(f"✨ Tidak ada data kesalahan yang perlu divalidasi untuk Lembaga SSR: **{pilihan_ssr}**")
                 else:
                     df_hasil_edit = st.data_editor(
-                        df_bawah_view,
+                        df_view_gabungan,
                         use_container_width=True,
-                        hide_index=True,
+                        hide_index=False,  # 🔥 WAJIB FALSE: Diperlukan agar indeks asli dataframe master tetap terjaga saat penghapusan baris
+                        key="editor_validasi_tunggal",
                         column_config={
-                            "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika telah direvisi", default=False),
+                            "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika data telah direvisi/diperbaiki", default=False),
+                            "Kategori Data": st.column_config.TextColumn("Kategori Data", width=110),
                             "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
-                            "Tanggal": st.column_config.TextColumn("Tanggal", width=110),
+                            "Kode Petugas": st.column_config.TextColumn("Kode Petugas", width=100),
+                            "Nama Kota": st.column_config.TextColumn("Nama Kota", width=110),
+                            "Nama Layanan": st.column_config.TextColumn("Nama Layanan", width=120),
+                            "Tanggal": st.column_config.TextColumn("Tanggal", width=100),
                             "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
-                            "Kode Petugas": st.column_config.TextColumn("Kode Petugas", width=110),
-                            "Nama Kota": st.column_config.TextColumn("Nama Kota", width=120),
-                            "NIK": st.column_config.TextColumn("NIK", width=140),
-                            "Tipe Sasaran": st.column_config.TextColumn("Tipe Sasaran", width=120),
-                            "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=320),
-                            "Validasi Hasil Review": st.column_config.TextColumn("Validasi Hasil Review", width=220),
-                            "Justifikasi": st.column_config.TextColumn("Justifikasi", help="Hanya untuk baris berunsur 'konfirmasi'", width=280),
+                            "NIK": st.column_config.TextColumn("NIK", width=130),
+                            "Tipe Sasaran": st.column_config.TextColumn("Tipe Sasaran", width=110),
+                            "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=300),
+                            "Validasi Hasil Review": st.column_config.TextColumn("Validasi Hasil Review", width=200),
+                            "Justifikasi": st.column_config.TextColumn("Justifikasi", help="Hanya diisi jika kolom indikator mengandung unsur kata 'konfirmasi'", width=260),
                         },
-                        disabled=[c for c in kolom_susunan if c not in ["Pilih", "Justifikasi"]]
+                        disabled=[c for c in kolom_susunan_gabungan if c not in ["Pilih", "Justifikasi"]]
                     )
-                            
+            
+                    # 8. Tombol Eksekusi Penyimpanan Tunggal
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_save, _ = st.columns([1, 2])
                     with col_save:
-                        # Sumbu kotak sekarang akan otomatis mengecil mengikuti panjang teks di dalamnya
-                        if st.button("💾 Simpan Progres Validasi", type="secondary", use_container_width=False):
-                                    
-                            with st.spinner("Menyimpan progres validasi..."):
-                                list_log_db = []
-                                    
-                            with st.spinner("Menyimpan progres validasi..."):
+                        if st.button("💾 Simpan Semua Progres Validasi", type="primary", use_container_width=False):
+                            
+                            with st.spinner("Memproses penyelarasan data ke database..."):
                                 list_log_db = []
                                 indeks_baris_terpilih = []
                                 peringatan_justifikasi = False
-                            
+            
+                                # Iterasi baris hasil edit dari interface tunggal
                                 for idx, row_edit in df_hasil_edit.iterrows():
                                     ind_text = str(row_edit['Indikator Kesalahan Data'])
                                     text_justifikasi = str(row_edit['Justifikasi']).strip()
-                                                
+                                    
                                     is_konfirmasi = "konfirmasi" in ind_text.lower()
-                                                
-                                    # Intersepsi Belakang Layar (Proteksi Data Non-Konfirmasi)
+                                    
+                                    # Proteksi: Abaikan input justifikasi jika baris tersebut bukan tipe konfirmasi
                                     if not is_konfirmasi:
                                         if text_justifikasi not in ["", "None", "-", "nan"]:
                                             peringatan_justifikasi = True
-                                        text_justifikasi = ""  
+                                        text_justifikasi = ""
                                     else:
                                         if text_justifikasi in ["None", "-", "nan"]:
                                             text_justifikasi = ""
-                            
-                                    # Trigger simpan jika di-ceklis ATAU baris konfirmasi yang terisi justifikasinya
+            
+                                    # Trigger simpan: jika kotak 'Pilih' dicentang ATAU justifikasi konfirmasi terisi
                                     if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi != ""):
-                                        
                                         status_revisi = bool(row_edit['Pilih'])
                                         
-                                        # Susun persis 6 elemen sesuai urutan %s di database.py
+                                        # Susun parameter tuple sesuai kebutuhan fungsi simpan_log_ke_neon
                                         list_log_db.append((
                                             str(row_edit.get('Lembaga SSR', '-')),
                                             str(row_edit.get('Tanggal', '-')),
                                             str(row_edit.get('ID Klien', '-')),
                                             ind_text,
-                                            status_revisi,       # Mengirim True/False (BOOLEAN)
-                                            text_justifikasi     # Mengirim teks Justifikasi
+                                            status_revisi,      # BOOLEAN
+                                            text_justifikasi    # TEXT
                                         ))
+                                        # Catat indeks dataframe asli untuk dipotong dari session state jika sukses
                                         indeks_baris_terpilih.append(idx)
-                                            
+            
+                                # Kirim ke Neon Database jika ada baris yang memenuhi kriteria simpan
                                 if len(list_log_db) > 0:
                                     if simpan_log_ke_neon(list_log_db):
                                         
-                                        # Potong baris yang sukses dari layar (Berdasarkan indeks asli session_state)
+                                        # Potong baris yang sukses disimpan berdasarkan indeks asli session_state
                                         df_sekarang = st.session_state['df_tabel_bawah']
                                         df_sisa = df_sekarang.drop(indeks_baris_terpilih).reset_index(drop=True)
                                         st.session_state['df_tabel_bawah'] = df_sisa
-                                                    
-                                        st.success(f"🎉 Berhasil memindahkan {len(list_log_db)} baris ke tabel log_validasi_review!")
-                                                    
+                                        
+                                        st.success(f"🎉 Sukses memindahkan {len(list_log_db)} baris data ke tabel log_validasi_review!")
+                                        
                                         if peringatan_justifikasi:
-                                            st.warning("⚠️ Catatan: Input Justifikasi pada baris non-konfirmasi otomatis diabaikan oleh sistem.")
-                                                    
+                                            st.warning("⚠️ Catatan: Teks Justifikasi pada baris non-konfirmasi otomatis diabaikan oleh sistem.")
+                                            
                                         import time
-                                        time.sleep(1.5)
+                                        time.sleep(1.2)
                                         st.rerun()
                                     else:
-                                        st.error("❌ Gagal menyimpan log ke Neon Database. Periksa kembali koneksi Anda.")
+                                        st.error("❌ Terjadi kegagalan saat menyimpan ke Neon Database. Cek koneksi Anda.")
                                 else:
-                                    st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau isi 'Justifikasi' sebelum menyimpan.")
+                                    st.info("ℹ️ Tidak ada data yang diproses. Silakan centang 'Pilih' atau ketik teks 'Justifikasi' sebelum menekan tombol simpan.")
+            else:
+                st.info("✨ Belum ada data tabel review atau session state kosong.")
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
