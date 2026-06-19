@@ -342,8 +342,8 @@ with st.sidebar:
                         st.info("📋 **Terdeteksi:** Berkas Data Referensi HIV+ Semester Lalu")
                         if st.button("🔄 Update Database Referensi HIV", use_container_width=False, key="btn_exec_hiv"):
                             with st.spinner("Sedang memproses data rujukan HIV..."):
-                                from database import import_data_rujukan
-                                if import_data_rujukan(df_check):
+                                from database import import_data_HIV
+                                if import_data_HIV(df_check):
                                     st.success("✅ Database referensi HIV diperbarui!")
                                 else:
                                     st.error("❌ Gagal mengupdate database.")
