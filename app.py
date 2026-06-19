@@ -786,7 +786,7 @@ def jalankan_review_data(
 
     
 # =========================================================================
-# 4. LOGIKA TOMBOL EKSEKUSI (VERSI PENYELARASAN 3 TABEL + METRIK AKURASI NEON)
+# 4. LOGIKA TOMBOL EKSEKUSI (VERSI PENYELARASAN 3 TABEL + DUAL SCORECARD)
 # =========================================================================
 if tombol_proses:
     if not files_review:
@@ -794,8 +794,7 @@ if tombol_proses:
     else:
         with st.spinner("Sedang memproses validasi data & sinkronisasi database terintegrasi..."):
             
-            # 🛠️ SOLUSI ERROR 1: Tangkap uploader referensi dengan aman
-            # Pastikan "uploader_master_tunggal" adalah 'key' dari st.file_uploader Anda di sidebar
+            # 🛠️ Tangkap uploader referensi dengan aman
             file_referensi_aman = st.session_state.get('uploader_master_tunggal', None)
             df_ref = None
             if file_referensi_aman is not None:
@@ -822,6 +821,7 @@ if tombol_proses:
             except Exception as e:
                 pass # Abaikan jika data historis belum ada
 
+            # Loop 1: Kumpulkan set ID Penjangkauan
             for f in files_review:
                 try:
                     temp_df = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
@@ -833,6 +833,7 @@ if tombol_proses:
                             if ssr and idk: set_penjangkauan.add(f"{ssr}_{idk}")
                 except Exception: pass
 
+            # Loop 2: Eksekusi Validasi
             for f in files_review:
                 try:
                     df_target = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
@@ -855,7 +856,10 @@ if tombol_proses:
                         all_errs.append(df_res)
                 except Exception: pass
 
+            # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Simpan total entri ke memory Streamlit
             st.session_state['total_entri'] = total_records
+            st.session_state['total_entri_penjangkauan'] = total_proses_pjj
+            st.session_state['total_entri_rujukan'] = total_proses_rjk
 
             if all_errs:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
@@ -863,6 +867,11 @@ if tombol_proses:
                 # SIMPAN LOG AKURASI
                 df_pjj_raw = df_bawah[df_bawah['Kategori Data'] == 'Penjangkauan'] if not df_bawah.empty else pd.DataFrame()
                 df_rjk_raw = df_bawah[df_bawah['Kategori Data'] == 'Rujukan'] if not df_bawah.empty else pd.DataFrame()
+                
+                # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Simpan tabel temuan spesifik ke memory Streamlit
+                st.session_state['df_err_penj'] = df_pjj_raw
+                st.session_state['df_err_ruj'] = df_rjk_raw
+                
                 total_temuan_pjj = len(df_pjj_raw)
                 total_temuan_rjk = len(df_rjk_raw)
                 akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
@@ -874,6 +883,7 @@ if tombol_proses:
                     if total_proses_rjk > 0: simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
                 except Exception: pass
 
+                # STANDARISASI NAMA KOLOM UI
                 rename_map = {}
                 for c in df_bawah.columns:
                     c_clean = str(c).strip().upper()
@@ -893,7 +903,7 @@ if tombol_proses:
                 for col in ['Kode Petugas', 'Nama Kota', 'Nama Layanan', 'NIK', 'Tipe Sasaran', 'Validasi Hasil Review', 'Justifikasi']:
                     if col not in df_bawah.columns: df_bawah[col] = "-"
 
-                # FILTER DUPLIKAT
+                # FILTER DUPLIKAT DARI DATABASE NEON
                 existing_master_keys = set()
                 try:
                     from database import dapatkan_koneksi_neon
@@ -919,7 +929,7 @@ if tombol_proses:
                 if indices_to_drop:
                     df_bawah = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
 
-                # SINKRONISASI KE 3 TABEL
+                # SINKRONISASI KE 3 TABEL (EKSTRAKSI TUPLE MANUAL YANG AMAN DARI ERROR PANDAS)
                 try:
                     from database import simpan_paket_validasi_ke_tiga_tabel
                     
@@ -938,15 +948,12 @@ if tombol_proses:
                                     if hitung_kesalahan > 0:
                                         list_insert_tabel_1.append((ssr_name, ind_err, hitung_kesalahan))
 
-                        # 2. TABEL RUJUKAN (Hanya untuk kategori Rujukan)
+                        # 2. TABEL RUJUKAN
                         df_rjk_only = df_bawah[df_bawah['Kategori Data'] == 'Rujukan']
                         list_insert_tabel_2 = []
                         for _, row_rjk in df_rjk_only.iterrows():
-                            # Pastikan format tanggal sesuai SQL
                             tgl_raw = str(row_rjk.get('Tanggal', '')).strip()
                             tgl_clean = tgl_raw if tgl_raw != '-' else None
-                            
-                            # 🛠️ SOLUSI ERROR 2: Pastikan nilai validasi dikonversi ke Boolean (True/False)
                             val_review = str(row_rjk.get('Validasi Hasil Review', '')).strip().lower()
                             is_valid = True if val_review in ['true', 'yes', '1', 'ya'] else False
 
@@ -958,10 +965,9 @@ if tombol_proses:
                                 is_valid, str(row_rjk.get('Justifikasi', '-'))
                             ))
 
-                        # 3. TABEL UTAMA (Gabungan Penjangkauan & Rujukan)
+                        # 3. TABEL UTAMA MASTER
                         list_insert_tabel_3 = []
                         for _, row_all in df_bawah.iterrows():
-                            # Di tabel master, validasi_hasil_review bertipe TEXT (berdasarkan skema SQL sebelumnya)
                             list_insert_tabel_3.append((
                                 str(row_all.get('Kategori Data', '-')), str(row_all.get('Lembaga SSR', '-')),
                                 str(row_all.get('Kode Petugas', '-')), str(row_all.get('Nama Kota', '-')),
@@ -971,7 +977,7 @@ if tombol_proses:
                                 str(row_all.get('Validasi Hasil Review', '-')), str(row_all.get('Justifikasi', '-'))
                             ))
 
-                        # EKSEKUSI
+                        # EKSEKUSI PENYIMPANAN
                         sukses = simpan_paket_validasi_ke_tiga_tabel(list_insert_tabel_1, list_insert_tabel_2, list_insert_tabel_3)
                         if sukses:
                             st.toast("💾 Sinkronisasi aman ke 3 tabel Cloud Neon Database berhasil!", icon="✅")
@@ -984,9 +990,14 @@ if tombol_proses:
             else:
                 st.session_state['df_tabel_atas'] = pd.DataFrame()
                 st.session_state['df_tabel_bawah'] = pd.DataFrame()
+                
+                # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Reset jika tidak ada error
+                st.session_state['df_err_penj'] = pd.DataFrame()
+                st.session_state['df_err_ruj'] = pd.DataFrame()
+                
                 st.info("✨ Proses selesai: Tidak ditemukan indikator kesalahan data pada file yang Anda unggah.")
 
-            # AUTO-REFRESH UI
+            # AUTO-REFRESH UI DENGAN DATA DARI DB
             try:
                 from database import ambil_agregasi_penjangkauan_terakhir, ambil_agregasi_rujukan_terakhir, ambil_hasil_review_utama_terakhir, ambil_metrik_akurasi_terakhir
                 metrik_db, ts_metrik = ambil_metrik_akurasi_terakhir()
@@ -997,7 +1008,7 @@ if tombol_proses:
                 df_rjk_db, ts_rjk = ambil_agregasi_rujukan_terakhir()
                 df_utama_db, ts_utama = ambil_hasil_review_utama_terakhir()
                 
-                st.session_state['df_tabel_atas'] = df_pjj_db # Tetap pertahankan nama kunci df_tabel_atas untuk UI lama
+                st.session_state['df_tabel_atas'] = df_pjj_db 
                 st.session_state['df_tabel_penjangkauan'] = df_pjj_db
                 st.session_state['df_tabel_rujukan'] = df_rjk_db
                 st.session_state['df_tabel_bawah'] = df_utama_db
