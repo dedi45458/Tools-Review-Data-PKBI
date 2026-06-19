@@ -1205,28 +1205,29 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # 🟢 SEKSI 1: RENDER HASIL REVIEW DATA PENJANGKAUAN (SUDAH DI-FILTER)
             # =========================================================================
             st.markdown("#### 📋 Rekap Hasil Review Data Penjangkauan SSR")
-            
+                        
             if tanggal_terakhir:
                 if hasattr(tanggal_terakhir, 'strftime'):
                     tgl_format = tanggal_terakhir.strftime("%d-%m-%Y pukul %H:%M WIB")
                 else:
                     tgl_format = str(tanggal_terakhir)
                     
+                # 🔥 PERBAIKAN: Mengubah kalimat text & skema warna menjadi Ungu Terintegrasi (Sesuai Gambar 3)
                 badge_html = f"""
                 <div style="
                     display: inline-flex;
                     align-items: center;
                     gap: 6px;
-                    background-color: rgba(28, 131, 225, 0.12);
-                    color: #1c83e1;
+                    background-color: rgba(124, 58, 237, 0.12);
+                    color: #7c3aed;
                     padding: 6px 14px;
                     border-radius: 20px;
-                    border: 1px solid rgba(28, 131, 225, 0.25);
+                    border: 1px solid rgba(124, 58, 237, 0.25);
                     font-size: 0.88rem;
                     font-weight: 500;
                     margin-bottom: 18px;
                 ">
-                    ℹ️ Review Data Penjangkauan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_format}</span>
+                    🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format}</span>
                 </div>
                 """
                 st.markdown(badge_html, unsafe_allow_html=True)
@@ -1274,14 +1275,14 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.info("✅ Tidak ada temuan kesalahan untuk Data Penjangkauan.")
             else:
                 st.info("✨ Belum ada data review dalam database Neon.")
-        
-        
+            
+            
             # =========================================================================
             # 🔵 SEKSI 2: RENDER HASIL REVIEW DATA RUJUKAN (SUDAH BENAR & SINKRON NEON)
             # =========================================================================
             st.markdown("<hr style='border: 1px solid #e2e8f0; margin: 40px 0;'>", unsafe_allow_html=True)
             st.markdown("#### 📋 Rekap Hasil Review Data Rujukan SSR")
-            
+                        
             # 🔥 SINKRONISASI OTOMATIS: Ambil data agregasi rujukan terbaru langsung dari database jika validasi baru selesai
             if st.session_state.get('proses_selesai', False) or 'df_rujukan' not in st.session_state:
                 try:
@@ -1293,35 +1294,36 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             st.session_state['tanggal_terakhir_rujukan_str'] = ts_rj.strftime('%d %B %Y') if hasattr(ts_rj, 'strftime') else str(ts_rj)
                 except Exception as e:
                     pass
-
+            
             # Menggunakan tanggal dinamis hasil tarikan database terakhir
             tgl_badge = st.session_state.get('tanggal_terakhir_rujukan_str', tanggal_terakhir if 'tanggal_terakhir' in locals() else "-")
-            
+                        
             if tgl_badge:
+                # 🔥 PERBAIKAN: Mengubah kalimat text & skema warna menjadi Ungu Terintegrasi (Sesuai Gambar 3)
                 badge_rujukan_html = f"""
                 <div style="
                     display: inline-flex;
                     align-items: center;
                     gap: 6px;
-                    background-color: rgba(16, 185, 129, 0.12); /* Warna Emerald/Hijau */
-                    color: #10B981;
+                    background-color: rgba(124, 58, 237, 0.12);
+                    color: #7c3aed;
                     padding: 6px 14px;
                     border-radius: 20px;
-                    border: 1px solid rgba(16, 185, 129, 0.25);
+                    border: 1px solid rgba(124, 58, 237, 0.25);
                     font-size: 0.88rem;
                     font-weight: 500;
                     margin-bottom: 18px;
                 ">
-                    🔗 Review Data Rujukan SR terakhir tanggal : <span style="font-weight: 700;">{tgl_badge}</span>
+                    🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_badge}</span>
                 </div>
                 """
                 st.markdown(badge_rujukan_html, unsafe_allow_html=True)
-                
+                            
             # Menentukan fallback data: Prioritaskan isi database (st.session_state['df_rujukan']) lalu df_atas_view
             df_sumber = st.session_state.get('df_rujukan', pd.DataFrame())
             if df_sumber.empty and df_atas_view is not None:
                 df_sumber = df_atas_view.copy()
-
+            
             if df_sumber is not None and not df_sumber.empty:
                 df_render_ruj = df_sumber.copy()
                 
@@ -1385,153 +1387,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.info("✅ Tidak ada temuan kesalahan untuk Data Rujukan.")
             else:
                 st.info("✨ Belum ada data review dalam database Neon.")
-
-
-            # =========================================================================
-            # TABEL GABUNGAN: HASIL REVIEW PENJANGKAUAN & RUJUKAN (ONE-TABLE EDITOR)
-            # =========================================================================
-            st.markdown("### 🔍 Hasil Review Validasi Data (Penjangkauan & Rujukan)")
-            st.markdown(
-                "<small style='color: #888;'>💡 Kolom Justifikasi hanya dapat diisi jika indikator kesalahan mengandung kata 'konfirmasi'. Kolom lain dikunci secara otomatis.</small>", 
-                unsafe_allow_html=True
-            )
-            
-            # --- 1. VALIDASI AWAL KEBERADAAN DATA (DILONGGARKAN & DIBERI FALLBACK) ---
-            # Mengambil data utama dengan fallback ganda agar jika di-refresh tetap aman
-            df_master_source = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
-            
-            if df_master_source is not None and not df_master_source.empty:
-                
-                # Mengambil tanggal dengan aman (jika None, beri fallback tanggal hari ini / teks default)
-                tanggal_terakhir_bawah = st.session_state.get('tanggal_terakhir_bawah', st.session_state.get('ts_terakhir_utama', "-"))
-                
-                # Ambil format tanggal untuk Badge Informasi
-                if hasattr(tanggal_terakhir_bawah, 'strftime'):
-                    tgl_format_bawah = tanggal_terakhir_bawah.strftime("%d-%m-%Y pukul %H:%M WIB")
-                else:
-                    tgl_format_bawah = str(tanggal_terakhir_bawah)
-                    
-                badge_gabungan_html = f"""
-                <div style="
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    background-color: rgba(124, 58, 237, 0.12);
-                    color: #7c3aed;
-                    padding: 6px 14px;
-                    border-radius: 20px;
-                    border: 1px solid rgba(124, 58, 237, 0.25);
-                    font-size: 0.88rem;
-                    font-weight: 500;
-                    margin-bottom: 15px;
-                ">
-                    🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format_bawah}</span>
-                </div>
-                """
-                st.markdown(badge_gabungan_html, unsafe_allow_html=True)
-            
-                # 2. Duplikasi & Normalisasi Kolom secara Global
-                df_master = df_master_source.copy()
-                
-                # PENGAMAN: Paksa semua kolom menjadi penulisan string standar sebelum pencocokan nama
-                df_master.columns = [str(c).strip() for c in df_master.columns]
-                
-                rename_dict = {}
-                for col in df_master.columns:
-                    c_clean = str(col).strip().lower()
-                    if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean:
-                        rename_dict[col] = "Indikator Kesalahan Data"
-                    elif "validasi" in c_clean or "review" in c_clean:
-                        rename_dict[col] = "Validasi Hasil Review"
-                    elif "justifikasi" in c_clean:
-                        rename_dict[col] = "Justifikasi"
-                    elif "lembaga" in c_clean or "ssr" in c_clean:
-                        rename_dict[col] = "Lembaga SSR"
-                    elif "layanan" in c_clean:
-                        rename_dict[col] = "Nama Layanan"
-                    elif "petugas" in c_clean:
-                        rename_dict[col] = "Kode Petugas"
-                    elif "kota" in c_clean or "kabupaten" in c_clean:
-                        rename_dict[col] = "Nama Kota"
-                        
-                if rename_dict:
-                    df_master = df_master.rename(columns=rename_dict)
-            
-                # 3. 🔥 IMPLEMENTASI BARU: Penentuan Kategori Data Otomatis 🔥
-                if "Indikator Kesalahan Data" in df_master.columns:
-                    df_master["Kategori Data"] = df_master["Indikator Kesalahan Data"].apply(
-                        lambda x: "Rujukan" if str(x) in ind_rujukan else "Penjangkauan"
-                    )
-                else:
-                    df_master["Kategori Data"] = "Penjangkauan"
-            
-                # 4. Susunan Struktur Kolom Universal Baru
-                kolom_susunan_gabungan = [
-                    "Pilih", "Kategori Data", "Lembaga SSR", "Kode Petugas", "Nama Kota", "Nama Layanan", 
-                    "Tanggal", "ID Klien", "NIK", "Tipe Sasaran", 
-                    "Indikator Kesalahan Data", "Validasi Hasil Review", "Justifikasi"
-                ]
-            
-                # Safety Check: Isi nilai default jika ada kolom struktural yang absen dari file sumber
-                for col in kolom_susunan_gabungan:
-                    if col not in df_master.columns:
-                        if col == "Pilih":
-                            df_master["Pilih"] = False
-                        else:
-                            df_master[col] = "-"
-            
-                # 5. Filter Komponen Tunggal Berdasarkan Lembaga SSR
-                pilihan_ssr = "Semua"
-                list_ssr_unik = sorted(df_master["Lembaga SSR"].dropna().unique().tolist())
-                
-                col_filter, _ = st.columns([1, 2])
-                with col_filter:
-                    pilihan_ssr = st.selectbox(
-                        "🎯 Pilih Lembaga SSR (Semua Kategori):",
-                        options=["Semua"] + list_ssr_unik,
-                        index=0,
-                        help="Menyaring seluruh data Penjangkauan dan Rujukan berdasarkan Lembaga SSR yang dipilih."
-                    )
-                    st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-            
-                # Jalankan filter selectbox jika bukan "Semua"
-                if pilihan_ssr != "Semua":
-                    df_master = df_master[df_master["Lembaga SSR"] == pilihan_ssr]
-            
-                # Ambil view kolom sesuai urutan susunan global
-                df_view_gabungan = df_master[kolom_susunan_gabungan].copy()
-            
-                # 6. Intersepsi Tampilan: Bersihkan Justifikasi jika bukan tipe 'konfirmasi'
-                for idx, row in df_view_gabungan.iterrows():
-                    if "konfirmasi" not in str(row['Indikator Kesalahan Data']).lower():
-                        df_view_gabungan.at[idx, 'Justifikasi'] = ""
-            
-                # 7. Render Data Editor Tunggal
-                if df_view_gabungan.empty:
-                    st.info(f"✨ Tidak ada data kesalahan yang perlu divalidasi untuk Lembaga SSR: **{pilihan_ssr}**")
-                else:
-                    df_hasil_edit = st.data_editor(
-                        df_view_gabungan,
-                        use_container_width=True,
-                        hide_index=False,  # 🔥 WAJIB FALSE: Diperlukan agar indeks asli dataframe master tetap terjaga saat penghapusan baris
-                        key="editor_validasi_tunggal",
-                        column_config={
-                            "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika data telah direvisi/diperbaiki", default=False),
-                            "Kategori Data": st.column_config.TextColumn("Kategori Data", width=110),
-                            "Lembaga SSR": st.column_config.TextColumn("Lembaga SSR", width=120),
-                            "Kode Petugas": st.column_config.TextColumn("Kode Petugas", width=100),
-                            "Nama Kota": st.column_config.TextColumn("Nama Kota", width=110),
-                            "Nama Layanan": st.column_config.TextColumn("Nama Layanan", width=120),
-                            "Tanggal": st.column_config.TextColumn("Tanggal", width=100),
-                            "ID Klien": st.column_config.TextColumn("ID Klien", width=110),
-                            "NIK": st.column_config.TextColumn("NIK", width=130),
-                            "Tipe Sasaran": st.column_config.TextColumn("Tipe Sasaran", width=110),
-                            "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=300),
-                            "Validasi Hasil Review": st.column_config.TextColumn("Validasi Hasil Review", width=200),
-                            "Justifikasi": st.column_config.TextColumn("Justifikasi", help="Hanya diisi jika kolom indikator mengandung unsur kata 'konfirmasi'", width=260),
-                        },
-                        disabled=[c for c in kolom_susunan_gabungan if c not in ["Pilih", "Justifikasi"]]
-                    )
             
                     # 8. Tombol Eksekusi Penyimpanan Tunggal
                     st.markdown("<br>", unsafe_allow_html=True)
