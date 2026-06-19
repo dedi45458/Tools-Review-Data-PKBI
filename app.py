@@ -1119,7 +1119,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         """, unsafe_allow_html=True)
         
         # Seksi 1: Penjangkauan
-        st.markdown("<b style='color: #38bdf8; font-size: 1.05rem;'>🎯 Kinerja Data Penjangkauan</b>", unsafe_allow_html=True)
+        st.markdown("<b style='color: #38bdf8; font-size: 1.05rem;'>🎯 Data Penjangkauan</b>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1: 
             st.metric(label="Total Data Diproses", value=f"{tot_data_penj:,}")
@@ -1131,7 +1131,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
         
         # Seksi 2: Rujukan
-        st.markdown("<b style='color: #10B981; font-size: 1.05rem;'>🔗 Kinerja Data Rujukan</b>", unsafe_allow_html=True)
+        st.markdown("<b style='color: #10B981; font-size: 1.05rem;'>🎯 Data Rujukan</b>", unsafe_allow_html=True)
         c4, c5, c6 = st.columns(3)
         with c4: 
             st.metric(label="Total Data Diproses", value=f"{tot_data_ruj:,}")
