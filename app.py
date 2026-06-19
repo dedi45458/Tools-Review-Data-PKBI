@@ -1102,6 +1102,20 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             except NameError:
                 ind_rujukan = [] # Fallback aman jika list aturan rujukan tidak terbaca
                 
+            # =========================================================================
+            # 🔥 PENGAMAN STRUKTUR KOLOM SEBELUM FILTER BARIS 1072
+            # =========================================================================
+            if df_semua_error is not None and not df_semua_error.empty:
+                # Paksa semua nama kolom menjadi HURUF KAPITAL tanpa spasi liar
+                df_semua_error.columns = [str(col).strip().upper() for col in df_semua_error.columns]
+                
+                # Antisipasi jika di database/session state namanya masih menggunakan format lama
+                if 'INDIKATOR KESALAHAN' in df_semua_error.columns and 'INDIKATOR KESALAHAN DATA' not in df_semua_error.columns:
+                    df_semua_error = df_semua_error.rename(columns={'INDIKATOR KESALAHAN': 'INDIKATOR KESALAHAN DATA'})
+                elif 'INDIKATOR_KESALAHAN' in df_semua_error.columns:
+                    df_semua_error = df_semua_error.rename(columns={'INDIKATOR_KESALAHAN': 'INDIKATOR KESALAHAN DATA'})
+
+            # Baris 1072 asli kamu (Sekarang dijamin aman dari KeyError)
             mask_rujukan = df_semua_error['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)
             
             # Eliminasi duplikasi baris fisik agar akurasi dihitung per entri data (bukan per jenis error)
