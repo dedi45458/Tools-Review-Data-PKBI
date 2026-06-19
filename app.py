@@ -566,6 +566,9 @@ def jalankan_review_data(
     col_upper_all = [str(c).upper() for c in df.columns]
     is_file_rujukan = any(k in col_upper_all for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
     
+    # Injeksi penentuan Kategori Data secara universal
+    v_kategori = "Rujukan" if is_file_rujukan else "Penjangkauan"
+    
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
 
@@ -638,7 +641,7 @@ def jalankan_review_data(
             for _, r in df.iloc[start_row_idx:].iterrows():
                 k_ssr = str(r.get('Lembaga SSR', '')).strip().upper()
                 k_id = str(r.get('ID Klien', '')).replace("'", "").strip()
-                if cek_kode(r.get(col_ruj_temp), '2'):
+                if periksa_rujukan(r.get(col_ruj_temp)):
                     rujukan_vct_per_klien[f"{k_ssr}_{k_id}"] = True
 
     # ==========================================================
@@ -750,6 +753,13 @@ def jalankan_review_data(
         layanan_clean = str(row.get(col_nama_layanan, '')).strip().lower() if col_nama_layanan else ""
         is_layanan_prep_db = True if not layanan_clean else f"{v_ssr.lower()}_{layanan_clean}" in set_prep_valid
 
+        # 🔥 LOGIKA UTAMA EKSTRAKSI NAMA LAYANAN / FASYANKES BERDASARKAN ATURAN BISNIS
+        if is_file_rujukan and col_nama_layanan:
+            v_nama_layanan = str(row.get(col_nama_layanan, '-')).strip()
+            if v_nama_layanan.lower() in ['nan', 'none', '']: v_nama_layanan = '-'
+        else:
+            v_nama_layanan = '-'
+
         # KONTEKS DATA (Mencakup variabel untuk kedua jenis file)
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
@@ -792,17 +802,20 @@ def jalankan_review_data(
                         status_validasi = "kesalahan pada ID yang berulang (belum dilakukan revisi)"
                         checked_state = True
 
+                    # 🌟 FIX PENAMAAN KUNCI DICTIONARY OUTPUT: Menggunakan Huruf Kapital Sesuai Cleansing Map
                     list_kesalahan.append({
                         "Pilih": checked_state,
+                        "Kategori Data": v_kategori,
                         "Lembaga SSR": v_ssr,
                         "Tanggal": v_tanggal, 
                         "ID Klien": id_clean, 
                         "Kode Petugas": v_petugas, 
                         "Nama Kota": v_kota, 
+                        "Nama Layanan": v_nama_layanan,
                         "NIK": nik_clean, 
                         "Tipe Sasaran": v_tipe_sasaran,
                         "INDIKATOR KESALAHAN DATA": nama_ind,
-                        "validasi hasil review": status_validasi, 
+                        "Validasi Hasil Review": status_validasi, 
                         "Justifikasi": justif_val
                     })
             except Exception: 
@@ -930,17 +943,37 @@ if tombol_proses:
                 
                 df_bawah = df_bawah.rename(columns=rename_map)
                 
-                # 1. Pastikan kolom wajib ada (Gunakan HURUF KAPITAL)
-                kolom_wajib = ['KATEGORI DATA', 'KODE PETUGAS', 'NAMA KOTA', 'NAMA LAYANAN', 'NIK', 'TIPE SASARAN', 'VALIDASI HASIL REVIEW', 'JUSTIFIKASI']
+                # 1. Pastikan SEMUA kolom wajib didefinisikan (Ditambahkan TANGGAL & ID KLIEN)
+                kolom_wajib = [
+                    'KATEGORI DATA', 'LEMBAGA SSR', 'TANGGAL', 'ID KLIEN', 'KODE PETUGAS', 
+                    'NAMA KOTA', 'NAMA LAYANAN', 'NIK', 'TIPE SASARAN', 
+                    'INDIKATOR KESALAHAN DATA', 'VALIDASI HASIL REVIEW', 'JUSTIFIKASI'
+                ]
                 for col in kolom_wajib:
-                    if col not in df_bawah.columns: df_bawah[col] = "-"
-
-                # 2. Proses Cleansing (Hapus spasi berlebih, hilangkan .0 pada tipe sasaran)
-                df_bawah['TIPE SASARAN'] = df_bawah['TIPE SASARAN'].astype(str).str.replace('.0', '', regex=False).str.strip()
-                for col in ['TANGGAL', 'ID KLIEN', 'NAMA LAYANAN', 'TIPE SASARAN']:
-                    if col in df_bawah.columns:
-                        df_bawah[col] = df_bawah[col].fillna('-').astype(str).str.strip()
-                        df_bawah[col] = df_bawah[col].replace({'nan': '-', 'None': '-', '': '-'})
+                    if col not in df_bawah.columns: 
+                        df_bawah[col] = "-"
+                
+                # 2. Proses Cleansing Standar Null/NaN Value
+                for col in kolom_wajib:
+                    df_bawah[col] = df_bawah[col].fillna('-').astype(str).str.strip()
+                    df_bawah[col] = df_bawah[col].replace({'nan': '-', 'None': '-', '': '-', 'NAN': '-'})
+                
+                # 3. Bersihkan sisa format float pada tipe sasaran
+                df_bawah['TIPE SASARAN'] = df_bawah['TIPE SASARAN'].str.replace('.0', '', regex=False)
+                
+                # 4. 🔥 LOGIKA ATURAN BISNIS: Kondisional Nama Layanan Berbasis Kategori Data
+                def sesuaikan_nama_layanan(row_data):
+                    kat = str(row_data['KATEGORI DATA']).strip().lower()
+                    layanan = str(row_data['NAMA LAYANAN']).strip()
+                    
+                    if 'rujukan' in kat:
+                        # Jika kategori rujukan tetapi datanya kosong/strip, biarkan strip atau cari fallback name.
+                        return layanan if layanan not in ['', '-', 'nan', 'None'] else "-"
+                    else:
+                        # Jika kategori penjangkauan, paksa menjadi strip sesuai regulasi Anda
+                        return "-"
+                
+                df_bawah['NAMA LAYANAN'] = df_bawah.apply(sesuaikan_nama_layanan, axis=1)
 
                 # FILTER DUPLIKAT DARI DATABASE NEON
                 existing_master_keys = set()
