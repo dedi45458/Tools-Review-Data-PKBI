@@ -647,13 +647,13 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
 
 
 def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
-    """Menyimpan metrik ke tabel akurasi_review_data di Neon secara aman."""
+    """Menyimpan atau memperbarui metrik ke Neon secara otomatis (UPSERT)."""
     conn = dapatkan_koneksi_neon()
     if not conn: 
         return False
     try:
         with conn.cursor() as cur:
-            # Menggunakan susunan kolom yang benar sesuai visual tabel Neon Anda
+            # Menggunakan ON CONFLICT UPDATE untuk memperbarui data jika metrik sama persis
             cur.execute("""
                 INSERT INTO akurasi_review_data (
                     kategori, 
@@ -661,13 +661,18 @@ def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
                     total_baris_temuan, 
                     tingkat_akurasi
                 ) 
-                VALUES (%s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT ON CONSTRAINT unique_kategori_metrik 
+                DO UPDATE SET 
+                    tingkat_akurasi = EXCLUDED.tingkat_akurasi,
+                    created_at = CURRENT_TIMESTAMP;
             """, (kategori, total_proses, total_temuan, akurasi))
+            
         conn.commit()
         return True
     except Exception as e:
         conn.rollback()
-        raise e  # Di-raise agar bisa terbaca jika ada error lain
+        raise e
     finally:
         conn.close()
 
