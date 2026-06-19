@@ -622,8 +622,8 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
             if list_tabel_3:
                 cur.executemany("""
                     INSERT INTO hasil_review_data
-                    (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
+                    VALUES (%s, %s, %s, %s))
                 """, list_tabel_3)
 
         # Jika semua berhasil, simpan ke database
