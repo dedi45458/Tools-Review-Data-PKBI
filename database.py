@@ -646,14 +646,15 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
         if conn: conn.close()
 
 def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
-    """Menyimpan log metrik akurasi saat validasi berjalan."""
+    """Menyimpan log metrik akurasi ke tabel akurasi_review_data."""
     conn = dapatkan_koneksi_neon()
-    if not conn: return False
+    if not conn: 
+        return False
     try:
         with conn.cursor() as cur:
-            # Otomatis membuat tabel jika kamu belum sempat membuatnya di Neon
+            # 1. Pastikan tabel akurasi_review_data dibuat terlebih dahulu
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS metrik_akurasi (
+                CREATE TABLE IF NOT EXISTS akurasi_review_data (
                     id SERIAL PRIMARY KEY,
                     kategori VARCHAR(50), 
                     total_proses INT, 
@@ -661,45 +662,56 @@ def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
                     akurasi FLOAT, 
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
-                INSERT INTO metrik_akurasi (kategori, total_proses, total_temuan, akurasi) 
+            """)
+            
+            # 2. Lakukan insert data baru ke tabel akurasi_review_data
+            cur.execute("""
+                INSERT INTO akurasi_review_data (kategori, total_proses, total_temuan, akurasi) 
                 VALUES (%s, %s, %s, %s);
             """, (kategori, total_proses, total_temuan, akurasi))
+            
         conn.commit()
         return True
-    except Exception:
+    except Exception as e:
         conn.rollback()
+        # print(f"Error saat menyimpan data: {e}") # Debugging opsional
         return False
     finally:
         conn.close()
 
 
 def ambil_metrik_akurasi_terakhir():
-    """Mengambil persentase akurasi terakhir menggunakan urutan DESC (Lebih Cepat & Aman)."""
+    """Mengambil persentase akurasi terakhir dari tabel akurasi_review_data."""
     conn = dapatkan_koneksi_neon()
     metrik_default = {'akurasi_penjangkauan': 100.0, 'akurasi_rujukan': 100.0}
     ts_metrik = dt.datetime.now()
     
-    if not conn: return metrik_default, ts_metrik
+    if not conn: 
+        return metrik_default, ts_metrik
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'metrik_akurasi');")
+            # Cek apakah tabel akurasi_review_data sudah ada di database
+            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'akurasi_review_data');")
             tabel_ada = cur.fetchone()[0]
             
             if tabel_ada:
-                # Ambil 2 data terbaru (1 penjangkauan, 1 rujukan dari batch terakhir)
+                # Ambil maksimal 2 data terbaru (1 penjangkauan, 1 rujukan dari batch terakhir)
                 cur.execute("""
                     SELECT kategori, akurasi, created_at 
-                    FROM metrik_akurasi 
+                    FROM akurasi_review_data 
                     ORDER BY created_at DESC 
                     LIMIT 2
                 """)
                 rows = cur.fetchall()
                 if rows:
-                    ts_metrik = rows[0][2] # Ambil timestamp dari data paling baru
+                    # Ambil timestamp dari baris pertama sebagai penanda waktu update terbaru
+                    ts_metrik = rows[0][2] 
                     for row in rows:
                         kat = str(row[0]).lower()
-                        if 'penjangkauan' in kat: metrik_default['akurasi_penjangkauan'] = float(row[1])
-                        if 'rujukan' in kat: metrik_default['akurasi_rujukan'] = float(row[1])
+                        if 'penjangkauan' in kat: 
+                            metrik_default['akurasi_penjangkauan'] = float(row[1])
+                        if 'rujukan' in kat: 
+                            metrik_default['akurasi_rujukan'] = float(row[1])
     except Exception:
         pass
     finally:
