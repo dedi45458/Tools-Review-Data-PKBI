@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import io
 import re
-from datetime import datetime  
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # ==========================================================
 # IMPORT FUNGSI NEON DARI FILE database.py
@@ -179,7 +180,7 @@ def ambil_keyword_medsos():
 
 # --- C. TAMPILAN JUDUL UTAMA ---
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Sistem Penelaahan Kualitas Data Penjangkauan & Rujukan Terpadu (Neon DB)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Sistem Validasi Kualitas Data Penjangkauan & Rujukan</div>', unsafe_allow_html=True)
 
 # ==========================================================
 # FUNGSI HELPER
@@ -1189,7 +1190,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         # --- RENDER UI KARTU SKOR MENGGUNAKAN GLASSMORPHISM ---
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
-        tanggal_hari_ini = datetime.now().strftime('%d %B %Y')
+        # Set timezone ke Jakarta langsung di dalam now()
+        tanggal_hari_ini = datetime.now(ZoneInfo('Asia/Jakarta')).strftime('%d %B %Y')
+        
         st.markdown(f"""
             <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
                 📅 <b>Executive Review Dashboard</b> | Tanggal: {tanggal_hari_ini}
