@@ -19,7 +19,9 @@ from database import (
     ambil_agregasi_terakhir_dari_neon,
     simpan_detil_review_ke_neon,       # 🔥 WAJIB TAMBAHKAN BARIS INI
     ambil_detil_terakhir_dari_neon,      # 🔥 WAJIB TAMBAHKAN BARIS INI
-    ambil_status_storage_neon
+    ambil_status_storage_neon,
+    ambil_data_rujukan_hiv_positif,  # 🔥 DITAMBAHKAN UNTUK REFERENSI RUJUKAN
+    ambil_database_layanan           # 🔥 DITAMBAHKAN UNTUK REFERENSI LAYANAN
 )
 
 # ==========================================================
@@ -185,76 +187,41 @@ def hitung_dan_ambil_log_db():
     return dict_revisi, dict_justifikasi
 
 # ==========================================================
-# 1. ATURAN VALIDASI BAWAAN (DIURUTKAN SESUAI URUTAN KOLOM)
+# 1. ATURAN VALIDASI BAWAAN (PENJANGKAUAN)
 # ==========================================================
 ATURAN_VALIDASI_BAWAAN = [
-    # --- KOLOM: KODE PETUGAS ---
     {"nama": "Kode Petugas Kosong", "periksa": lambda c: pd.isna(c['row'].get('Kode Petugas')) or str(c['row'].get('Kode Petugas')).strip() in ['', 'nan', 'None']},
-    
-    # --- KOLOM: TANGGAL PENJANGKAUAN ---
     {"nama": "Tahun dalam tanggal penjangkauan lebih besar/kecil dari tahun sekarang", "periksa": lambda c: pd.notna(c['tgl_p']) and c['tgl_p'].year != c['tahun_sekarang']},
     {"nama": "Tanggal lebih besar dari tanggal hari ini", "periksa": lambda c: pd.notna(c['tgl_p']) and c['tgl_p'] > c['hari_ini']},
-    
-    # --- KOLOM: ID KLIEN (IDKD) ---
     {"nama": "IDKD kurang/lebih dari 10 digit karakter", "periksa": lambda c: c['id_clean'] != '' and (len(c['id_clean']) != 10 or not c['id_clean'].isalnum())},
     {"nama": "Digit nama kurang/lebih dari 4 digit karakter", "periksa": lambda c: c['id_clean'] != '' and (len(c['id_clean']) < 4 or not (c['id_clean'][:4].isalpha() or (c['id_clean'][:3].isalpha() and c['id_clean'][3] == '0')))},
     {"nama": "Digit tanggal lahir lebih/kurang dari 6 digit angka", "periksa": lambda c: c['id_clean'] != '' and len(c['id_clean']) == 10 and not c['id_clean'][4:].isdigit()},
     {"nama": "Ada tanda titik (.) pada penulisan IDKD", "periksa": lambda c: '.' in str(c['row'].get('ID Klien', ''))},
     {"nama": "Ada spasi pada penulisan IDKD", "periksa": lambda c: ' ' in str(c['row'].get('ID Klien', ''))},
-    {"nama": "ID sama tapi NIK berbeda dengan data Semester/Tahun lalu (Konfirmasi)", "periksa": lambda c: c['is_file_rujukan'] and c['df_ref'] is not None and c['v_ssr'] and f"{c['v_ssr']}_{c['id_clean']}" in c['ref_ssr_id_to_nik'] and c['ref_ssr_id_to_nik'][f"{c['v_ssr']}_{c['id_clean']}"] != c['nik_clean']},
-    
-    # --- KOLOM: NIK, UMUR, JENIS KELAMIN ---
-    {"nama": "NIK sama tapi ID berbeda dengan data Semester/Tahun lalu (Konfirmasi)", "periksa": lambda c: c['is_file_rujukan'] and c['df_ref'] is not None and c['v_ssr'] and c['nik_clean'] != '' and f"{c['nik_clean']}_{c['v_ssr']}" in c['ref_nik_ssr_to_id'] and c['ref_nik_ssr_to_id'][f"{c['nik_clean']}_{c['v_ssr']}"] != c['id_clean']},
+    {"nama": "ID sama tapi NIK berbeda dengan data Semester/Tahun lalu (Konfirmasi)", "periksa": lambda c: c['df_ref'] is not None and c['v_ssr'] and f"{c['v_ssr']}_{c['id_clean']}" in c['ref_ssr_id_to_nik'] and c['ref_ssr_id_to_nik'][f"{c['v_ssr']}_{c['id_clean']}"] != c['nik_clean']},
+    {"nama": "NIK sama tapi ID berbeda dengan data Semester/Tahun lalu (Konfirmasi)", "periksa": lambda c: c['df_ref'] is not None and c['v_ssr'] and c['nik_clean'] != '' and f"{c['nik_clean']}_{c['v_ssr']}" in c['ref_nik_ssr_to_id'] and c['ref_nik_ssr_to_id'][f"{c['nik_clean']}_{c['v_ssr']}"] != c['id_clean']},
     {"nama": "Usia KD dibawah 16 tahun (konfirmasi)", "periksa": lambda c: pd.notna(c['umur']) and str(c['umur']).strip() != '' and float(c['umur']) < 17},
     {"nama": "Usia KD diatas 70 tahun (konfirmasi)", "periksa": lambda c: pd.notna(c['umur']) and str(c['umur']).strip() != '' and float(c['umur']) > 70},
     {"nama": "Tahun lahir pada IDKD berbeda dengan Tahun lahir pada NIK (konfirmasi)", "periksa": lambda c: c['id_clean'] != '' and len(c['id_clean']) == 10 and c['nik_clean'] != '' and len(c['nik_clean']) == 16 and c['id_clean'][4:6] != (str(c['row'].get('NIK', '')) if str(c['row'].get('NIK', '')).startswith("'") else "'" + c['nik_clean'])[11:13]},
     {"nama": "NIK kurang/lebih dari 16 digit (konfirmasi)", "periksa": lambda c: c['nik_clean'] not in ['', 'nan', 'none', 'NaN', "'"] and len(c['nik_clean']) != 16},
     {"nama": "Kesalahan dalam penulisan NIK (00) (konfirmasi)", "periksa": lambda c: c['nik_clean'] != '' and c['nik_clean'].endswith('00')},
     {"nama": "Secara NIK harusnya perempuan bukan laki-laki (konfirmasi)", "periksa": lambda c: len(c['nik_clean']) == 16 and c['jk'] == '1' and int(c['nik_clean'][6:8]) > 31 if c['nik_clean'].isdigit() and len(c['nik_clean'])>=8 else False},
-    
-    # --- KOLOM: TIPE SASARAN ---
     {"nama": "LSL/Waria tapi jenis kelamin perempuan", "periksa": lambda c: c['v_tipe_sasaran'] in ['1304', '1301'] and c['jk'] == '2'},
-    
-    # --- KOLOM: JENIS KONTAK & JENIS KEGIATAN & VC1 ---
     {"nama": "Jenis kontak dengan Jenis Kegiatan tidak sesuai", "periksa": lambda c: (c['jns_kontak'] == '1' and c['jns_kegiatan'] not in ['1', '5']) or (c['jns_kontak'] == '2' and c['jns_kegiatan'] not in ['2', '3', '4', '6', '7']) or (c['jns_kontak'] == '3' and c['jns_kegiatan'] != '8')},
     {"nama": "Jenis kontak Individual/kelompok tapi kolom Virtual dan Tatap Muka (VC1) tidak diisi", "periksa": lambda c: c['jns_kontak'] in ['1', '2'] and (c['vc1'] == '' or c['vc1'] == 'nan')},
     {"nama": "VO tapi kolom Virtual dan Tatap Muka (VC1) diisi angka 1", "periksa": lambda c: c['is_vo'] and c['vc1'] == '1'},
-    
-    # --- KOLOM: LOKASI OUTREACH & NO HP / AKUN ---
     {"nama": "Penjangkauan tatap muka tapi lokasi outreach diindikasi ada nama medsos", "periksa": lambda c: str(c.get('jns_kontak', '')).split('.')[0].strip() in ['1', '2'] and c.get('pattern_medsos') is not None and str(c.get('pattern_medsos')).strip() != '' and bool(re.search(c['pattern_medsos'], str(c.get('lokasi', '')), re.IGNORECASE))},
     {"nama": "Lokasi outreach diisi IDKD", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and len(c['lokasi']) == 10 and c['lokasi'][:4].isalpha() and c['lokasi'][4:].isdigit()},
-    {"nama": "Lokasi outreach diindikasi kurang spesifik atau kurang detil (konfirmasi)", 
-    "periksa": lambda c: (
-        str(c.get('lokasi', '')).strip() != '' 
-        and str(c.get('lokasi', '')).strip().lower() != 'nan' 
-        and not c.get('is_vo', False) 
-        # 👇 BAGIAN INI SUDAH DIPERKETAT: Hanya skip jika Kontak=3, Kegiatan=8, DAN mengandung unsur Medsos
-        and not (
-            str(c.get('jns_kontak', '')).split('.')[0].strip() == '3' 
-            and str(c.get('jns_kegiatan', '')).split('.')[0].strip() == '8'
-            and any(m in str(c.get('lokasi', '')).upper() for m in [
-                'FB', 'FACEBOOK', 'IG', 'INSTAGRAM', 'WA', 'WHATSAPP', 'TELE', 'TELEGRAM', 
-                'TIKTOK', 'TWITTER', 'X ', 'YOUTUBE', 'YT', 'GRUP', 'GROUP', 'ONLINE', 'MEDSOS', 'SOSMED'
-            ])
-        )
-        and len(str(c.get('lokasi', '')).strip()) < 17 
-        and not any(k in str(c.get('lokasi', '')).upper() for k in ['ALUN', 'RSUD', 'RS ', 'PUSKESMAS', 'KLINIK', 'TERMINAL', 'STASIUN', 'TAMAN', 'PASAR', 'MALL', 'KAMPUS', 'UNIV', 'SEKOLAH', 'SMK', 'SMA', 'SMP', 'SD', 'MASJID', 'GEREJA', 'HOTEL', 'PANTI', 'AULA', 'BALAI']) 
-        and not (bool(re.search(r'\d', str(c.get('lokasi', '')))) or any(p in str(c.get('lokasi', '')).upper() for p in ['JL', 'JALAN', 'RT', 'RW', 'GANG', 'GG', 'KP', 'KAMPUNG', 'BLOK', 'DESA', 'KEC', 'KAB', 'SAMPING', 'DEPAN', 'DEKAT', 'SEBERANG']))
-        )
-    },
+    {"nama": "Lokasi outreach diindikasi kurang spesifik atau kurang detil (konfirmasi)", "periksa": lambda c: (str(c.get('lokasi', '')).strip() != '' and str(c.get('lokasi', '')).strip().lower() != 'nan' and not c.get('is_vo', False) and not (str(c.get('jns_kontak', '')).split('.')[0].strip() == '3' and str(c.get('jns_kegiatan', '')).split('.')[0].strip() == '8' and any(m in str(c.get('lokasi', '')).upper() for m in ['FB', 'FACEBOOK', 'IG', 'INSTAGRAM', 'WA', 'WHATSAPP', 'TELE', 'TELEGRAM', 'TIKTOK', 'TWITTER', 'X ', 'YOUTUBE', 'YT', 'GRUP', 'GROUP', 'ONLINE', 'MEDSOS', 'SOSMED'])) and len(str(c.get('lokasi', '')).strip()) < 17 and not any(k in str(c.get('lokasi', '')).upper() for k in ['ALUN', 'RSUD', 'RS ', 'PUSKESMAS', 'KLINIK', 'TERMINAL', 'STASIUN', 'TAMAN', 'PASAR', 'MALL', 'KAMPUS', 'UNIV', 'SEKOLAH', 'SMK', 'SMA', 'SMP', 'SD', 'MASJID', 'GEREJA', 'HOTEL', 'PANTI', 'AULA', 'BALAI']) and not (bool(re.search(r'\d', str(c.get('lokasi', '')))) or any(p in str(c.get('lokasi', '')).upper() for p in ['JL', 'JALAN', 'RT', 'RW', 'GANG', 'GG', 'KP', 'KAMPUNG', 'BLOK', 'DESA', 'KEC', 'KAB', 'SAMPING', 'DEPAN', 'DEKAT', 'SEBERANG'])))},
     {"nama": "Lokasi outreach indikasi diisi nomer HP", "periksa": lambda c: c['lokasi'] != '' and c['lokasi'] != 'nan' and __import__('re').search(r'(08\d{8,11})|(\+62\d{8,11})', str(c['lokasi']).replace('-', '').replace(' ', '')) and not (str(c['jns_kontak']).strip() == '3' and str(c['jns_kegiatan']).strip() == '8')},
     {"nama": "VO tapi lokasi outreach bukan nama medsos/kurang tepat mencatat nama aplikasi medsos", "periksa": lambda c: c['is_vo'] and str(c['lokasi']).strip() != '' and (c['pattern_medsos'] is None or not bool(re.search(c['pattern_medsos'], str(c['lokasi']), re.IGNORECASE)))},
     {"nama": "VO tapi nama akun /No. Hp tidak sesuai format medsos/telepon", "periksa": lambda c: c['is_vo'] and (c['no_hp'].replace("'", "").strip() in ['', 'nan', '-', '.', 'tidak ada'] or not re.match(r'^[a-zA-Z0-9_@.+- ]+$', c['no_hp'].replace("'", "").strip()))},
-    
-    # --- KOLOM: INFORMASI YANG DIBERIKAN ---
     {"nama": "Tidak ada informasi satupun yang diberikan / tidak diisi", "periksa": lambda c: str(c.get('info_diberikan', '')).strip() == '' or str(c.get('info_diberikan', '')).strip().lower() in ['nan', 'none', 'null']},
     {"nama": "Bukan PWID mendapatkan info 8 atau 9 (LASS, PTRM)", "periksa": lambda c: not c['is_pwid'] and (cek_kode(c['info_diberikan'], '8') or cek_kode(c['info_diberikan'], '9'))},
     {"nama": "LSL/TG/PWID menerima informasi PMTC (konfirmasi)", "periksa": lambda c: c['v_tipe_sasaran'] in ['1304', '1301', '1401'] and cek_kode(c['info_diberikan'], '6')},
     {"nama": "KD dikontak lebih dari 1x tapi tidak mendapat informasi HIV", "periksa": lambda c: c['id_clean'] != '' and c['id_counts'].get(c['id_clean'], 0) > 1 and not c['pernah_dapat_info_hiv']},
     {"nama": "KD telah menerima layanan CBS tapi tidak ada informasi CBS", "periksa": lambda c: c['pernah_cbs_di_rujukan'] and not cek_kode(c['info_diberikan'], '13')},
     {"nama": "KD ada rujukan PrEp di penjangkauan tapi tidak ada informasi PrEp", "periksa": lambda c: cek_kode(c['rujukan'], '5') and not cek_kode(c['info_diberikan'], '10')},
-    
-    # --- KOLOM: LOGISTIK (KIE, KONDOM, PELICIN, JARUM, SWAB) ---
     {"nama": "Konfirmasi jumlah KIE yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_kie'] > 5},
     {"nama": "Konfirmasi jumlah kondom yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_kon'] > 144},
     {"nama": "Konfirmasi jumlah pelicin yang diberikan adalah wajar (konfirmasi)", "periksa": lambda c: c['log_pel'] > 50},
@@ -268,12 +235,56 @@ ATURAN_VALIDASI_BAWAAN = [
     {"nama": "Popkun selain PWID menerima jarum suntik", "periksa": lambda c: not c['is_pwid'] and c['log_jar'] > 0},
     {"nama": "Popkun selain PWID menerima alkohol swab", "periksa": lambda c: not c['is_pwid'] and c['log_swab'] > 0},
     {"nama": "Popkun selain PWID menyerahkan jarum", "periksa": lambda c: not c['is_pwid'] and c['jarum_kembali'] > 0},
-    
-    # --- KOLOM: RUJUKAN ---
     {"nama": "Tidak ada rujukan yang diberikan satupun / tidak diisi", "periksa": lambda c: c['rujukan'] == '' or c['rujukan'] == 'nan'},
     {"nama": "KD dikontak lebih dari 1x tetapi tidak ada Rujukan Tes HIV (konfirmasi)", "periksa": lambda c: c['id_clean'] != '' and c['id_counts'].get(c['id_clean'], 0) > 1 and not c['pernah_dapat_rujuk_tes']},
     {"nama": "Bukan penasun rujukan 3,4", "periksa": lambda c: not c['is_pwid'] and (cek_kode(c['rujukan'], '3') or cek_kode(c['rujukan'], '4'))},
     {"nama": "KD telah menerima layanan PrEp tapi tidak ada rujukan PrEp di penjangkauan", "periksa": lambda c: c['pernah_prep_di_rujukan'] and not cek_kode(c['rujukan'], '5')}
+]
+
+# ==========================================================
+# 2. ATURAN VALIDASI KHUSUS RUJUKAN
+# ==========================================================
+ATURAN_VALIDASI_RUJUKAN = [
+    {"nama": "ID tidak terdaftar di penjangkauan", "periksa": lambda c: f"{c.get('v_ssr', '')}_{c.get('id_clean', '')}" not in c.get('set_ssr_id_penjangkauan', set())},
+    {"nama": "Data rujukan tapi tidak ada NIK (konfirmasi)", "periksa": lambda c: str(c['row'].get('ID Klien', '')).strip() != '' and str(c['row'].get('NIK', '')).replace("'", "").strip() in ['', 'nan', 'none']},
+    {"nama": "ID sudah dinyatakan Reaktif di semester / tahun lalu (Konfirmasi)", "periksa": lambda c: c.get('is_reaktif_sebelumnya', False)},
+    {"nama": "Jenis Layanan tidak sesuai", "periksa": lambda c: 'cbs' in str(c['row'].get('Nama Layanan', '')).lower() and str(c['row'].get('Jenis Layanan', '')).split('.')[0].strip() not in ['5', '6']},
+    {"nama": "Jenis Layanan dengan Metode CBS tidak sesuai", "periksa": lambda c: str(c['row'].get('Jenis Layanan', '')).split('.')[0].strip() in ['5', '6'] and str(c['row'].get('Metode CBS', '')).split('.')[0].strip() in ['', '0', '1', 'nan']},
+    {"nama": "Bukan CBS tapi jenis layanan 5/6", "periksa": lambda c: 'cbs' not in str(c['row'].get('Nama Layanan', '')).lower() and str(c['row'].get('Jenis Layanan', '')).split('.')[0].strip() in ['5', '6']},
+    {"nama": "Layanan CBS ada rujukan IMS", "periksa": lambda c: 'cbs' in str(c['row'].get('Nama Layanan', '')).lower() and str(c['row'].get('Jenis Layanan', '')).split('.')[0].strip() in ['5', '6'] and cek_kode(c['row'].get('Rujukan'), '1')},
+    {"nama": "Layanan CBS ada rujukan PrEp", "periksa": lambda c: 'cbs' in str(c['row'].get('Nama Layanan', '')).lower() and cek_kode(c['row'].get('Rujukan'), '51')},
+    {"nama": "Layanan CBS ada rujukan selain VCT", "periksa": lambda c: 'cbs' in str(c['row'].get('Nama Layanan', '')).lower() and str(c['row'].get('Rujukan', '')).replace("'", "").strip() != '2'},
+    {"nama": "Tidak ada rujukan satupun/tidak diisi", "periksa": lambda c: str(c['row'].get('Rujukan', '')).replace("'", "").strip() in ['', 'nan', 'None']},
+    {"nama": "Bukan penasun rujukan 3,4", "periksa": lambda c: str(c['row'].get('Tipe Klien', '')).split('.')[0].strip() != '1401' and (cek_kode(c['row'].get('Rujukan'), '3') or cek_kode(c['row'].get('Rujukan'), '4'))},
+    {"nama": "ID akses ke layanan lebih dari 1x tapi belum tes HIV (Konfirmasi)", "periksa": lambda c: c.get('id_counts_ruj', {}).get(f"{c.get('v_ssr', '')}_{c.get('id_clean', '')}", 0) > 1 and not c.get('rujukan_vct_per_klien', {}).get(f"{c.get('v_ssr', '')}_{c.get('id_clean', '')}", False)},
+    {"nama": "Tidak menerima hasil tes HIV", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '2') and str(c['row'].get('Menerima Hasil VCT', '')).split('.')[0].strip() in ['', '2', 'nan']},
+    {"nama": "Kolom menerima hasil tes HIV terisi tapi tidak ada rujukan HIV", "periksa": lambda c: str(c['row'].get('Menerima Hasil VCT', '')).split('.')[0].strip() in ['1', '2'] and not cek_kode(c['row'].get('Rujukan'), '2')},
+    {"nama": "Ada hasil tes HIV tapi tidak ada rujukan HIV", "periksa": lambda c: str(c['row'].get('Hasil Tes HIV', '')).split('.')[0].strip() in ['1', '2', '3'] and not cek_kode(c['row'].get('Rujukan'), '2')},
+    {"nama": "Ada hasil tes HIV tapi kolom menerima hasil tidak terisi", "periksa": lambda c: str(c['row'].get('Hasil Tes HIV', '')).split('.')[0].strip() in ['1', '2', '3'] and str(c['row'].get('Menerima Hasil VCT', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Dirujuk IMS tapi tidak ada hasil IMS", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '1') and str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Ada hasil IMS tapi tidak ada rujukan IMS", "periksa": lambda c: str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['1', '2', '3'] and not cek_kode(c['row'].get('Rujukan'), '1')},
+    {"nama": "Menerima pengobatan IMS tapi hasil tes IMS Non Reaktif/ N/A", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['2', '3']},
+    {"nama": "Hasil tes IMS reaktif tapi tidak menerima pengobatan IMS (konfirmasi)", "periksa": lambda c: str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() == '1' and str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() == '2'},
+    {"nama": "Kolom menerima pengobatan IMS terisi tapi tidak ada rujukan IMS", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() in ['1', '2'] and not cek_kode(c['row'].get('Rujukan'), '1')},
+    {"nama": "Menerima pengobatan IMS tapi tidak ada hasil tes IMS", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Ada hasil tes IMS tapi kolom menerima pengobatan IMS tidak diisi", "periksa": lambda c: str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['1', '2', '3'] and str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "DIrujuk PrEP tapi hasil skrining PrEP tidak diisi", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '5') and str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Layanan PrEp tidak terdaftar, indikasi salah mengisi layanan atau belum update jenis layanan PrEP di SIMS (konfirmasi)", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '5') and not c.get('is_layanan_prep_valid', True)},
+    {"nama": "Ada hasil skrining PrEP tapi tidak ada rujukan PrEP", "periksa": lambda c: str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() in ['1', '2'] and not cek_kode(c['row'].get('Rujukan'), '5')},
+    {"nama": "Ada hasil skrining PrEP tapi kolom menerima obat PrEP tidak disi", "periksa": lambda c: str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() in ['1', '2'] and str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Menerima pengobatan PrEP diisi tapi tidak ada rujukan PrEP", "periksa": lambda c: str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() == '1' and not cek_kode(c['row'].get('Rujukan'), '5')},
+    {"nama": "KD sudah menerima obat PrEP tapi hasil skrining PrEP tidak memenuhi syarat", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '5') and str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() == '2'},
+    {"nama": "Hasil Skrining PrEP memenuhi syarat tapi KD tidak menerima obat PrEP (konfirmasi)", "periksa": lambda c: str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() == '1' and str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() == '2'},
+    {"nama": "Dirujuk TB tapi tidak ada Hasil Tes TB", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '8') and str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Ada Hasil TB tapi tidak ada rujukan TB", "periksa": lambda c: str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['1', '2', '3'] and not cek_kode(c['row'].get('Rujukan'), '8')},
+    {"nama": "Menerima pengobatan TB tapi hasil tes TB Non Reaktif/ N/A/ tidak diisi", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan TB/OAT', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['2', '3', '', 'nan']},
+    {"nama": "Hasil tes TB reaktif tapi tidak menerima pengobatan TB (konfirmasi)", "periksa": lambda c: str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() == '1' and str(c['row'].get('Menerima Pengobatan TB/OAT', '')).split('.')[0].strip() == '2'},
+    {"nama": "Ada hasil tes TB tapi kolom pengobatan TB tidak diisi", "periksa": lambda c: str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['2', '3'] and str(c['row'].get('Menerima Pengobatan TB/OAT', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Dirujuk Hep-C tapi tidak ada Hasil Tes Hep-C", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '9') and str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Ada Hasil Hep-C tapi tidak ada rujukan Hep-C", "periksa": lambda c: str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['1', '2', '3'] and not cek_kode(c['row'].get('Rujukan'), '9')},
+    {"nama": "Menerima Pengobatan Hep-C tapi Hasil Tes Non Reaktif/ N/A / tidak diisi", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan HEPC/DAA', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['2', '3', '', 'nan']},
+    {"nama": "Hasil tes Hep-C reaktif tapi tidak menerima pengobatan Hep-C (konfirmasi)", "periksa": lambda c: str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() == '1' and str(c['row'].get('Menerima Pengobatan HEPC/DAA', '')).split('.')[0].strip() == '2'},
+    {"nama": "Ada hasil tes Hep-C tapi kolom pengobatan Hep-C tidak diisi", "periksa": lambda c: str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['1', '2', '3'] and str(c['row'].get('Menerima Pengobatan HEPC/DAA', '')).split('.')[0].strip() in ['', 'nan']}
 ]
 
 # ==========================================================
@@ -339,7 +350,7 @@ with st.sidebar:
                     
                     # Deteksi Tipe B: Berarti ini Data HIV+ Semester Lalu
                     else:
-                        st.info("📋 **Terdeteksi:** Berkas Data Referensi HIV+ Semester Lalu")
+                        st.info("📋 **Terdeteksi:** Berkas Database HIV+")
                         if st.button("🔄 Update Database Referensi HIV", use_container_width=False, key="btn_exec_hiv"):
                             with st.spinner("Sedang memproses data rujukan HIV..."):
                                 from database import import_data_HIV
@@ -354,7 +365,7 @@ with st.sidebar:
             # Pembatas vertikal pemisah antar uploader
             st.markdown("<div style='margin-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 15px;'></div>", unsafe_allow_html=True)
             
-            # --- 2. UPLOADER RAW DATA PENJANGKAUAN BERKALA ---
+            # --- 2. UPLOADER RAW DATA PENJANGKAUAN ---
             st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>📂 Upload RD Penjangkauan & Rujukan</span>", unsafe_allow_html=True)
             files_review = st.file_uploader(
                 "Raw Data Penjangkauan (Multi-File)", 
@@ -456,9 +467,23 @@ with st.sidebar:
         st.markdown("<div style='margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-top: 15px;'></div>", unsafe_allow_html=True)
 
 # ==========================================================
-# 3. ENGINE VALIDASI UTAMA (VERSI SEMPURNA & DINAMIS + INTEGRASI NOTIFIKASI)
+# 3. ENGINE VALIDASI UTAMA (MENDUKUNG 2 FILE & CROSS-CHECK)
 # ==========================================================
-def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
+def jalankan_review_data(
+    df_asli, 
+    df_ref=None, 
+    nama_file="",
+    set_ssr_id_penjangkauan=None, 
+    set_nik_reaktif=None, 
+    set_ssr_id_reaktif=None, 
+    set_prep_valid=None
+):
+    # Inisialisasi fallback pengaman Cross-Check Variables
+    if set_ssr_id_penjangkauan is None: set_ssr_id_penjangkauan = set()
+    if set_nik_reaktif is None: set_nik_reaktif = set()
+    if set_ssr_id_reaktif is None: set_ssr_id_reaktif = set()
+    if set_prep_valid is None: set_prep_valid = set()
+        
     list_kesalahan = []
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
     
@@ -482,7 +507,6 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         for i in range(len(main_headers)):
             if main_headers[i] and 'UNNAMED' not in main_headers[i].upper():
                 current_main = main_headers[i]
-            
             sub = sub_headers[i] if (sub_headers[i] and str(sub_headers[i]).lower() != 'nan') else ""
             
             if current_main and sub and 'UNNAMED' not in sub.upper():
@@ -501,7 +525,9 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
         if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values).lower() or 'laki-laki' in str(df.iloc[0].values).lower()):
             start_row_idx = 1
             
-    is_file_rujukan = any('RUJUKAN' in str(c).upper() for c in df.columns) or any('FASYANKES' in str(c).upper() for c in df.columns)
+    # 🔥 DETEKSI CERDAS: Apakah ini file rujukan atau penjangkauan?
+    col_upper_all = [str(c).upper() for c in df.columns]
+    is_file_rujukan = any(k in col_upper_all for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
     
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
@@ -516,13 +542,14 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     # Pengaman Database terintegrasi (Membaca riwayat konfirmasi & revisi terdahulu)
     try:
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
-    except Exception as e:
+    except Exception:
         dict_revisi, dict_justifikasi = {}, {}
 
     ref_ssr_id_to_nik, ref_nik_ssr_to_id = {}, {}
     dict_pernah_cbs, dict_pernah_prep_rujukan = {}, {}
-    
-    if is_file_rujukan and df_ref is not None and not df_ref.empty:
+
+    # PENYUSUNAN DICTIONARY REFERENSI HISTORIS (Jika df_ref diupload)
+    if not is_file_rujukan and df_ref is not None and not df_ref.empty:
         df_ref_cp = df_ref.copy()
         df_ref_cp.columns = [str(c).strip() for c in df_ref_cp.columns]
         
@@ -560,63 +587,35 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     dict_ssr_id_counts = df.iloc[start_row_idx:]['ssr_id_key'].value_counts().to_dict()
     
     def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
-    
     def periksa_rujukan(x): 
         s = str(x).replace("'", "").replace(" ", "").replace(".0", "")
         if '.' in s and ',' not in s: 
             s = s.replace('.', ',')
         return '2' in s.split(',')
 
+    # PRE-KALKULASI KHUSUS RUJUKAN (Apakah ID rujuk VCT > 1x)
+    rujukan_vct_per_klien = {}
+    if is_file_rujukan:
+        col_ruj_temp = next((c for c in df.columns if "RUJUKAN" in str(c).upper()), None)
+        if col_ruj_temp:
+            for _, r in df.iloc[start_row_idx:].iterrows():
+                k_ssr = str(r.get('Lembaga SSR', '')).strip().upper()
+                k_id = str(r.get('ID Klien', '')).replace("'", "").strip()
+                if cek_kode(r.get(col_ruj_temp), '2'):
+                    rujukan_vct_per_klien[f"{k_ssr}_{k_id}"] = True
+
     # ==========================================================
-    # DETEKSI KOLOM DINAMIS (DIOPTIMALKAN & DISEMPURNAKAN)
+    # DETEKSI KOLOM DINAMIS
     # ==========================================================
-    col_info = ""
-    for c in df.columns:
-        if "INFORMASI" in str(c).upper() and "DIBERIKAN" in str(c).upper():
-            col_info = c
-            break
-            
-    col_kegiatan = ""
-    for c in df.columns:
-        if "JENIS KEGIATAN" in str(c).upper():
-            col_kegiatan = c
-            break
-
-    col_kontak = ""
-    for c in df.columns:
-        if "JENIS KONTAK" in str(c).upper() or "JNS KONTAK" in str(c).upper():
-            col_kontak = c
-            break
-
-    col_lokasi = ""
-    for c in df.columns:
-        if "LOKASI" in str(c).upper():
-            col_lokasi = c
-            break
-
-    col_ruj = ""
-    for c in df.columns:
-        if "RUJUKAN" in str(c).upper():
-            col_ruj = c
-            break
-            
-    col_tanggal = "Tanggal"
-    for c in df.columns:
-        if "TANGGAL" in str(c).upper():
-            col_tanggal = c
-            break
-
-    col_tipe_sasaran = "Tipe Sasaran"
-    for c in df.columns:
-        if "TIPE SASARAN" in str(c).upper() or "TIPE KLIEN" in str(c).upper():
-            col_tipe_sasaran = c
-            break
-
-    col_vc1 = ""
-    for c in df.columns:
-        if "VIRTUAL" in str(c).upper() or "VC1" in str(c).upper() or "TATAP MUKA" in str(c).upper():
-            col_vc1 = c
-            break
+    col_info = next((c for c in df.columns if "INFORMASI" in str(c).upper() and "DIBERIKAN" in str(c).upper()), "")
+    col_kegiatan = next((c for c in df.columns if "JENIS KEGIATAN" in str(c).upper()), "")
+    col_kontak = next((c for c in df.columns if "JENIS KONTAK" in str(c).upper() or "JNS KONTAK" in str(c).upper()), "")
+    col_lokasi = next((c for c in df.columns if "LOKASI" in str(c).upper()), "")
+    col_ruj = next((c for c in df.columns if "RUJUKAN" in str(c).upper()), "")
+    col_tanggal = next((c for c in df.columns if "TANGGAL" in str(c).upper()), "Tanggal")
+    col_tipe_sasaran = next((c for c in df.columns if "TIPE SASARAN" in str(c).upper() or "TIPE KLIEN" in str(c).upper()), "Tipe Sasaran")
+    col_vc1 = next((c for c in df.columns if "VIRTUAL" in str(c).upper() or "VC1" in str(c).upper() or "TATAP MUKA" in str(c).upper()), "")
+    col_nama_layanan = next((c for c in df.columns if "NAMA LAYANAN" in str(c).upper()), "")
     
     if col_info and col_kegiatan:
         df['is_info_hiv'] = df[col_info].apply(periksa_hiv) | df[col_kegiatan].apply(periksa_hiv)
@@ -652,10 +651,14 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
     df['kunci_klien_ref_log'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
 
-    aturan_kustom = st.session_state.get('aturan_kustom', [])
-    SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_BAWAAN + aturan_kustom
+    # PILIH ATURAN VALIDASI BERDASARKAN JENIS FILE
+    if is_file_rujukan:
+        SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_RUJUKAN
+    else:
+        aturan_kustom = st.session_state.get('aturan_kustom', [])
+        SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_BAWAAN + aturan_kustom
 
-    # LOOP BARIS DATA
+    # LOOP BARIS DATA UNTUK EVALUASI
     for idx in range(start_row_idx, len(df)):
         row = df.iloc[idx]
         
@@ -699,7 +702,18 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
 
         pernah_dapat_info_hiv = dict_pernah_hiv.get(kunci_klien_ref, False) if id_clean else False
         pernah_dapat_rujuk_tes = dict_pernah_rujuk.get(kunci_klien_ref, False) if id_clean else False
+        
+        # Validasi Database Khusus Rujukan (Is Reaktif & Validasi PrEP)
+        is_reaktif_db = False
+        if nik_clean and nik_clean.lower() not in ['', 'nan', 'none'] and nik_clean in set_nik_reaktif:
+            is_reaktif_db = True
+        elif kunci_klien_ref in set_ssr_id_reaktif:
+            is_reaktif_db = True
+            
+        layanan_clean = str(row.get(col_nama_layanan, '')).strip().lower() if col_nama_layanan else ""
+        is_layanan_prep_db = True if not layanan_clean else f"{v_ssr.lower()}_{layanan_clean}" in set_prep_valid
 
+        # KONTEKS DATA (Mencakup variabel untuk kedua jenis file)
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
@@ -712,7 +726,14 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             'pernah_cbs_di_rujukan': dict_pernah_cbs.get(kunci_klien_ref, False),
             'pernah_prep_di_rujukan': dict_pernah_prep_rujukan.get(kunci_klien_ref, False),
             'total_log_keseluruhan_klien': dict_total_log_per_klien.get(kunci_klien_ref, 0.0),
-            'pattern_medsos': pattern_medsos_dinamis
+            'pattern_medsos': pattern_medsos_dinamis,
+            
+            # --- PARAMETER CROSS CHECK RUJUKAN ---
+            'set_ssr_id_penjangkauan': set_ssr_id_penjangkauan,
+            'is_reaktif_sebelumnya': is_reaktif_db,
+            'rujukan_vct_per_klien': rujukan_vct_per_klien,
+            'id_counts_ruj': dict_ssr_id_counts,
+            'is_layanan_prep_valid': is_layanan_prep_db
         }
 
         # LOOP ATURAN VALIDASI
@@ -720,19 +741,16 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
             nama_ind = rule["nama"]
             try:
                 if rule["periksa"](context_data):
-                    # Kunci unik pencocokan database: SSR + TANGGAL + ID + INDIKATOR
+                    # Kunci unik pencocokan database
                     key_db = f"{v_ssr}_{v_tanggal}_{id_clean}_{nama_ind}"
                     
                     status_validasi = "-"
                     checked_state = False
                     justif_val = dict_justifikasi.get(key_db, "")
                     
-                    # 🛠️ INTEGRASI PENYEMPURNAAN ALUR NOTIFIKASI 🛠️
-                    # Kondisi 1: Jika data terdeteksi kembali DAN sudah pernah diisi justifikasinya di database konfirmasi
                     if key_db in dict_justifikasi:
                         status_validasi = f"⚠️ Terdeteksi Kembali (Riwayat Justifikasi: {justif_val})"
                         
-                    # Kondisi 2: Jika sistem mendeteksi ini sebagai data berulang yang belum tuntas direvisi
                     if key_db in dict_revisi:
                         status_validasi = "kesalahan pada ID yang berulang (belum dilakukan revisi)"
                         checked_state = True
@@ -747,10 +765,10 @@ def jalankan_review_data(df_asli, df_ref=None, nama_file=""):
                         "NIK": nik_clean, 
                         "Tipe Sasaran": v_tipe_sasaran,
                         "INDIKATOR KESALAHAN DATA": nama_ind,
-                        "validasi hasil review": status_validasi, # Kolom notifikasi dinamis
+                        "validasi hasil review": status_validasi, 
                         "Justifikasi": justif_val
                     })
-            except Exception as e: 
+            except Exception: 
                 pass
 
     return pd.DataFrame(list_kesalahan)
@@ -766,9 +784,51 @@ if tombol_proses:
         with st.spinner("Sedang memproses validasi data & sinkronisasi database..."):
             df_ref = None
             if file_referensi:
-                try: df_ref = pd.read_excel(file_referensi)
-                except Exception: pass
+                try: 
+                    df_ref = pd.read_excel(file_referensi)
+                except Exception: 
+                    pass
             
+            # -----------------------------------------------------------------
+            # 🔥 LANGKAH UTAMA: PRE-PROCESSING & KUMPULKAN PARAMETER CROSS-CHECK
+            # -----------------------------------------------------------------
+            
+            # 1. PISAHKAN DAN BACA SEMUA FILE UNTUK PILAH PENJANGKAUAN VS RUJUKAN
+            df_all_penjangkauan = pd.DataFrame()
+            df_all_rujukan = pd.DataFrame()
+            
+            for f in files_review:
+                try:
+                    temp_df = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
+                    col_upper = [str(c).upper() for c in temp_df.columns]
+                    if any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS']):
+                        df_all_rujukan = pd.concat([df_all_rujukan, temp_df], ignore_index=True)
+                    else:
+                        df_all_penjangkauan = pd.concat([df_all_penjangkauan, temp_df], ignore_index=True)
+                except Exception:
+                    pass
+
+            # 2. EKSTRAKSI SET CROSS-CHECK PENJANGKAUAN
+            set_penjangkauan = set()
+            if not df_all_penjangkauan.empty:
+                for _, row in df_all_penjangkauan.iterrows():
+                    ssr = str(row.get('Lembaga SSR', '')).strip().upper()
+                    idk = str(row.get('ID Klien', '')).replace("'", "").strip()
+                    if ssr and idk: 
+                        set_penjangkauan.add(f"{ssr}_{idk}")
+            
+            # 3. TARIK DATASET PRASYARAT DARI DATABASE NEON
+            set_nik_rkt, set_ssr_id_rkt = set(), set()
+            set_prep_vld = set()
+            
+            try:
+                from database import ambil_set_reaktif_sebelumnya, ambil_set_layanan_prep_valid
+                set_nik_rkt, set_ssr_id_rkt = ambil_set_reaktif_sebelumnya()
+                set_prep_vld = ambil_set_layanan_prep_valid()
+            except Exception as e:
+                st.warning(f"⚠️ Catatan: Gagal menarik data riwayat reaktif/PrEP dari DB ({str(e)}). Menggunakan set kosong.")
+
+            # 4. JALANKAN VALIDASI SATU PER SATU DENGAN PARAMETER LENGKAP
             all_errs, total_records = [], 0
             detected_ssrs = set()
 
@@ -776,11 +836,21 @@ if tombol_proses:
                 try:
                     df_target = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     total_records += len(df_target)
-                    df_res = jalankan_review_data(df_target, df_ref, nama_file=f.name)
+                    
+                    # Panggil fungsi review data dengan parameter ekstra untuk cross-check lintas tabel/database
+                    df_res = jalankan_review_data(
+                        df_target, df_ref, nama_file=f.name,
+                        set_ssr_id_penjangkauan=set_penjangkauan,
+                        set_nik_reaktif=set_nik_rkt,
+                        set_ssr_id_reaktif=set_ssr_id_rkt,
+                        set_prep_valid=set_prep_vld
+                    )
+                    
                     if not df_res.empty:
                         all_errs.append(df_res)
                         detected_ssrs.update(df_res['Lembaga SSR'].unique())
-                except Exception: pass
+                except Exception: 
+                    pass
 
             st.session_state['total_entri'] = total_records
 
@@ -988,7 +1058,7 @@ if tombol_proses:
 # ==========================================================
 
 # ----------------------------------------------------------
-# MENU 1: DASHBOARD REVIEW DATA (VERSI REVISI AKURASI BARIS)
+# MENU 1: DASHBOARD REVIEW DATA (VERSI REVISI AKURASI BARIS MULTI-FILE)
 # ----------------------------------------------------------
 if menu_pilihan == "🎯 Dashboard Review Data":
     
@@ -997,41 +1067,81 @@ if menu_pilihan == "🎯 Dashboard Review Data":
     
     if st.session_state.get('proses_selesai', False) or (df_historis is not None and not df_historis.empty):
         
-        tot_data = st.session_state.get('total_entri', 0)
-       
         # ==========================================================
-        # 🛠️ PERBAIKAN UTAMA: Hitung baris fisik secara cerdas
+        # 🔥 INTEGRASI BARU: KARTU SKOR GANDA (PENJANGKAUAN & RUJUKAN)
         # ==========================================================
-        if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
-            # Hitung dari data yang baru saja divalidasi (Live)
-            df_baris_unik = st.session_state['df_tabel_bawah'].drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien"])
-            tot_err = len(df_baris_unik)
-        elif df_historis is not None and not df_historis.empty:
-            # Hitung dari total data rekap agregasi database (Jika aplikasi baru di-refresh)
-            tot_err = int(df_historis['Jumlah per indikator'].sum()) if 'Jumlah per indikator' in df_historis.columns else 0
-        else:
-            tot_err = 0
-            
-        akurasi = 100.0 if tot_data == 0 else max(0, 100 - (tot_err / tot_data * 100))
-        akurasi_teks = f"{akurasi:.1f}%" if tot_data > 0 else "Data Historis DB"
+        # Ambil total data awal dari session state
+        tot_data_penj = st.session_state.get('total_entri_penjangkauan', 0)
+        tot_data_ruj = st.session_state.get('total_entri_rujukan', 0)
         
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        tot_err_penj = 0
+        tot_err_ruj = 0
+        
+        # Hitung baris temuan secara dinamis jika data hasil review tersedia
+        if st.session_state.get('df_tabel_bawah') is not None and not st.session_state['df_tabel_bawah'].empty:
+            df_semua_error = st.session_state['df_tabel_bawah'].copy()
+            
+            # 🛡️ PROTEKSI KEYERROR: Sinkronisasi nama kolom seandainya sudah di-rename sebelumnya
+            if 'Indikator Kesalahan Data' in df_semua_error.columns and 'INDIKATOR KESALAHAN DATA' not in df_semua_error.columns:
+                df_semua_error = df_semua_error.rename(columns={'Indikator Kesalahan Data': 'INDIKATOR KESALAHAN DATA'})
+            
+            # Memisahkan error berdasarkan jenis file (Bisa dicek dari aturan mana yang terpicu)
+            # Menggunakan try-except sebagai fallback jika ATURAN_VALIDASI_RUJUKAN belum di-declare secara global
+            try:
+                ind_rujukan = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
+            except NameError:
+                ind_rujukan = [] # Fallback aman jika list aturan rujukan tidak terbaca
+                
+            mask_rujukan = df_semua_error['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)
+            
+            # Eliminasi duplikasi baris fisik agar akurasi dihitung per entri data (bukan per jenis error)
+            df_err_penj_unik = df_semua_error[~mask_rujukan].drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien"])
+            df_err_ruj_unik = df_semua_error[mask_rujukan].drop_duplicates(subset=["Lembaga SSR", "Tanggal", "ID Klien"])
+            
+            tot_err_penj = len(df_err_penj_unik)
+            tot_err_ruj = len(df_err_ruj_unik)
 
+        # Perhitungan Akurasi masing-masing entri
+        akurasi_penj = 100.0 if tot_data_penj == 0 else max(0, 100 - (tot_err_penj / tot_data_penj * 100))
+        akurasi_ruj = 100.0 if tot_data_ruj == 0 else max(0, 100 - (tot_err_ruj / tot_data_ruj * 100))
+        
+        teks_akurasi_penj = f"{akurasi_penj:.1f}%" if tot_data_penj > 0 else "N/A"
+        teks_akurasi_ruj = f"{akurasi_ruj:.1f}%" if tot_data_ruj > 0 else "N/A"
+
+        # --- RENDER UI KARTU SKOR MENGGUNAKAN GLASSMORPHISM ---
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        
         tanggal_hari_ini = datetime.now().strftime('%d %B %Y')
         st.markdown(f"""
             <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
-                📅 <b>Executive Review</b> | Tanggal: {tanggal_hari_ini}
+                📅 <b>Executive Review Dashboard</b> | Tanggal: {tanggal_hari_ini}
             </p>
         """, unsafe_allow_html=True)
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric(label="Total Data Diproses", value=f"{tot_data:,}")
-        with col2:
-            st.metric(label="Total Baris Temuan", value=f"{tot_err:,}", delta="Data Perlu Perhatian", delta_color="inverse")
-        with col3:
-            st.metric(label="Tingkat Akurasi", value=akurasi_teks, delta="Berdasarkan Validasi")
-
+        # Seksi 1: Penjangkauan
+        st.markdown("<b style='color: #38bdf8; font-size: 1.05rem;'>🎯 Kinerja Data Penjangkauan</b>", unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        with c1: 
+            st.metric(label="Total Data Diproses", value=f"{tot_data_penj:,}")
+        with c2: 
+            st.metric(label="Total Baris Temuan", value=f"{tot_err_penj:,}", delta="Perlu Perhatian", delta_color="inverse")
+        with c3: 
+            st.metric(label="Tingkat Akurasi", value=teks_akurasi_penj, delta="Akurasi Penjangkauan")
+        
+        st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
+        
+        # Seksi 2: Rujukan
+        st.markdown("<b style='color: #10B981; font-size: 1.05rem;'>🔗 Kinerja Data Rujukan</b>", unsafe_allow_html=True)
+        c4, c5, c6 = st.columns(3)
+        with c4: 
+            st.metric(label="Total Data Diproses", value=f"{tot_data_ruj:,}")
+        with c5: 
+            st.metric(label="Total Baris Temuan", value=f"{tot_err_ruj:,}", delta="Perlu Perhatian", delta_color="inverse")
+        with c6: 
+            st.metric(label="Tingkat Akurasi", value=teks_akurasi_ruj, delta="Akurasi Rujukan")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         # =========================================================================
         # KUSTOMISASI UKURAN HURUF TAB (Agar Seimbang dengan Sub-Tabel)
         # =========================================================================
