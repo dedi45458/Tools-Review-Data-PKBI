@@ -122,18 +122,47 @@ if 'df_penjangkauan' not in st.session_state or st.session_state['df_penjangkaua
         st.session_state['ts_terakhir_penjangkauan'] = datetime.now()
 
 # --- 2. REKAP HASIL REVIEW DATA RUJUKAN SSR (Tabel 2) ---
-if 'df_rujukan' not in st.session_state or st.session_state['df_rujukan'] is None:
+# Tambahkan pengecekan 'proses_selesai' agar otomatis mengambil data baru setelah klik tombol validasi
+pemicu_baca_ulang = st.session_state.get('proses_selesai', False)
+
+if ('df_rujukan' not in st.session_state 
+    or st.session_state['df_rujukan'] is None 
+    or pemicu_baca_ulang):
+    
     try:
         df_rj, ts_rj = ambil_agregasi_rujukan_terakhir()
         if df_rj is not None and not df_rj.empty:
             st.session_state['df_rujukan'] = df_rj
             st.session_state['ts_terakhir_rujukan'] = ts_rj
         else:
+            # Jika benar-benar kosong dari DB, set kosongan agar tidak error
             st.session_state['df_rujukan'] = pd.DataFrame()
             st.session_state['ts_terakhir_rujukan'] = datetime.now()
     except Exception as e:
         st.session_state['df_rujukan'] = pd.DataFrame()
         st.session_state['ts_terakhir_rujukan'] = datetime.now()
+
+# 📊 PROSES RENDER TABEL DI UI STREAMLIT
+st.markdown("### 📋 Rekap Hasil Review Rujukan SSR")
+
+if not st.session_state['df_rujukan'].empty:
+    # Menampilkan informasi timestamp data terakhir yang ditarik
+    ts_format = st.session_state['ts_terakhir_rujukan']
+    if hasattr(ts_format, 'strftime'):
+        ts_teks = ts_format.strftime('%d/%m/%Y %H:%M:%S')
+    else:
+        ts_teks = str(ts_format)
+        
+    st.caption(f"✨ Menampilkan data batch terakhir (Koneksi Neon Aktif | Sinkronisasi: {ts_teks})")
+    
+    # Render komponen dataframe interaktif Streamlit
+    st.dataframe(
+        st.session_state['df_rujukan'],
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.info("💡 Belum ada data agregasi rujukan yang tersedia atau berhasil dimuat untuk batch ini.")
 
 # --- 3. HASIL REVIEW VALIDASI DATA GABUNGAN UTAMA (Tabel 3) ---
 if 'df_review_utama' not in st.session_state or st.session_state['df_review_utama'] is None:
