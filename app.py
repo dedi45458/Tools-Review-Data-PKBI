@@ -896,32 +896,47 @@ if tombol_proses:
                         all_errs.append(df_res)
                 except Exception: pass
 
-            # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Simpan total entri ke memory Streamlit
-            st.session_state['total_entri'] = total_records
-            st.session_state['total_entri_penjangkauan'] = total_proses_pjj
-            st.session_state['total_entri_rujukan'] = total_proses_rjk
-
-            if all_errs:
-                df_bawah = pd.concat(all_errs, ignore_index=True)
+                # =========================================================================
+                # BAGIAN EKSEKUSI UTAMA (Taruh ini di akhir fungsi pemrosesan/validasi data)
+                # =========================================================================
                 
-                # SIMPAN LOG AKURASI
-                df_pjj_raw = df_bawah[df_bawah['Kategori Data'] == 'Penjangkauan'] if not df_bawah.empty else pd.DataFrame()
-                df_rjk_raw = df_bawah[df_bawah['Kategori Data'] == 'Rujukan'] if not df_bawah.empty else pd.DataFrame()
+                # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Simpan total entri ke memory Streamlit
+                st.session_state['total_entri'] = total_records
+                st.session_state['total_entri_penjangkauan'] = total_proses_pjj
+                st.session_state['total_entri_rujukan'] = total_proses_rjk
                 
-                # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Simpan tabel temuan spesifik ke memory Streamlit
+                # Inisialisasi DataFrame kosong sebagai fallback default
+                df_pjj_raw = pd.DataFrame()
+                df_rjk_raw = pd.DataFrame()
+                
+                if all_errs:
+                    df_bawah = pd.concat(all_errs, ignore_index=True)
+                    
+                    # PILAH DATA BERDASARKAN KATEGORI JIKA ADA ERROR
+                    df_pjj_raw = df_bawah[df_bawah['Kategori Data'] == 'Penjangkauan'] if not df_bawah.empty else pd.DataFrame()
+                    df_rjk_raw = df_bawah[df_bawah['Kategori Data'] == 'Rujukan'] if not df_bawah.empty else pd.DataFrame()
+                
+                # 🎯 INJEKSI UNTUK KARTU SKOR GANDA: Tetap simpan ke session state (meski kosong)
                 st.session_state['df_err_penj'] = df_pjj_raw
                 st.session_state['df_err_ruj'] = df_rjk_raw
                 
+                # HITUNG TOTAL TEMUAN SECARA AMAN
                 total_temuan_pjj = len(df_pjj_raw)
                 total_temuan_rjk = len(df_rjk_raw)
+                
+                # KALKULASI AKURASI (Di luar blok 'if all_errs' agar akurasi 100% tetap terhitung!)
                 akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
                 akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
                 
+                # 🔥 SINKRONISASI KE DATABASE NEON (Sekarang berjalan mutlak jika ada data yang diproses)
                 try:
                     from database import simpan_metrik_akurasi_db
-                    if total_proses_pjj > 0: simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
-                    if total_proses_rjk > 0: simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
-                except Exception: pass
+                    if total_proses_pjj > 0: 
+                        simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
+                    if total_proses_rjk > 0: 
+                        simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
+                except Exception: 
+                    pass
 
                 # =========================================================================
                 # 🔥 PERBAIKAN TOTAL: STANDARISASI NAMA KOLOM & CLEANSING DATA (HURUF KAPITAL)
