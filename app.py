@@ -1088,7 +1088,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         tot_err_ruj = 0
         
         # Hitung baris temuan secara dinamis jika data hasil review tersedia
-        # 🔥 PERBAIKAN 1: Tambahkan fallback ke 'df_review_utama' agar sinkron dengan seksi render tabel
         df_semua_error = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama'))
         
         if df_semua_error is not None and not df_semua_error.empty:
@@ -1110,26 +1109,21 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             if rename_dict_awal:
                 df_semua_error = df_semua_error.rename(columns=rename_dict_awal)
             
-            # Menggunakan try-except sebagai fallback jika ATURAN_VALIDASI_RUJUKAN belum di-declare secara global
             try:
                 ind_rujukan = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
             except NameError:
-                ind_rujukan = [] # Fallback aman jika list aturan rujukan tidak terbaca
+                ind_rujukan = [] 
                 
-            # Paksa semua nama kolom menjadi HURUF KAPITAL tanpa spasi liar untuk query internal berikutnya
             df_semua_error.columns = [str(col).strip().upper() for col in df_semua_error.columns]
 
-            # Baris mask_rujukan aman dari KeyError
             mask_rujukan = df_semua_error['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)
             
-            # Eliminasi duplikasi baris fisik agar akurasi dihitung per entri data (bukan per jenis error)
             df_err_penj_unik = df_semua_error[~mask_rujukan].drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KLIEN"])
             df_err_ruj_unik = df_semua_error[mask_rujukan].drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KLIEN"])
             
             tot_err_penj = len(df_err_penj_unik)
             tot_err_ruj = len(df_err_ruj_unik)
             
-            # 🔥 PERBAIKAN 2: Pastikan session state 'df_tabel_bawah' terisi kembali agar dibaca oleh komponen tabel editor
             if 'df_tabel_bawah' not in st.session_state or st.session_state['df_tabel_bawah'] is None:
                 st.session_state['df_tabel_bawah'] = df_semua_error
 
@@ -1175,18 +1169,15 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         st.markdown('</div>', unsafe_allow_html=True)
         
         # =========================================================================
-        # KUSTOMISASI UKURAN HURUF TAB (Agar Seimbang dengan Sub-Tabel)
+        # KUSTOMISASI UKURAN HURUF TAB
         # =========================================================================
         st.markdown("""
             <style>
-            /* Menargetkan teks paragraf di dalam komponen Tab Streamlit */
             .stTabs [data-baseweb="tab"] p {
-                font-size: 1.5rem !important;    /* Mengubah ukuran huruf (Default: ~0.875rem) */
-                font-weight: 600 !important;      /* Membuat teks menjadi lebih tebal/tegas */
-                color: #ffffff !important;        /* Memastikan warna teks tetap kontras */
+                font-size: 1.5rem !important;    
+                font-weight: 600 !important;      
+                color: #ffffff !important;        
             }
-            
-            /* Otomatis memberikan sedikit ruang vertikal agar tidak terlalu rapat dengan konten bawah */
             .stTabs [data-baseweb="tab-list"] {
                 gap: 8px;
                 margin-bottom: 10px;
@@ -1200,45 +1191,46 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         tab1, tab2 = st.tabs(["📋 Hasil Review Data SR", "📈 Analisis Tren Temuan"])
 
         with tab1:
-            # Ambil list indikator rujukan terlebih dahulu untuk keperluan filter di kedua seksi
             try:
                 ind_rujukan = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
             except NameError:
-                ind_rujukan = [] # Fallback aman jika variabel belum terdefinisi
+                ind_rujukan = []
                 
             df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame())
-            tanggal_terakhir = st.session_state.get('tanggal_terakhir_review', None)
-        
+            
             # =========================================================================
-            # 🟢 SEKSI 1: RENDER HASIL REVIEW DATA PENJANGKAUAN (SUDAH DI-FILTER)
+            # 🟢 SEKSI 1: RENDER HASIL REVIEW DATA PENJANGKAUAN
             # =========================================================================
             st.markdown("#### 📋 Rekap Hasil Review Data Penjangkauan SSR")
-                        
-            if tanggal_terakhir:
-                if hasattr(tanggal_terakhir, 'strftime'):
-                    tgl_format = tanggal_terakhir.strftime("%d-%m-%Y pukul %H:%M WIB")
-                else:
-                    tgl_format = str(tanggal_terakhir)
-                    
-                # 🔥 PERBAIKAN: Mengubah kalimat text & skema warna menjadi Ungu Terintegrasi (Sesuai Gambar 3)
-                badge_html = f"""
-                <div style="
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    background-color: rgba(124, 58, 237, 0.12);
-                    color: #7c3aed;
-                    padding: 6px 14px;
-                    border-radius: 20px;
-                    border: 1px solid rgba(124, 58, 237, 0.25);
-                    font-size: 0.88rem;
-                    font-weight: 500;
-                    margin-bottom: 18px;
-                ">
-                    🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format}</span>
-                </div>
-                """
-                st.markdown(badge_html, unsafe_allow_html=True)
+            
+            # 🔄 FIX VARIABEL TANGGAL PENJANGKAUAN (SINKRONISASI & FALLBACK)
+            tanggal_terakhir = st.session_state.get('tanggal_terakhir_review', None)
+            if not tanggal_terakhir:
+                # Fallback ke tanggal hari ini jika session state kosong agar teks badge tidak hilang
+                tgl_format = datetime.now().strftime("%d-%m-%Y pukul %H:%M WIB")
+            elif hasattr(tanggal_terakhir, 'strftime'):
+                tgl_format = tanggal_terakhir.strftime("%d-%m-%Y pukul %H:%M WIB")
+            else:
+                tgl_format = str(tanggal_terakhir)
+                                
+            badge_html = f"""
+            <div style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background-color: rgba(124, 58, 237, 0.12);
+                color: #7c3aed;
+                padding: 6px 14px;
+                border-radius: 20px;
+                border: 1px solid rgba(124, 58, 237, 0.25);
+                font-size: 0.88rem;
+                font-weight: 500;
+                margin-bottom: 18px;
+            >
+                🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format}</span>
+            </div>
+            """
+            st.markdown(badge_html, unsafe_allow_html=True)
                 
             if df_atas_view is not None and not df_atas_view.empty:
                 df_render = df_atas_view.copy()
@@ -1246,7 +1238,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 if df_render.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render.columns:
                     df_render = df_render.reset_index()
                     
-                # 🔥 PERBAIKAN LOGIKA: Saring agar HANYA menampilkan indikator Penjangkauan (Bukan Rujukan)
                 df_render = df_render[~df_render['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)].copy()
                 
                 if not df_render.empty:
@@ -1260,7 +1251,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
                     df_final = df_render[[c for c in kolom_final if c in df_render.columns]].copy()
                     
-                    # Recalculate % dan Total jika diperlukan agar akurat per kategori
                     total_error_penjangkauan = df_final['Jumlah per indikator'].sum()
                     if total_error_penjangkauan > 0:
                         df_final['%'] = (df_final['Jumlah per indikator'] / total_error_penjangkauan) * 100
@@ -1286,48 +1276,50 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             
             
             # =========================================================================
-            # 🔵 SEKSI 2: RENDER HASIL REVIEW DATA RUJUKAN (SUDAH BENAR & SINKRON NEON)
+            # 🔵 SEKSI 2: RENDER HASIL REVIEW DATA RUJUKAN
             # =========================================================================
             st.markdown("<hr style='border: 1px solid #e2e8f0; margin: 40px 0;'>", unsafe_allow_html=True)
             st.markdown("#### 📋 Rekap Hasil Review Data Rujukan SSR")
                         
-            # 🔥 SINKRONISASI OTOMATIS: Ambil data agregasi rujukan terbaru langsung dari database jika validasi baru selesai
+            # 🔥 SINKRONISASI OTOMATIS KE DATABASE NEON
             if st.session_state.get('proses_selesai', False) or 'df_rujukan' not in st.session_state:
                 try:
                     df_rj, ts_rj = ambil_agregasi_rujukan_terakhir()
                     if df_rj is not None and not df_rj.empty:
                         st.session_state['df_rujukan'] = df_rj
                         if ts_rj:
-                            # Jika ts_rj berupa datetime objek, ubah jadi string tanggal saja untuk tgl_format
-                            st.session_state['tanggal_terakhir_rujukan_str'] = ts_rj.strftime('%d %B %Y') if hasattr(ts_rj, 'strftime') else str(ts_rj)
+                            st.session_state['tanggal_terakhir_rujukan_str'] = ts_rj.strftime('%d-%m-%Y pukul %H:%M WIB') if hasattr(ts_rj, 'strftime') else str(ts_rj)
                 except Exception as e:
                     pass
             
-            # Menggunakan tanggal dinamis hasil tarikan database terakhir
-            tgl_badge = st.session_state.get('tanggal_terakhir_rujukan_str', tanggal_terakhir if 'tanggal_terakhir' in locals() else "-")
+            # 🔄 FIX VARIABEL TANGGAL RUJUKAN (SINKRONISASI & FALLBACK SAMA DENGAN PENJANGKAUAN)
+            tgl_badge = st.session_state.get('tanggal_terakhir_rujukan_str', None)
+            if not tgl_badge:
+                tgl_badge = st.session_state.get('tanggal_terakhir_review', None)
+                if tgl_badge:
+                    tgl_badge = tgl_badge.strftime('%d-%m-%Y pukul %H:%M WIB') if hasattr(tgl_badge, 'strftime') else str(tgl_badge)
+                else:
+                    tgl_badge = datetime.now().strftime("%d-%m-%Y pukul %H:%M WIB")
                         
-            if tgl_badge:
-                # 🔥 PERBAIKAN: Mengubah kalimat text & skema warna menjadi Ungu Terintegrasi (Sesuai Gambar 3)
-                badge_rujukan_html = f"""
-                <div style="
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    background-color: rgba(124, 58, 237, 0.12);
-                    color: #7c3aed;
-                    padding: 6px 14px;
-                    border-radius: 20px;
-                    border: 1px solid rgba(124, 58, 237, 0.25);
-                    font-size: 0.88rem;
-                    font-weight: 500;
-                    margin-bottom: 18px;
-                ">
-                    🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_badge}</span>
-                </div>
-                """
-                st.markdown(badge_rujukan_html, unsafe_allow_html=True)
+            badge_rujukan_html = f"""
+            <div style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background-color: rgba(124, 58, 237, 0.12);
+                color: #7c3aed;
+                padding: 6px 14px;
+                border-radius: 20px;
+                border: 1px solid rgba(124, 58, 237, 0.25);
+                font-size: 0.88rem;
+                font-weight: 500;
+                margin-bottom: 18px;
+            ">
+                🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_badge}</span>
+            </div>
+            """
+            st.markdown(badge_rujukan_html, unsafe_allow_html=True)
                             
-            # Menentukan fallback data: Prioritaskan isi database (st.session_state['df_rujukan']) lalu df_atas_view
             df_sumber = st.session_state.get('df_rujukan', pd.DataFrame())
             if df_sumber.empty and df_atas_view is not None:
                 df_sumber = df_atas_view.copy()
@@ -1335,23 +1327,18 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             if df_sumber is not None and not df_sumber.empty:
                 df_render_ruj = df_sumber.copy()
                 
-                # Standarisasi nama kolom / index agar kapital
                 if df_render_ruj.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render_ruj.columns:
                     df_render_ruj = df_render_ruj.reset_index()
                 
-                # Pengaman: Jika database mengembalikan huruf kecil 'indikator_kesalahan_data', ganti nama kolomnya
                 if 'indikator_kesalahan_data' in df_render_ruj.columns:
                     df_render_ruj = df_render_ruj.rename(columns={'indikator_kesalahan_data': 'INDIKATOR KESALAHAN DATA'})
                 
-                # Filter HANYA untuk indikator rujukan
                 df_render_ruj = df_render_ruj[df_render_ruj['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)].copy()
                 
                 if not df_render_ruj.empty:
                     kolom_indikator = 'INDIKATOR KESALAHAN DATA'
                     
-                    # Cek jika kolom agregasi 'Jumlah per indikator' belum terbentuk (bawaan dari DB mentah)
                     if 'Jumlah per indikator' not in df_render_ruj.columns and 'LEMBAGA SSR' in df_render_ruj.columns:
-                        # Jika formatnya baris mentah, lakukan pivot/agregasi agar berbentuk matriks tabel atas
                         df_render_ruj = df_render_ruj.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
                         df_render_ruj['Jumlah per indikator'] = df_render_ruj.sum(axis=1)
                         df_render_ruj = df_render_ruj.reset_index()
@@ -1365,7 +1352,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     kolom_final_ruj = [kolom_indikator] + ssr_aktif_ruj + ['Jumlah per indikator', '%']
                     df_final_ruj = df_render_ruj[[c for c in kolom_final_ruj if c in df_render_ruj.columns]].copy()
                     
-                    # Recalculate % khusus kelompok rujukan agar total porsinya pas 100%
                     total_error_rujukan = df_final_ruj['Jumlah per indikator'].sum() if 'Jumlah per indikator' in df_final_ruj.columns else 0
                     if total_error_rujukan > 0:
                         df_final_ruj['%'] = (df_final_ruj['Jumlah per indikator'] / total_error_rujukan) * 100
@@ -1377,19 +1363,15 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         if col in df_display_ruj.columns:
                             df_display_ruj[col] = df_display_ruj[col].astype(str).replace({'0': '-', '0.0': '-'})
                     
-                    # =========================================================================
-                    # 🔥 PERBAIKAN: CONFIG COLUMN CONFIG UNTUK STRUKTUR DATA KAPITAL
-                    # =========================================================================
                     column_config_ruj = {
                         kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
                         "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
-                        "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")}
+                        "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
+                    }
                     
-                    # Mapping dinamis untuk setiap nama kolom SSR yang aktif (Semua otomatis kapital)
                     for col in ssr_aktif_ruj:
                         column_config_ruj[col] = st.column_config.TextColumn(str(col).upper(), width="small")
                     
-                    # Render tabel ke layar secara fisik tanpa index bawaan pandas
                     st.dataframe(df_display_ruj, use_container_width=True, column_config=column_config_ruj, hide_index=True)
                 else:
                     st.info("✅ Tidak ada temuan kesalahan untuk Data Rujukan.")
