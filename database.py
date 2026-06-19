@@ -600,45 +600,50 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
         with conn.cursor() as cur:
             tanggal_hari_ini = dt.datetime.now().date()
 
-            # 1. TABEL PENJANGKAUAN
-            # Di UI, list_tabel_1 dikirim dengan format: (ssr_name, ind_err, hitung_kesalahan)
-            # Di DB, kita butuh: (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
+            # -----------------------------------------------------------------
+            # 1. TABEL PENJANGKAUAN (Agregasi - 4 Kolom)
+            # -----------------------------------------------------------------
             if list_tabel_1:
                 list_1_lengkap = [(tanggal_hari_ini, row[0], row[1], row[2]) for row in list_tabel_1]
                 cur.executemany("""
                     INSERT INTO agregasi_hasil_review_penjangkauan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                    VALUES (%s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s);
                 """, list_1_lengkap)
 
-            # 2. TABEL RUJUKAN
+            # -----------------------------------------------------------------
+            # 2. 🔥 TABEL RUJUKAN (Agregasi - Sudah Diubah ke 4 Kolom Sesuai DDL Baru)
+            # -----------------------------------------------------------------
             if list_tabel_2:
+                # Karena dari tombol proses UI kita sudah mengirimkan tuple lengkap (4 kolom):
+                # (tanggal_skr, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
                 cur.executemany("""
-                    INSERT INTO agregasi_hasil_review_rujukan
-                    (lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan_data, validasi_hasil_review, justifikasi)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO agregasi_hasil_review_rujukan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
+                    VALUES (%s, %s, %s, %s);
                 """, list_tabel_2)
 
-            # 3. TABEL UTAMA (MASTER)
+            # -----------------------------------------------------------------
+            # 3. 🔥 TABEL UTAMA (MASTER DATA DETIL KLIEN - 12 Kolom)
+            # -----------------------------------------------------------------
             if list_tabel_3:
+                # Memperbaiki nama kolom master agar merekam data baris mentah (bukan agregasi)
                 cur.executemany("""
                     INSERT INTO hasil_review_data
-                    (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                    VALUES (%s, %s, %s, %s))
+                    (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                 """, list_tabel_3)
 
-        # Jika semua berhasil, simpan ke database
+        # Jika semua berhasil tanpa error, simpan ke database secara permanen
         conn.commit()
         return True
 
     except Exception as e:
-        # Jika ada SATU saja yang gagal, batalkan semua (rollback) agar data tidak belang
-        conn.rollback()
+        # Jika ada SATU saja yang gagal, batalkan semua (rollback) agar data tidak berantakan
+        if conn: conn.rollback()
         import streamlit as st
         st.error(f"Gagal transaksi multi-tabel: {e}")
         return False
     finally:
-        conn.close()
-
+        if conn: conn.close()
 
 def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
     """Menyimpan log metrik akurasi saat validasi berjalan."""
