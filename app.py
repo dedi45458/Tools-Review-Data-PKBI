@@ -316,7 +316,6 @@ with st.sidebar:
     if menu_pilihan == "🎯 Dashboard Review Data":
         with st.container():
             st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>📁 MANAJEMEN BERKAS</b>", unsafe_allow_html=True)
-            st.markdown("<small style='color: #888;'>Unggah berkas database.</small>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
             # --- 1. UPLOADER PINTAR (SINGLE SLOT UNTUK SEMUA DATA REFERENSI) ---
