@@ -594,3 +594,30 @@ def import_database_layanan(df):
             cursor.close()
         if conn:
             conn.close()
+
+# ==========================================================
+# FITUR PEMBACA DATA REFERENSI (BARU)
+# ==========================================================
+def ambil_data_rujukan_hiv_positif():
+    """Mengambil seluruh data referensi HIV Positif semester/tahun lalu dari database"""
+    conn = dapatkan_koneksi_neon()
+    if not conn: return pd.DataFrame()
+    try:
+        query = "SELECT lembaga_ssr, id_klien, nik, hasil_tes_hiv, nama_kota, kode_petugas, tanggal, nama_layanan FROM data_rujukan_hiv_positif"
+        return pd.read_sql(query, conn)
+    except Exception as e:
+        return pd.DataFrame()
+    finally:
+        conn.close()
+
+def ambil_database_layanan():
+    """Mengambil seluruh data referensi Layanan Fasyankes dari database"""
+    conn = dapatkan_koneksi_neon()
+    if not conn: return pd.DataFrame()
+    try:
+        query = "SELECT lembaga_ssr_iu, nama_layanan, jenis FROM database_layanan"
+        return pd.read_sql(query, conn)
+    except Exception as e:
+        return pd.DataFrame()
+    finally:
+        conn.close()
