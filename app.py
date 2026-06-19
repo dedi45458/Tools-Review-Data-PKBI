@@ -1201,7 +1201,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # =========================================================================
             # 🟢 SEKSI 1: RENDER HASIL REVIEW DATA PENJANGKAUAN
             # =========================================================================
-            st.markdown("<hr style='border: 1px solid #e2e8f0; margin: 40px 0;'>", unsafe_allow_html=True)
             st.markdown("#### 📋 Rekap Hasil Review Data Penjangkauan SSR")
             
             # 🔄 FIX VARIABEL TANGGAL PENJANGKAUAN (SINKRONISASI & FALLBACK)
@@ -1227,7 +1226,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 font-size: 0.88rem;
                 font-weight: 500;
                 margin-bottom: 18px;
-            >
+            ">
                 🔮 Total Data Review Terintegrasi (SR) terakhir tanggal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format}</span>
             </div>
             """
