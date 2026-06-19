@@ -1072,8 +1072,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             mask_rujukan = df_semua_error['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)
             
             # Eliminasi duplikasi baris fisik agar akurasi dihitung per entri data (bukan per jenis error)
-            df_err_penj_unik = df_semua_error[~mask_rujukan].drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KKLIEN"])
-            df_err_ruj_unik = df_semua_error[mask_rujukan].drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KKLIEN"])
+            df_err_penj_unik = df_semua_error[~mask_rujukan].drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KLIEN"])
+            df_err_ruj_unik = df_semua_error[mask_rujukan].drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KLIEN"])
             
             tot_err_penj = len(df_err_penj_unik)
             tot_err_ruj = len(df_err_ruj_unik)
