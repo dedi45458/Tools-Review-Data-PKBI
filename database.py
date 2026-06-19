@@ -621,3 +621,52 @@ def ambil_database_layanan():
         return pd.DataFrame()
     finally:
         conn.close()
+
+def simpan_agregasi_rujukan_db(list_data):
+    """Menyimpan data mandiri khusus untuk tabel rujukan"""
+    if not list_data:
+        return False
+    conn = dapatkan_koneksi_neon()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            query = """
+                INSERT INTO agregasi_hasil_review_rujukan 
+                (lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan_data, validasi_hasil_review, justifikasi)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            """
+            cur.executemany(query, list_data)
+            conn.commit()
+            return True
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Gagal menyimpan ke tabel agregasi rujukan: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def simpan_hasil_review_utama_db(list_data):
+    """Menyimpan data mandiri khusus untuk tabel utama gabungan UI"""
+    if not list_data:
+        return False
+    conn = dapatkan_koneksi_neon()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            query = """
+                INSERT INTO hasil_review_data 
+                (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            """
+            cur.executemany(query, list_data)
+            conn.commit()
+            return True
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Gagal menyimpan ke tabel hasil review data: {e}")
+        return False
+    finally:
+        conn.close()
