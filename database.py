@@ -388,9 +388,19 @@ def ambil_agregasi_penjangkauan_terakhir():
 
 # --- Bagian B: Tabel 2 (agregasi_hasil_review_rujukan) ---
 
-def simpan_agregasi_rujukan_db(list_data):
-    """Menyimpan data mandiri khusus untuk tabel rujukan"""
-    if not list_data: return False
+def simpan_agregasi_rujukan_db(data_input):
+    """Menyimpan data mandiri khusus untuk tabel rujukan (Mendukung DataFrame/List)"""
+    if data_input is None: return False
+    
+    # Konversi DataFrame ke List of Tuples dan tangani nilai kosong (NaN -> None)
+    if isinstance(data_input, pd.DataFrame):
+        if data_input.empty: return False
+        df_bersih = data_input.astype(object).where(pd.notnull(data_input), None)
+        list_data = [tuple(x) for x in df_bersih.to_numpy()]
+    else:
+        if not data_input: return False
+        list_data = data_input
+
     conn = dapatkan_koneksi_neon()
     if not conn: return False
     try:
@@ -408,7 +418,7 @@ def simpan_agregasi_rujukan_db(list_data):
         st.error(f"Gagal menyimpan ke tabel agregasi rujukan: {e}")
         return False
     finally:
-        conn.close()
+        if conn: conn.close()
 
 def ambil_agregasi_rujukan_terakhir():
     """🔥 BARU: Mengambil seluruh baris data rujukan dari batch upload terakhir berdasarkan MAX(created_at)"""
@@ -437,9 +447,19 @@ def ambil_agregasi_rujukan_terakhir():
 
 # --- Bagian C: Tabel 3 (hasil_review_data) ---
 
-def simpan_hasil_review_utama_db(list_data):
-    """Menyimpan data mandiri khusus untuk tabel utama gabungan UI"""
-    if not list_data: return False
+def simpan_hasil_review_utama_db(data_input):
+    """Menyimpan data mandiri khusus untuk tabel utama gabungan UI (Mendukung DataFrame/List)"""
+    if data_input is None: return False
+    
+    # Konversi DataFrame ke List of Tuples dan tangani nilai kosong (NaN -> None)
+    if isinstance(data_input, pd.DataFrame):
+        if data_input.empty: return False
+        df_bersih = data_input.astype(object).where(pd.notnull(data_input), None)
+        list_data = [tuple(x) for x in df_bersih.to_numpy()]
+    else:
+        if not data_input: return False
+        list_data = data_input
+
     conn = dapatkan_koneksi_neon()
     if not conn: return False
     try:
@@ -457,7 +477,7 @@ def simpan_hasil_review_utama_db(list_data):
         st.error(f"Gagal menyimpan ke tabel hasil review data: {e}")
         return False
     finally:
-        conn.close()
+        if conn: conn.close()
 
 def ambil_hasil_review_utama_terakhir():
     """🔥 BARU: Mengambil detail data review gabungan utama berdasarkan MAX(created_at)"""
