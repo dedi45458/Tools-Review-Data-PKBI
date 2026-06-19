@@ -337,32 +337,32 @@ with st.sidebar:
                     is_data_layanan = any("lembaga" in c or "ssr" in c for c in kolom_terdeteksi) and any("layanan" in c for c in kolom_terdeteksi)
                     
                     if is_data_layanan:
-                        st.info("🏥 **Terdeteksi:** Berkas Master Layanan Fasyankes / SSR")
-                        if st.button("🔄 Update Database Referensi Layanan", use_container_width=False, key="btn_exec_layanan"):
-                            with st.spinner("Sedang memproses database master layanan..."):
+                        st.info("🏥 **Terdeteksi:** Database Fasyankes / SSR")
+                        if st.button("🔄 Update Database Fasyankes", use_container_width=False, key="btn_exec_layanan"):
+                            with st.spinner("Sedang memproses database fasyankes..."):
                                 from database import import_database_layanan
                                 sukses, pesan = import_database_layanan(df_check)
                                 if sukses:
-                                    st.success(f"✅ {pesan}")
+                                    st.success("✅ Database Fasyankes telah diperbarui!")
                                 else:
-                                    st.error(f"❌ Gagal: {pesan}")
+                                    st.error("❌ Gagal mengupdate database fasyankes")
                     
                     # Deteksi Tipe B: Berarti ini Data HIV+ Semester Lalu
                     else:
                         st.info("📋 **Terdeteksi:** Berkas Database HIV+")
-                        if st.button("🔄 Update Database Referensi HIV", use_container_width=False, key="btn_exec_hiv"):
+                        if st.button("🔄 Update Database HIV+", use_container_width=False, key="btn_exec_hiv"):
                             with st.spinner("Sedang memproses data rujukan HIV..."):
                                 from database import import_data_HIV
                                 if import_data_HIV(df_check):
-                                    st.success("✅ Database referensi HIV diperbarui!")
+                                    st.success("✅ Database HIV+ telah diperbarui!")
                                 else:
-                                    st.error("❌ Gagal mengupdate database.")
+                                    st.error("❌ Gagal mengupdate database HIV+.")
                                     
                 except Exception as e:
                     st.error(f"⚠️ Gagal membaca struktur berkas Excel: {e}")
             
             # Pembatas vertikal pemisah antar uploader
-            st.markdown("<div style='margin-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 15px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;'></div>", unsafe_allow_html=True)
             
             # --- 2. UPLOADER RAW DATA PENJANGKAUAN ---
             st.markdown("<span style='font-weight: 500; font-size: 0.9rem;'>📂 Upload RD Penjangkauan & Rujukan</span>", unsafe_allow_html=True)
