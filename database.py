@@ -101,8 +101,8 @@ def simpan_log_ke_neon(list_data_log):
         with conn.cursor() as cur:
             query = """
                 INSERT INTO public.log_hasil_review_data 
-                (Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi)
-                VALUES (%s, %s, %s, %s, %s, %s);
+                (Kategori_Data, Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi)
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
             """
             cur.executemany(query, list_data_log)
             conn.commit()
@@ -124,7 +124,7 @@ def hitung_dan_ambil_log_db():
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             query = """
-                SELECT lembaga_ssr, tanggal, id_klien, indikator_kesalahan_data, is_revisi, justifikasi 
+                SELECT kategori_data, lembaga_ssr, tanggal, id_klien, indikator_kesalahan_data, is_revisi, justifikasi 
                 FROM public.log_hasil_review_data;
             """
             cur.execute(query)
