@@ -251,6 +251,38 @@ def buat_fungsi_validasi_kustom(target, kondisi, pembanding):
         return lambda c: str(c.get(target, '')).strip().lower() == pembanding.strip().lower()
     return lambda c: False
 
+# 🔥 REKOMENDASI: Diletakkan di sini
+def ambil_set_layanan_prep_valid():
+    """Mengambil kombinasi (Lembaga SSR, Nama Layanan) yang valid untuk PrEP dari database."""
+    conn = dapatkan_koneksi_neon()
+    set_prep_valid = set()
+    
+    if conn is None:
+        return set_prep_valid
+        
+    try:
+        with conn.cursor() as cur:
+            # Menggunakan LOWER() dan LIKE '%prep%' agar pencarian teks bersifat fleksibel
+            query = """
+                SELECT LOWER(TRIM(lembaga_ssr_iu)), LOWER(TRIM(nama_layanan))
+                FROM public.database_layanan
+                WHERE LOWER(jenis) LIKE '%prep%';
+            """
+            cur.execute(query)
+            rows = cur.fetchall()
+            
+            # Simpan ke dalam Python set berupa tuple (lembaga, nama_layanan)
+            for r in rows:
+                if r[0] and r[1]:
+                    set_prep_valid.add((r[0], r[1]))
+                    
+    except Exception as e:
+        st.error(f"Gagal memuat referensi tabel database_layanan: {e}")
+    finally:
+        conn.close()
+        
+    return set_prep_valid
+
 def hitung_dan_ambil_log_db():
     dict_revisi, dict_justifikasi = {}, {}
     conn = dapatkan_koneksi_neon()
