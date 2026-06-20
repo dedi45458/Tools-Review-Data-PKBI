@@ -231,7 +231,8 @@ st.markdown('<div class="sub-title">Sistem Validasi Kualitas Data Penjangkauan &
 # FUNGSI HELPER
 # ==========================================================
 def cek_kode(teks_kolom, kode_target):
-    if pd.isna(teks_kolom) or str(teks_kolom).strip().lower() in ['', 'nan']: return False
+    if pd.isna(teks_kolom) or str(teks_kolom).strip().lower() in ['', 'nan']: 
+        return False
     clean_str = str(teks_kolom).replace("'", "").replace(" ", "")
     mentah_list = clean_str.split(",")
     list_kode = [kode.split('.')[0] for kode in mentah_list if kode != '']
@@ -257,7 +258,7 @@ def hitung_dan_ambil_log_db():
         try:
             with conn.cursor() as cur:
                 # Ambil data langsung menggunakan query Postgres
-                cur.execute("SELECT Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi FROM log_hasil_review_data")
+                cur.execute("SELECT Kategori_Data, Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi FROM log_hasil_review_data")
                 rows = cur.fetchall()
                 for r in rows:
                     ssr, tgl, id_klien, ind, is_rev, just = r
@@ -1593,7 +1594,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     if "konfirmasi" not in str(row['Indikator Kesalahan Data']).lower():
                         df_view_gabungan.at[idx, 'Justifikasi'] = ""
             
+                # ==========================================================
                 # 7. Render Data Editor Tunggal
+                # ==========================================================
                 if df_view_gabungan.empty:
                     st.info(f"✨ Tidak ada data kesalahan yang perlu divalidasi untuk Lembaga SSR: **{pilihan_ssr}**")
                 else:
@@ -1619,7 +1622,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         },
                         disabled=[c for c in kolom_susunan_gabungan if c not in ["Pilih", "Justifikasi"]]
                     )
-            
+                    
                     # 8. Tombol Eksekusi Penyimpanan Tunggal
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_save, _ = st.columns([1, 2])
@@ -1630,7 +1633,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                 list_log_db = []
                                 indeks_baris_terpilih = []
                                 peringatan_justifikasi = False
-            
+                                
                                 # Iterasi baris hasil edit dari interface tunggal
                                 for idx, row_edit in df_hasil_edit.iterrows():
                                     ind_text = str(row_edit['Indikator Kesalahan Data'])
@@ -1646,13 +1649,14 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                     else:
                                         if text_justifikasi in ["None", "-", "nan"]:
                                             text_justifikasi = ""
-            
+                                    
                                     # Trigger simpan: jika kotak 'Pilih' dicentang ATAU justifikasi konfirmasi terisi
                                     if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi != ""):
                                         status_revisi = bool(row_edit['Pilih'])
                                         
-                                        # Susun parameter tuple sesuai kebutuhan fungsi simpan_log_ke_neon
+                                        # 🔥 PERBAIKAN: Ditambahkan row_edit.get('Kategori Data') di urutan pertama tuple
                                         list_log_db.append((
+                                            str(row_edit.get('Kategori Data', '-')),
                                             str(row_edit.get('Lembaga SSR', '-')),
                                             str(row_edit.get('Tanggal', '-')),
                                             str(row_edit.get('ID Klien', '-')),
@@ -1660,19 +1664,19 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                             status_revisi,      # BOOLEAN
                                             text_justifikasi    # TEXT
                                         ))
-                                        # Catat indeks dataframe asli untuk dipotong dari session state jika sukses
-                                        indeks_baris_terpilesh = idx
+                                        
+                                        # 🔥 PERBAIKAN: Menghapus typo 'indeks_baris_terpilesh'
                                         indeks_baris_terpilih.append(idx)
-            
+                                
                                 # Kirim ke Neon Database jika ada baris yang memenuhi kriteria simpan
                                 if len(list_log_db) > 0:
                                     if simpan_log_ke_neon(list_log_db):
                                         
-                                        # Update kedua penampung session state agar tersinkronisasi bersih
+                                        # 🔥 PERBAIKAN: Menambahkan errors='ignore' agar drop indeks lebih aman
                                         if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None:
-                                            st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(indeks_baris_terpilih).reset_index(drop=True)
+                                            st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(indeks_baris_terpilih, errors='ignore').reset_index(drop=True)
                                         if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
-                                            st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(indeks_baris_terpilih).reset_index(drop=True)
+                                            st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(indeks_baris_terpilih, errors='ignore').reset_index(drop=True)
                                         
                                         st.success(f"🎉 Sukses memindahkan {len(list_log_db)} baris data ke tabel log_hasil_review_data!")
                                         
