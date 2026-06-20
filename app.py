@@ -257,7 +257,7 @@ def hitung_dan_ambil_log_db():
         try:
             with conn.cursor() as cur:
                 # Ambil data langsung menggunakan query Postgres
-                cur.execute("SELECT Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi FROM log_validasi_review")
+                cur.execute("SELECT Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi FROM log_hasil_review_data")
                 rows = cur.fetchall()
                 for r in rows:
                     ssr, tgl, id_klien, ind, is_rev, just = r
@@ -1674,7 +1674,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                         if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
                                             st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(indeks_baris_terpilih).reset_index(drop=True)
                                         
-                                        st.success(f"🎉 Sukses memindahkan {len(list_log_db)} baris data ke tabel log_validasi_review!")
+                                        st.success(f"🎉 Sukses memindahkan {len(list_log_db)} baris data ke tabel log_hasil_review_data!")
                                         
                                         if peringatan_justifikasi:
                                             st.warning("⚠️ Catatan: Teks Justifikasi pada baris non-konfirmasi otomatis diabaikan oleh sistem.")
