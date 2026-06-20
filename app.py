@@ -111,6 +111,51 @@ if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = 
 # Pemicu untuk memaksa baca ulang data dari DB setelah tombol validasi selesai diproses
 pemicu_baca_ulang = st.session_state.get('proses_selesai', False)
 
+# 🎯 --- BAGIAN PERBAIKAN BARU: TARIK METRIK KARTU SKOR DARI DATABASE SAAT REFRESH ---
+if ('total_entri_penjangkauan' not in st.session_state or pemicu_baca_ulang):
+    # Set nilai default awal di session state
+    st.session_state['total_entri_penjangkauan'] = 0
+    st.session_state['total_entri_rujukan'] = 0
+    st.session_state['temuan_penjangkauan'] = 0
+    st.session_state['temuan_rujukan'] = 0
+    st.session_state['akurasi_penjangkauan'] = 100.0
+    st.session_state['akurasi_rujukan'] = 100.0
+    
+    try:
+        from database import dapatkan_koneksi_neon
+        conn = dapatkan_koneksi_neon()
+        if conn:
+            with conn.cursor() as cur:
+                # Mengambil seluruh riwayat metrik akurasi dari yang paling baru
+                # Sesuai dengan kolom di database Anda: total_data_diproses dan tingkat_akurasi
+                cur.execute("""
+                    SELECT kategori, total_data_diproses, total_baris_temuan, tingkat_akurasi 
+                    FROM akurasi_review_data 
+                    ORDER BY id DESC;
+                """)
+                rows = cur.fetchall()
+                
+                # Ambil 1 baris terbaru unik untuk masing-masing kategori
+                kategori_terisi = set()
+                for r in rows:
+                    kat = str(r[0]).strip().lower()
+                    if kat not in kategori_terisi:
+                        if kat == 'penjangkauan':
+                            st.session_state['total_entri_penjangkauan'] = int(r[1])
+                            st.session_state['temuan_penjangkauan'] = int(r[2])
+                            st.session_state['akurasi_penjangkauan'] = float(r[3])
+                            kategori_terisi.add(kat)
+                        elif kat == 'rujukan':
+                            st.session_state['total_entri_rujukan'] = int(r[1])
+                            st.session_state['temuan_rujukan'] = int(r[2])
+                            st.session_state['akurasi_rujukan'] = float(r[3])
+                            kategori_terisi.add(kat)
+                    # Jika kedua kategori sudah mendapatkan data terbarunya, stop loop
+                    if len(kategori_terisi) == 2:
+                        break
+            conn.close()
+    except Exception as e:
+        pass
 # --- 1. REKAP HASIL REVIEW DATA PENJANGKAUAN SSR (Tabel 1) ---
 if ('df_penjangkauan' not in st.session_state or st.session_state['df_penjangkauan'] is None or pemicu_baca_ulang):
     try:
