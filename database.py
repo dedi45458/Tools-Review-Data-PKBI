@@ -91,7 +91,7 @@ def tambah_keyword_medsos_db(keyword):
 # ==============================================================================
 
 def simpan_log_ke_neon(list_data_log):
-    """Menyimpan data hasil review secara batch ke tabel log_validasi_review."""
+    """Menyimpan data hasil review secara batch ke tabel log_hasil_review_data."""
     if not list_data_log:
         return False
     conn = dapatkan_koneksi_neon()
@@ -100,7 +100,7 @@ def simpan_log_ke_neon(list_data_log):
     try:
         with conn.cursor() as cur:
             query = """
-                INSERT INTO public.log_validasi_review 
+                INSERT INTO public.log_hasil_review_data 
                 (Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi)
                 VALUES (%s, %s, %s, %s, %s, %s);
             """
@@ -125,7 +125,7 @@ def hitung_dan_ambil_log_db():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             query = """
                 SELECT lembaga_ssr, tanggal, id_klien, indikator_kesalahan_data, is_revisi, justifikasi 
-                FROM public.log_validasi_review;
+                FROM public.log_hasil_review_data;
             """
             cur.execute(query)
             rows = cur.fetchall()
