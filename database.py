@@ -99,6 +99,7 @@ def simpan_log_ke_neon(list_data_log):
         return False
     try:
         with conn.cursor() as cur:
+            # 🔥 PERBAIKAN: Menambahkan Kategori_Data ke dalam query INSERT
             query = """
                 INSERT INTO public.log_hasil_review_data 
                 (Kategori_Data, Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi)
@@ -116,27 +117,24 @@ def simpan_log_ke_neon(list_data_log):
 
 def hitung_dan_ambil_log_db():
     """Mengambil riwayat log validasi untuk mengecek status revisi dan justifikasi."""
+    dict_revisi, dict_justifikasi = {}, {}
     conn = dapatkan_koneksi_neon()
-    dict_revisi = {}
-    dict_justifikasi = {}
-    if conn is None:
-        return dict_revisi, dict_justifikasi
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            query = """
-                SELECT kategori_data, lembaga_ssr, tanggal, id_klien, indikator_kesalahan_data, is_revisi, justifikasi 
-                FROM public.log_hasil_review_data;
-            """
-            cur.execute(query)
-            rows = cur.fetchall()
-            for row in rows:
-                key_db = f"{row['lembaga_ssr']}_{row['tanggal']}_{row['id_klien']}_{row['indikator_kesalahan_data']}"
-                dict_revisi[key_db] = row['is_revisi']
-                dict_justifikasi[key_db] = row['justifikasi'] if row['justifikasi'] else ""
-    except Exception as e:
-        st.error(f"Gagal mengambil riwayat Log Review: {e}")
-    finally:
-        conn.close()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                # Ambil data langsung menggunakan query Postgres
+                cur.execute("SELECT Kategori_Data, Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi FROM log_hasil_review_data")
+                rows = cur.fetchall()
+                for r in rows:
+                    kat, ssr, tgl, id_klien, ind, is_rev, just = r
+                    key = f"{str(ssr).upper()}_{str(tgl)}_{str(id_klien)}_{str(ind)}"
+                    dict_revisi[key] = is_rev
+                    if just: 
+                        dict_justifikasi[key] = just
+        except Exception as e:
+            st.error(f"Gagal mengambil riwayat Log Review: {e}")
+        finally:
+            conn.close()
     return dict_revisi, dict_justifikasi
 
 def jalankan_agregasi_tren():
