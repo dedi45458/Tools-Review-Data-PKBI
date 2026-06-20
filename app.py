@@ -1227,7 +1227,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         
         st.markdown(f"""
             <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
-                📅 <b>Executive Review Dashboard</b> | Tanggal Server Jakarta: {tanggal_hari_ini}
+                📅 <b>Executive Review Dashboard</b> | Tanggal : {tanggal_hari_ini}
             </p>
         """, unsafe_allow_html=True)
         
@@ -1504,7 +1504,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     font-weight: 500;
                     margin-bottom: 15px;
                 ">
-                    🔮 Tanggal review datal: <span style="font-weight: 700; margin-left: 3px;">{tgl_format_bawah}</span>
+                    🔮 Tanggal review data: <span style="font-weight: 700; margin-left: 3px;">{tgl_format_bawah}</span>
                 </div>
                 """
                 st.markdown(badge_gabungan_html, unsafe_allow_html=True)
@@ -1574,7 +1574,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 col_filter, _ = st.columns([1, 2])
                 with col_filter:
                     pilihan_ssr = st.selectbox(
-                        "🎯 Pilih Lembaga SSR (Semua Kategori):",
+                        "🎯 Pilih Lembaga SSR:",
                         options=["Semua"] + list_ssr_unik,
                         index=0,
                         help="Menyaring seluruh data Penjangkauan dan Rujukan berdasarkan Lembaga SSR yang dipilih."
@@ -1624,7 +1624,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_save, _ = st.columns([1, 2])
                     with col_save:
-                        if st.button("💾 Simpan Semua Progres Validasi", type="primary", use_container_width=False):
+                        if st.button("💾 Simpan Progres Validasi", type="primary", use_container_width=False):
                             
                             with st.spinner("Memproses penyelarasan data ke database..."):
                                 list_log_db = []
