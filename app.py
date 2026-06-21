@@ -363,7 +363,7 @@ ATURAN_VALIDASI_BAWAAN = [
 ]
 
 # ==========================================================
-# 2. ATURAN VALIDASI KHUSUS RUJUKAN
+# 2. ATURAN VALIDASI KHUSUS RUJUKAN (VERSI PENYELARASAN)
 # ==========================================================
 ATURAN_VALIDASI_RUJUKAN = [
     {"nama": "ID tidak terdaftar di penjangkauan", "periksa": lambda c: c.get('id_clean', '') not in ['', '-', 'nan', 'None'] and f"{c.get('v_ssr', '')}_{c.get('id_clean', '')}" not in c.get('set_ssr_id_penjangkauan', set())},
@@ -372,35 +372,48 @@ ATURAN_VALIDASI_RUJUKAN = [
     {"nama": "Jenis Layanan tidak sesuai", "periksa": lambda c: 'cbs' in str(c['row'].get('Nama Layanan', '')).lower() and str(c['row'].get('Jenis Layanan', '')).strip()[:1] not in ['5', '6']},
     {"nama": "Jenis Layanan dengan Metode CBS tidak sesuai", "periksa": lambda c: str(c['row'].get('Jenis Layanan', '')).split('.')[0].strip() in ['5', '6'] and str(c['row'].get('Metode CBS', '')).split('.')[0].strip() in ['', '0', '1', 'nan']},
     {"nama": "Bukan CBS tapi jenis layanan 5/6", "periksa": lambda c: 'cbs' not in str(c['row'].get('Nama Layanan', '')).lower() and str(c['row'].get('Jenis Layanan', '')).split('.')[0].strip() in ['5', '6']},
-    {"nama": "Layanan CBS ada rujukan selain VCT", "periksa": lambda c: 'cbs' in str(c['row'].get('Nama Layanan', '')).lower() and str(c['row'].get('Jenis Layanan', '')).split('.')[0].strip() in ['5', '6'] and str(c['row'].get('Rujukan', '')).replace("'", "").strip() != '2'},
-    {"nama": "Tidak ada rujukan satupun/kolom rujukan tidak diisi", "periksa": lambda c: str(c['row'].get('Rujukan', '')).replace("'", "").strip() in ['', 'nan', 'None']},
-    {"nama": "Bukan penasun rujukan 3,4", "periksa": lambda c: str(c['row'].get('Tipe Klien', '')).split('.')[0].strip() != '1401' and (cek_kode(c['row'].get('Rujukan'), '3') or cek_kode(c['row'].get('Rujukan'), '4'))},
+    
+    # 📌 Penyesuaian aturan CBS: Memakai c['cek_kode'] untuk mengantisipasi jika kode '2' (VCT) digabung dengan kode lain (misal: '2,5')
+    {"nama": "Layanan CBS ada rujukan selain VCT", "periksa": lambda c: 'cbs' in str(c['row'].get('Nama Layanan', '')).lower() and str(c['row'].get('Jenis Layanan', '')).split('.')[0].strip() in ['5', '6'] and (not c['cek_kode'](c['row'].get('Rujukan'), '2') or len(c.get('list_kode_rujukan', [])) > 1)},
+    
+    {"nama": "Tidak ada rujukan satupun/kolom rujukan tidak diisi", "periksa": lambda c: str(c['row'].get('Rujukan', '')).replace("'", "").strip() in ['', 'nan', 'None'] or len(c.get('list_kode_rujukan', [])) == 0},
+    {"nama": "Bukan penasun rujukan 3,4", "periksa": lambda c: str(c['row'].get('Tipe Klien', '')).split('.')[0].strip() != '1401' and (c['cek_kode'](c['row'].get('Rujukan'), '3') or c['cek_kode'](c['row'].get('Rujukan'), '4'))},
     {"nama": "ID akses ke layanan lebih dari 1x tapi belum tes HIV (Konfirmasi)", "periksa": lambda c: c.get('id_counts_ruj', {}).get(f"{c.get('v_ssr', '')}_{c.get('id_clean', '')}", 0) > 1 and not c.get('rujukan_vct_per_klien', {}).get(f"{c.get('v_ssr', '')}_{c.get('id_clean', '')}", False)},
-    {"nama": "Tidak menerima hasil tes HIV", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '2') and str(c['row'].get('Menerima Hasil VCT', '')).split('.')[0].strip() in ['', '2', 'nan']},
-    {"nama": "Kolom menerima hasil tes HIV terisi tapi tidak ada rujukan HIV", "periksa": lambda c: str(c['row'].get('Menerima Hasil VCT', '')).split('.')[0].strip() in ['1', '2'] and not cek_kode(c['row'].get('Rujukan'), '2')},
-    {"nama": "Ada hasil tes HIV tapi tidak ada rujukan HIV", "periksa": lambda c: str(c['row'].get('Hasil Tes HIV', '')).split('.')[0].strip() in ['1', '2', '3'] and not cek_kode(c['row'].get('Rujukan'), '2')},
+    
+    # 📌 Validasi HIV / VCT
+    {"nama": "Tidak menerima hasil tes HIV", "periksa": lambda c: c['cek_kode'](c['row'].get('Rujukan'), '2') and str(c['row'].get('Menerima Hasil VCT', '')).split('.')[0].strip() in ['', '2', 'nan']},
+    {"nama": "Kolom menerima hasil tes HIV terisi tapi tidak ada rujukan HIV", "periksa": lambda c: str(c['row'].get('Menerima Hasil VCT', '')).split('.')[0].strip() in ['1', '2'] and not c['cek_kode'](c['row'].get('Rujukan'), '2')},
+    {"nama": "Ada hasil tes HIV tapi tidak ada rujukan HIV", "periksa": lambda c: str(c['row'].get('Hasil Tes HIV', '')).split('.')[0].strip() in ['1', '2', '3'] and not c['cek_kode'](c['row'].get('Rujukan'), '2')},
     {"nama": "Ada hasil tes HIV tapi kolom menerima hasil tidak terisi", "periksa": lambda c: str(c['row'].get('Hasil Tes HIV', '')).split('.')[0].strip() in ['1', '2', '3'] and str(c['row'].get('Menerima Hasil VCT', '')).split('.')[0].strip() in ['', 'nan']},
-    {"nama": "Dirujuk IMS tapi tidak ada hasil IMS", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '1') and str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['', 'nan']},
-    {"nama": "Ada hasil IMS tapi tidak ada rujukan IMS", "periksa": lambda c: str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['1', '2', '3'] and not cek_kode(c['row'].get('Rujukan'), '1')},
+    
+    # 📌 Validasi IMS
+    {"nama": "Dirujuk IMS tapi tidak ada hasil IMS", "periksa": lambda c: c['cek_kode'](c['row'].get('Rujukan'), '1') and str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Ada hasil IMS tapi tidak ada rujukan IMS", "periksa": lambda c: str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['1', '2', '3'] and not c['cek_kode'](c['row'].get('Rujukan'), '1')},
     {"nama": "Menerima pengobatan IMS tapi hasil tes IMS Non Reaktif/ N/A", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['2', '3']},
     {"nama": "Hasil tes IMS reaktif tapi tidak menerima pengobatan IMS (konfirmasi)", "periksa": lambda c: str(c['row'].get('Hasil Tes IMS', '')).strip() in ['1', '1.0'] and str(c['row'].get('Menerima Pengobatan IMS', '')).strip() in ['2', '2.0']},
-    {"nama": "Kolom menerima pengobatan IMS terisi tapi tidak ada rujukan IMS", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() in ['1', '2'] and not cek_kode(c['row'].get('Rujukan'), '1')},
+    {"nama": "Kolom menerima pengobatan IMS terisi tapi tidak ada rujukan IMS", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() in ['1', '2'] and not c['cek_kode'](c['row'].get('Rujukan'), '1')},
     {"nama": "Menerima pengobatan IMS tapi tidak ada hasil tes IMS", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['', 'nan']},
     {"nama": "Ada hasil tes IMS tapi kolom menerima pengobatan IMS tidak diisi", "periksa": lambda c: str(c['row'].get('Hasil Tes IMS', '')).split('.')[0].strip() in ['1', '2', '3'] and str(c['row'].get('Menerima Pengobatan IMS', '')).split('.')[0].strip() in ['', 'nan']},
-    {"nama": "DIrujuk PrEP tapi hasil skrining PrEP tidak diisi", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '5') and str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() in ['', 'nan']},
-    {"nama": "Layanan PrEp tidak terdaftar, indikasi salah mengisi layanan atau belum update jenis layanan PrEP di SIMS (konfirmasi)", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '5') and not c.get('is_layanan_prep_valid', True)},
-    {"nama": "Ada hasil skrining PrEP tapi tidak ada rujukan PrEP", "periksa": lambda c: str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() in ['1', '2'] and not cek_kode(c['row'].get('Rujukan'), '5')},
+    
+    # 📌 Validasi PrEP
+    {"nama": "DIrujuk PrEP tapi hasil skrining PrEP tidak diisi", "periksa": lambda c: c['cek_kode'](c['row'].get('Rujukan'), '5') and str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Layanan PrEp tidak terdaftar, indikasi salah mengisi layanan atau belum update jenis layanan PrEP di SIMS (konfirmasi)", "periksa": lambda c: c['cek_kode'](c['row'].get('Rujukan'), '5') and not c.get('is_layanan_prep_valid', True)},
+    {"nama": "Ada hasil skrining PrEP tapi tidak ada rujukan PrEP", "periksa": lambda c: str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() in ['1', '2'] and not c['cek_kode'](c['row'].get('Rujukan'), '5')},
     {"nama": "Ada hasil skrining PrEP tapi kolom menerima obat PrEP tidak disi", "periksa": lambda c: str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() in ['1', '2'] and str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() in ['', 'nan']},
-    {"nama": "Menerima pengobatan PrEP diisi tapi tidak ada rujukan PrEP", "periksa": lambda c: str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() == '1' and not cek_kode(c['row'].get('Rujukan'), '5')},
-    {"nama": "KD sudah menerima obat PrEP tapi hasil skrining PrEP tidak memenuhi syarat", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '5') and str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() == '2'},
+    {"nama": "Menerima pengobatan PrEP diisi tapi tidak ada rujukan PrEP", "periksa": lambda c: str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() == '1' and not c['cek_kode'](c['row'].get('Rujukan'), '5')},
+    {"nama": "KD sudah menerima obat PrEP tapi hasil skrining PrEP tidak memenuhi syarat", "periksa": lambda c: c['cek_kode'](c['row'].get('Rujukan'), '5') and str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() == '2'},
     {"nama": "Hasil Skrining PrEP memenuhi syarat tapi KD tidak menerima obat PrEP (konfirmasi)", "periksa": lambda c: str(c['row'].get('Hasil Screening PrEP', '')).split('.')[0].strip() == '1' and str(c['row'].get('Menerima Obat PrEP', '')).split('.')[0].strip() == '2'},
-    {"nama": "Dirujuk TB tapi tidak ada Hasil Tes TB", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '7') and str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['', 'nan']},
-    {"nama": "Ada Hasil TB tapi tidak ada rujukan TB", "periksa": lambda c: str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['1', '2', '3'] and not cek_kode(c['row'].get('Rujukan'), '7')},
+    
+    # 📌 Validasi TB
+    {"nama": "Dirujuk TB tapi tidak ada Hasil Tes TB", "periksa": lambda c: c['cek_kode'](c['row'].get('Rujukan'), '7') and str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Ada Hasil TB tapi tidak ada rujukan TB", "periksa": lambda c: str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['1', '2', '3'] and not c['cek_kode'](c['row'].get('Rujukan'), '7')},
     {"nama": "Menerima pengobatan TB tapi hasil tes TB Non Reaktif/ N/A/ tidak diisi", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan TB/OAT', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['2', '3', '', 'nan']},
     {"nama": "Hasil tes TB reaktif tapi tidak menerima pengobatan TB (konfirmasi)", "periksa": lambda c: str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() == '1' and str(c['row'].get('Menerima Pengobatan TB/OAT', '')).split('.')[0].strip() == '2'},
     {"nama": "Ada hasil tes TB tapi kolom pengobatan TB tidak diisi", "periksa": lambda c: str(c['row'].get('Hasil Tes TB', '')).split('.')[0].strip() in ['1', '2', '3'] and str(c['row'].get('Menerima Pengobatan TB/OAT', '')).split('.')[0].strip() in ['', 'nan']},
-    {"nama": "Dirujuk Hep-C tapi tidak ada Hasil Tes Hep-C", "periksa": lambda c: cek_kode(c['row'].get('Rujukan'), '9') and str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['', 'nan']},
-    {"nama": "Ada Hasil Hep-C tapi tidak ada rujukan Hep-C", "periksa": lambda c: str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['1', '2', '3'] and not cek_kode(c['row'].get('Rujukan'), '9')},
+    
+    # 📌 Validasi Hepatitis C (Hep-C)
+    {"nama": "Dirujuk Hep-C tapi tidak ada Hasil Tes Hep-C", "periksa": lambda c: c['cek_kode'](c['row'].get('Rujukan'), '9') and str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['', 'nan']},
+    {"nama": "Ada Hasil Hep-C tapi tidak ada rujukan Hep-C", "periksa": lambda c: str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['1', '2', '3'] and not c['cek_kode'](c['row'].get('Rujukan'), '9')},
     {"nama": "Menerima Pengobatan Hep-C tapi Hasil Tes Non Reaktif/ N/A / tidak diisi", "periksa": lambda c: str(c['row'].get('Menerima Pengobatan HEPC/DAA', '')).split('.')[0].strip() == '1' and str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['2', '3', '', 'nan']},
     {"nama": "Hasil tes Hep-C reaktif tapi tidak menerima pengobatan Hep-C (konfirmasi)", "periksa": lambda c: str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() == '1' and str(c['row'].get('Menerima Pengobatan HEPC/DAA', '')).split('.')[0].strip() == '2'},
     {"nama": "Ada hasil tes Hep-C tapi kolom pengobatan Hep-C tidak diisi", "periksa": lambda c: str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['1', '2', '3'] and str(c['row'].get('Menerima Pengobatan HEPC/DAA', '')).split('.')[0].strip() in ['', 'nan']}
@@ -890,6 +903,29 @@ def jalankan_review_data(
         else:
             v_nama_layanan = '-'
 
+        # =========================================================================
+        # 🟢 STANDARISASI LOGIKA DETEKSI MULTI-KODE PADA KOLOM RUJUKAN
+        # =========================================================================
+        # Membaca string rujukan secara aman, membersihkan tanda kutip tunggal dan desimal .0
+        rujukan_clean_text = rujukan.replace("'", "").replace(".0", "").strip()
+        if '.' in rujukan_clean_text and ',' not in rujukan_clean_text:
+            rujukan_clean_text = rujukan_clean_text.replace('.', ',')
+        
+        # Ekstraksi menjadi list teks kode individual: ['1', '2', '3']
+        list_kode_rujukan = [
+            k.strip() 
+            for k in rujukan_clean_text.split(',') 
+            if k.strip() not in ['', 'nan', 'None']
+        ]
+
+        # Fungsi penimpa/pembantu global untuk lambda aturan rujukan yang menggunakan fungsi `cek_kode()`
+        def jembatan_cek_kode(nilai_input, kode_target):
+            # Mengakomodir jika nilai_input yang dilempar dari lambda adalah data mentah string
+            if nilai_input and kode_target:
+                return str(kode_target).strip() in list_kode_rujukan
+            return False
+        # =========================================================================
+
         # KONTEKS DATA (Mencakup variabel untuk kedua jenis file)
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
@@ -912,6 +948,10 @@ def jalankan_review_data(
             'id_counts_ruj': dict_ssr_id_counts,
             'is_layanan_prep_valid': is_layanan_prep_db,
             
+            # --- VARIABEL STANDARISASI MULTI-KODE ---
+            'list_kode_rujukan': list_kode_rujukan,
+            'cek_kode': jembatan_cek_kode,  # Memotong eksekusi ke jembatan lokal agar aman koma (,)
+            
             # 🟢 INJEKSI BARU: Mengirimkan map memori penjangkauan ke lambda validator
             'info_cbs_di_penjangkauan_per_klien': info_cbs_di_penjangkauan_per_klien,
             'edukasi_vct_di_penjangkauan_per_klien': edukasi_vct_di_penjangkauan_per_klien,
@@ -922,6 +962,7 @@ def jalankan_review_data(
         for rule in SEMUA_ATURAN_AKTIF:
             nama_ind = rule["nama"]
             try:
+                # Memasukkan lingkungan lokal ke dalam evaluasi lambda global jika diperlukan
                 if rule["periksa"](context_data):
                     # Kunci unik pencocokan database
                     key_db = f"{v_ssr}_{v_tanggal}_{id_clean}_{nama_ind}"
