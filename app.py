@@ -678,24 +678,22 @@ def jalankan_review_data(
         if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values).lower() or 'laki-laki' in str(df.iloc[0].values).lower()):
             start_row_idx = 1
             
-    # 🔥 DETEKSI CERDAS: Apakah ini file rujukan atau penjangkauan?
+    # 🔥 DETEKSI CERDAS (DIPERBAIKI): Mengecek substring, bukan exact match
     col_upper_all = [str(c).upper() for c in df.columns]
-    is_file_rujukan = any(k in col_upper_all for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
+    is_file_rujukan = any(any(k in c for c in col_upper_all) for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
     
-    # Injeksi penentuan Kategori Data secara universal
     v_kategori = "Rujukan" if is_file_rujukan else "Penjangkauan"
-    
     tahun_sekarang = datetime.now().year
     hari_ini = pd.Timestamp(datetime.now().date())
 
     # PENGAMAN REGEX MEDSOS
-    keywords_aktif = st.session_state.get('medsoc_keywords', [])
+    keywords_aktif = st.session_state.get('medsoc_keywords', []) if 'st' in globals() else []
     if keywords_aktif:
         pattern_medsos_dinamis = r'\b(' + '|'.join([re.escape(k) for k in keywords_aktif]) + r')\b'
     else:
         pattern_medsos_dinamis = r'\b(TIDAK_ADA_MEDSOS_TERDAFTAR_DI_SISTEM)\b'
 
-    # Pengaman Database terintegrasi (Membaca riwayat konfirmasi & revisi terdahulu)
+    # Pengaman Database terintegrasi
     try:
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
     except Exception:
@@ -704,7 +702,6 @@ def jalankan_review_data(
     ref_ssr_id_to_nik, ref_nik_ssr_to_id = {}, {}
     dict_pernah_cbs, dict_pernah_prep_rujukan = {}, {}
 
-    # PENYUSUNAN DICTIONARY REFERENSI HISTORIS (Jika df_ref diupload)
     if not is_file_rujukan and df_ref is not None and not df_ref.empty:
         df_ref_cp = df_ref.copy()
         df_ref_cp.columns = [str(c).strip() for c in df_ref_cp.columns]
@@ -724,44 +721,18 @@ def jalankan_review_data(
 
                 if id_r and id_r != 'nan' and ssr_r and ssr_r != 'nan': 
                     ref_ssr_id_to_nik[key_klien] = nik_r
-                if nik_r and nik_r != 'nan' and nik_r != '' and ssr_r and ssr_r != 'nan': 
+                if nik_r and nik_r not in ['nan', ''] and ssr_r and ssr_r != 'nan': 
                     ref_nik_ssr_to_id[f"{nik_r}_{ssr_r}"] = id_r
                 
                 if col_layanan_ref:
                     layanans = str(r[col_layanan_ref[0]]).replace("'", "").replace(" ", "").split(',')
-                    if '5' in layanans or '6' in layanans:
-                        dict_pernah_cbs[key_klien] = True
-                
+                    if '5' in layanans or '6' in layanans: dict_pernah_cbs[key_klien] = True
                 if col_rujukan_ref:
                     rujukans = str(r[col_rujukan_ref[0]]).replace("'", "").replace(" ", "").split(',')
-                    if '5' in rujukans:
-                        dict_pernah_prep_rujukan[key_klien] = True
-
-    df['id_mapped'] = df.get('ID Klien', pd.Series(dtype=str)).astype(str).str.replace("'", "").str.strip()
-    df['ssr_id_key'] = df.get('Lembaga SSR', pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
-    
-    dict_ssr_id_counts = df.iloc[start_row_idx:]['ssr_id_key'].value_counts().to_dict()
-    
-    def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
-    def periksa_rujukan(x): 
-        s = str(x).replace("'", "").replace(" ", "").replace(".0", "")
-        if '.' in s and ',' not in s: 
-            s = s.replace('.', ',')
-        return '2' in s.split(',')
-
-    # PRE-KALKULASI KHUSUS RUJUKAN (Apakah ID rujuk VCT > 1x)
-    rujukan_vct_per_klien = {}
-    if is_file_rujukan:
-        col_ruj_temp = next((c for c in df.columns if "RUJUKAN" in str(c).upper()), None)
-        if col_ruj_temp:
-            for _, r in df.iloc[start_row_idx:].iterrows():
-                k_ssr = str(r.get('Lembaga SSR', '')).strip().upper()
-                k_id = str(r.get('ID Klien', '')).replace("'", "").strip()
-                if periksa_rujukan(r.get(col_ruj_temp)):
-                    rujukan_vct_per_klien[f"{k_ssr}_{k_id}"] = True
+                    if '5' in rujukans: dict_pernah_prep_rujukan[key_klien] = True
 
     # ==========================================================
-    # DETEKSI KOLOM DINAMIS (KINI MENCAKUP ATRIBUT UTAMA KLIEN)
+    # DETEKSI KOLOM DINAMIS (DIPINDAH KE ATAS AGAR AMAN)
     # ==========================================================
     col_id_klien = next((c for c in df.columns if "ID KLIEN" in str(c).upper() or "ID_KLIEN" in str(c).upper()), "ID Klien")
     col_ssr = next((c for c in df.columns if "LEMBAGA SSR" in str(c).upper() or "SSR" in str(c).upper()), "Lembaga SSR")
@@ -781,48 +752,42 @@ def jalankan_review_data(
     col_vc1 = next((c for c in df.columns if "VIRTUAL" in str(c).upper() or "VC1" in str(c).upper() or "TATAP MUKA" in str(c).upper()), "")
     col_nama_layanan = next((c for c in df.columns if "NAMA LAYANAN" in str(c).upper()), "")
     
-    # Perbaikan mapping awal sebelum loop dengan kolom dinamis baru
+    # 🟢 Pemetaan Identitas Klien (Sudah memakai kolom dinamis)
     df['id_mapped'] = df.get(col_id_klien, pd.Series(dtype=str)).astype(str).str.replace("'", "").str.strip().str.upper()
     df['ssr_id_key'] = df.get(col_ssr, pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
-    
     dict_ssr_id_counts = df.iloc[start_row_idx:]['ssr_id_key'].value_counts().to_dict()
     
     def periksa_hiv(x): return '1' in str(x).replace("'", "").replace(" ", "").split(',')
     def periksa_rujukan(x): 
         s = str(x).replace("'", "").replace(" ", "").replace(".0", "")
-        if '.' in s and ',' not in s: 
-            s = s.replace('.', ',')
+        if '.' in s and ',' not in s: s = s.replace('.', ',')
         return '2' in s.split(',')
 
-    # PRE-KALKULASI KHUSUS RUJUKAN (Apakah ID rujuk VCT > 1x)
-    rujukan_vct_per_klien = {}
+    # PRE-KALKULASI KHUSUS RUJUKAN
+    rujakan_vct_per_klien = {}
     if is_file_rujukan:
         col_ruj_temp = next((c for c in df.columns if "RUJUKAN" in str(c).upper()), None)
         if col_ruj_temp:
             for _, r in df.iloc[start_row_idx:].iterrows():
-                k_ssr = str(r.get(col_ssr, '')).strip().upper()
-                k_id = str(r.get(col_id_klien, '')).replace("'", "").strip().upper()
+                k_ssr = str(r.get(col_ssr, '')).strip().upper() # <-- Pakai col dinamis
+                k_id = str(r.get(col_id_klien, '')).replace("'", "").strip().upper() # <-- Pakai col dinamis
                 if periksa_rujukan(r.get(col_ruj_temp)):
-                    rujukan_vct_per_klien[f"{k_ssr}_{k_id}"] = True
+                    rujakan_vct_per_klien[f"{k_ssr}_{k_id}"] = True
 
     if col_info and col_kegiatan:
         df['is_info_hiv'] = df[col_info].apply(periksa_hiv) | df[col_kegiatan].apply(periksa_hiv)
     else:
         df['is_info_hiv'] = False
         
-    if col_ruj: 
-        df['is_rujuk_tes'] = df[col_ruj].apply(periksa_rujukan)
-    else: 
-        df['is_rujuk_tes'] = False
+    if col_ruj: df['is_rujuk_tes'] = df[col_ruj].apply(periksa_rujukan)
+    else: df['is_rujuk_tes'] = False
 
     dict_pernah_hiv = df.groupby('ssr_id_key')['is_info_hiv'].any().to_dict()
     dict_pernah_rujuk = df.groupby('ssr_id_key')['is_rujuk_tes'].any().to_dict()
 
     def _safe_float(val):
-        try:
-            return float(val) if pd.notna(val) and str(val).strip().lower() not in ['', 'nan'] else 0.0
-        except:
-            return 0.0
+        try: return float(val) if pd.notna(val) and str(val).strip().lower() not in ['', 'nan'] else 0.0
+        except: return 0.0
 
     col_kie_list = [c for c in df.columns if 'KIE' in str(c).upper()]
     col_kon_list = [c for c in df.columns if 'KONDOM' in str(c).upper()]
@@ -833,28 +798,15 @@ def jalankan_review_data(
     semua_kolom_logistik = col_kie_list + col_kon_list + col_pel_list + col_jar_list + col_swab_list
 
     df['tmp_log'] = 0.0
-    for col in semua_kolom_logistik:
-        df['tmp_log'] += df[col].apply(_safe_float)
+    for col in semua_kolom_logistik: df['tmp_log'] += df[col].apply(_safe_float)
+    dict_total_log_per_klien = df.groupby('ssr_id_key')['tmp_log'].sum().to_dict()
 
-    df['kunci_klien_ref_log'] = df.get(col_ssr, pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
-    dict_total_log_per_klien = df.groupby('kunci_klien_ref_log')['tmp_log'].sum().to_dict()
-
-    # =========================================================================
-    # LOGIKA PENGUMPUL DATA PENJANGKAUAN (CROSS-FILE LOGIC)
-    # =========================================================================
     info_cbs_di_penjangkauan_per_klien = {}
     edukasi_vct_di_penjangkauan_per_klien = {}
     edukasi_prep_di_penjangkauan_per_klien = {}
-    
-    df_pj_aktif = locals().get('df_penjangkauan', st.session_state.get('df_penjangkauan_aktif', None))
-    
-    # ✨ PENYEMPURNAAN: Proteksi otomatis jika variabel luar lupa di-.upper()
-    if 'set_ssr_id_penjangkauan' in locals() or 'set_ssr_id_penjangkauan' in globals():
-        try:
-            set_ssr_id_penjangkauan = {str(x).strip().upper() for x in set_ssr_id_penjangkauan if str(x).strip() not in ['', 'nan', 'None']}
-        except Exception:
-            pass
-    
+
+    df_pj_aktif = locals().get('df_penjangkauan', st.session_state.get('df_penjangkauan_aktif', None) if 'st' in globals() else None)
+
     if is_file_rujukan and df_pj_aktif is not None and not df_pj_aktif.empty:
         col_info_pj = next((c for c in df_pj_aktif.columns if "INFORMASI" in str(c).upper() and "DIBERIKAN" in str(c).upper()), "")
         col_ruj_pj = next((c for c in df_pj_aktif.columns if "RUJUKAN" in str(c).upper()), "")
@@ -863,29 +815,25 @@ def jalankan_review_data(
         
         for _, r_pj in df_pj_aktif.iterrows():
             ssr_pj = str(r_pj.get(col_ssr_pj, '')).strip().upper()
-            id_pj = str(r_pj.get(col_id_pj, '')).replace("'", "").strip().upper()  # 🟢 Paksa .upper()
+            id_pj = str(r_pj.get(col_id_pj, '')).replace("'", "").strip().upper() 
             kunci_pj = f"{ssr_pj}_{id_pj}"
             
             txt_info = str(r_pj.get(col_info_pj, '')).strip() if col_info_pj else ""
             txt_ruj = str(r_pj.get(col_ruj_pj, '')).strip() if col_ruj_pj else ""
             
-            # ✨ PENYEMPURNAAN: Ditambahkan .replace(".0", "") untuk mengantisipasi angka desimal dari Excel
-            list_info_pj = [k.strip() for k in txt_info.replace("'", "").replace(" ", "").replace(".0", "").split(',') if k.strip()]
-            list_ruj_pj = [k.strip() for k in txt_ruj.replace("'", "").replace(" ", "").replace(".0", "").split(',') if k.strip()]
+            list_info_pj = txt_info.replace("'", "").replace(" ", "").split(',')
+            list_ruj_pj = txt_ruj.replace("'", "").replace(" ", "").replace(".0", "").split(',')
             
-            if '12' in list_info_pj:
-                info_cbs_di_penjangkauan_per_klien[kunci_pj] = True
-            if '1' in list_info_pj and '2' in list_ruj_pj:
-                edukasi_vct_di_penjangkauan_per_klien[kunci_pj] = True
-            if '10' in list_info_pj and '5' in list_ruj_pj:
-                edukasi_prep_di_penjangkauan_per_klien[kunci_pj] = True
-    
+            if '12' in list_info_pj: info_cbs_di_penjangkauan_per_klien[kunci_pj] = True
+            if '1' in list_info_pj and '2' in list_ruj_pj: edukasi_vct_di_penjangkauan_per_klien[kunci_pj] = True
+            if '10' in list_info_pj and '5' in list_ruj_pj: edukasi_prep_di_penjangkauan_per_klien[kunci_pj] = True
+
     if is_file_rujukan:
-        SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_RUJUKAN
+        SEMUA_ATURAN_AKTIF = globals().get('ATURAN_VALIDASI_RUJUKAN', [])
     else:
-        aturan_kustom = st.session_state.get('aturan_kustom', [])
-        SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_BAWAAN + aturan_kustom
-    
+        aturan_kustom = st.session_state.get('aturan_kustom', []) if 'st' in globals() else []
+        SEMUA_ATURAN_AKTIF = globals().get('ATURAN_VALIDASI_BAWAAN', []) + aturan_kustom
+
     # LOOP BARIS DATA UNTUK EVALUASI
     for idx in range(start_row_idx, len(df)):
         row = df.iloc[idx]
@@ -896,11 +844,11 @@ def jalankan_review_data(
         v_tanggal = str(row.get(col_tanggal, '')).split(' ')[0] if pd.notna(row.get(col_tanggal)) else ''
         
         id_raw = str(row.get(col_id_klien, '')).strip()
-        id_clean = id_raw.replace("'", "").strip().upper()  # 🟢 Paksa .upper() untuk sinkronisasi huruf alfabet
+        id_clean = id_raw.replace("'", "").strip().upper() 
         
         nik_raw = str(row.get(col_nik, '')).strip()
         nik_clean = nik_raw.replace("'", "").replace('.0', '').strip()
-    
+
         v_tipe_sasaran = str(row.get(col_tipe_sasaran, '')).replace('.0', '').strip()
         umur = row.get(col_umur, None)
         jk = str(row.get(col_jk, '')).replace('.0', '').strip()
@@ -914,63 +862,52 @@ def jalankan_review_data(
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         
         vc1 = str(row.get(col_vc1, row.get('Virtual & Tatap Muka', ''))).replace('.0', '').strip()
-    
+
         log_kie = sum(_safe_float(row.get(c, 0)) for c in col_kie_list)
         log_kon = sum(_safe_float(row.get(c, 0)) for c in col_kon_list)
         log_pel = sum(_safe_float(row.get(c, 0)) for c in col_pel_list)
         log_jar = sum(_safe_float(row.get(c, 0)) for c in col_jar_list)
         log_swab = sum(_safe_float(row.get(c, 0)) for c in col_swab_list)
         jarum_kembali = _safe_float(row.get('Jumlah Jarum Suntik Kembali', 0))
-    
+
         tgl_raw = row.get(col_tanggal, None)
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce', format='%d/%m/%Y') if pd.notna(tgl_raw) and '/' in str(tgl_raw) else pd.to_datetime(tgl_raw, errors='coerce')
-    
+
         kunci_klien_ref = f"{v_ssr}_{id_clean}"
         count_untuk_ssr_id = dict_ssr_id_counts.get(kunci_klien_ref, 0)
         local_id_counts = {id_clean: count_untuk_ssr_id} 
-    
+
         pernah_dapat_info_hiv = dict_pernah_hiv.get(kunci_klien_ref, False) if id_clean else False
         pernah_dapat_rujuk_tes = dict_pernah_rujuk.get(kunci_klien_ref, False) if id_clean else False
         
         is_reaktif_db = False
-        if nik_clean and nik_clean.lower() not in ['', 'nan', 'none'] and nik_clean in set_nik_reaktif:
-            is_reaktif_db = True
-        elif kunci_klien_ref in set_ssr_id_reaktif:
-            is_reaktif_db = True
+        if nik_clean and nik_clean.lower() not in ['', 'nan', 'none'] and nik_clean in set_nik_reaktif: is_reaktif_db = True
+        elif kunci_klien_ref in set_ssr_id_reaktif: is_reaktif_db = True
             
         layanan_clean = str(row.get(col_nama_layanan, '')).strip().lower() if col_nama_layanan else ""
-        
-        if not layanan_clean:
-            is_layanan_prep_db = True
-        else:
-            is_layanan_prep_db = (v_ssr.lower(), layanan_clean) in set_prep_valid
-    
+        if not layanan_clean: is_layanan_prep_db = True
+        else: is_layanan_prep_db = (v_ssr.lower(), layanan_clean) in set_prep_valid
+
         if is_file_rujukan and col_nama_layanan:
             v_nama_layanan = str(row.get(col_nama_layanan, '-')).strip()
             if v_nama_layanan.lower() in ['nan', 'none', '']: v_nama_layanan = '-'
-        else:
-            v_nama_layanan = '-'
-    
-        rujakan_clean_text = rujukan.replace("'", "").replace(".0", "").strip()
-        if '.' in rujukan_clean_text and ',' not in rujukan_clean_text:
-            rujakan_clean_text = rujukan_clean_text.replace('.', ',')
+        else: v_nama_layanan = '-'
+
+        rujakan_clean_text = rujakan.replace("'", "").replace(".0", "").strip()
+        if '.' in rujakan_clean_text and ',' not in rujakan_clean_text:
+            rujakan_clean_text = rujakan_clean_text.replace('.', ',')
         
-        list_kode_rujukan = [
-            k.strip() 
-            for k in rujukan_clean_text.split(',') 
-            if k.strip() not in ['', 'nan', 'None']
-        ]
-    
+        list_kode_rujukan = [k.strip() for k in rujakan_clean_text.split(',') if k.strip() not in ['', 'nan', 'None']]
+
         def jembatan_cek_kode(nilai_input, kode_target):
-            if nilai_input and kode_target:
-                return str(kode_target).strip() in list_kode_rujukan
+            if nilai_input and kode_target: return str(kode_target).strip() in list_kode_rujukan
             return False
-    
+
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
             'jns_kontak': jns_kontak, 'jns_kegiatan': jns_kegiatan, 'lokasi': lokasi, 'info_diberikan': info_diberikan,
-            'rujukan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
+            'rujukan': rujakan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
             'log_jar': log_jar, 'log_swab': log_swab, 'jarum_kembali': jarum_kembali, 'tgl_p': tgl_p, 'hari_ini': hari_ini,
             'tahun_sekarang': tahun_sekarang, 'is_vo': (jns_kontak == '3'), 'is_pwid': (v_tipe_sasaran in ['1401', '1403']),
             'id_counts': local_id_counts, 'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
@@ -979,23 +916,20 @@ def jalankan_review_data(
             'pernah_prep_di_rujukan': dict_pernah_prep_rujukan.get(kunci_klien_ref, False),
             'total_log_keseluruhan_klien': dict_total_log_per_klien.get(kunci_klien_ref, 0.0),
             'pattern_medsos': pattern_medsos_dinamis,
-            
             'set_ssr_id_penjangkauan': set_ssr_id_penjangkauan,
             'is_reaktif_sebelumnya': is_reaktif_db,
-            'rujukan_vct_per_klien': rujukan_vct_per_klien,
+            'rujukan_vct_per_klien': rujakan_vct_per_klien,
             'id_counts_ruj': dict_ssr_id_counts,
             'is_layanan_prep_valid': is_layanan_prep_db,
-            
             'list_kode_rujukan': list_kode_rujukan,
             'cek_kode': jembatan_cek_kode,
-            
             'info_cbs_di_penjangkauan_per_klien': info_cbs_di_penjangkauan_per_klien,
             'edukasi_vct_di_penjangkauan_per_klien': edukasi_vct_di_penjangkauan_per_klien,
             'edukasi_prep_di_penjangkauan_per_klien': edukasi_prep_di_penjangkauan_per_klien
         }
-    
+
         for rule in SEMUA_ATURAN_AKTIF:
-            nama_ind = rule["nama"]
+            nama_ind = rule.get("nama", "Unknown Rule")
             try:
                 if rule["periksa"](context_data):
                     key_db = f"{v_kategori}_{v_ssr}_{v_tanggal}_{id_clean}_{nama_ind}"
@@ -1026,9 +960,12 @@ def jalankan_review_data(
                         "Validasi Hasil Review": status_validasi, 
                         "Justifikasi": justif_val
                     })
-            except Exception: 
+            # 🟢 PENGAMAN DIPERBAIKI: Kita tidak lagi menelan error mentah-mentah
+            except Exception as e: 
+                # Uncomment baris di bawah jika Anda ingin memunculkan log error ke console
+                print(f"Error pada saat evaluasi Aturan [{nama_ind}] di Baris ke-{idx}: {e}")
                 pass
-    
+
     return pd.DataFrame(list_kesalahan)
 
     
