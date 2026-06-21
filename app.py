@@ -829,8 +829,17 @@ def jalankan_review_data(
         elif kunci_klien_ref in set_ssr_id_reaktif:
             is_reaktif_db = True
             
+        # =========================================================================
+        # 🟢 PERBAIKAN: Ubah format pencarian ke set_prep_valid menjadi Tuple
+        # =========================================================================
         layanan_clean = str(row.get(col_nama_layanan, '')).strip().lower() if col_nama_layanan else ""
-        is_layanan_prep_db = True if not layanan_clean else f"{v_ssr.lower()}_{layanan_clean}" in set_prep_valid
+        
+        if not layanan_clean:
+            is_layanan_prep_db = True
+        else:
+            # Menggunakan tuple (Lembaga, Layanan) agar cocok dengan isi set dari database Neon
+            is_layanan_prep_db = (v_ssr.lower(), layanan_clean) in set_prep_valid
+        # =========================================================================
 
         # 🔥 LOGIKA UTAMA EKSTRAKSI NAMA LAYANAN / FASYANKES BERDASARKAN ATURAN BISNIS
         if is_file_rujukan and col_nama_layanan:
