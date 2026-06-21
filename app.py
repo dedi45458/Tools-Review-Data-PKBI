@@ -1017,17 +1017,19 @@ if tombol_proses:
             set_nik_rkt, set_ssr_id_rkt, set_prep_vld = set(), set(), set()
             
             # 🔥 PERBAIKAN ISU #3: Tarik historis error dari log_hasil_review_data
-            set_error_historis = set() 
-            
+            set_error_historis = pd.DataFrame() 
+
             try:
                 set_nik_rkt, set_ssr_id_rkt = ambil_set_reaktif_sebelumnya()
                 set_prep_vld = ambil_set_layanan_prep_valid()
                 
-                # Tambahkan fungsi ini di file database.py Anda nantinya
-                from database import ambil_set_error_belum_direvisi
+                # Fungsi ini harus mengembalikan DataFrame hasil query dari tabel log_hasil_review_data
                 set_error_historis = ambil_set_error_belum_direvisi() 
             except Exception as e:
-                pass # Abaikan jika data historis belum ada
+                # Opsional: Berikan log/print error kecil untuk mempermudah debugging jika DB gagal terhubung
+                print(f"Gagal mengambil data historis log review: {e}")
+                # Jika gagal, set_error_historis tetap berupa DataFrame kosong (Aman bagi Pandas)
+                set_error_historis = pd.DataFrame()
 
             # Loop 1: Kumpulkan set ID Penjangkauan
             for f in files_review:
@@ -1059,7 +1061,7 @@ if tombol_proses:
                         set_ssr_id_penjangkauan=set_penjangkauan,
                         set_nik_reaktif=set_nik_rkt, set_ssr_id_reaktif=set_ssr_id_rkt, 
                         set_prep_valid=set_prep_vld,
-                        set_error_historis=set_error_historis # <--- Tambahan parameter
+                        df_log_review=set_error_historis # <--- Tambahan parameter
                     )
                     
                     if not df_res.empty:
