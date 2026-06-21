@@ -1055,17 +1055,18 @@ if tombol_proses:
                     if is_rujukan: total_proses_rjk += len(df_target)
                     else: total_proses_pjj += len(df_target)
                     
-                    # 🔥 PERBAIKAN ISU #3: Lempar parameter set_error_historis ke dalam engine validasi
                     df_res = jalankan_review_data(
                         df_target, df_ref, nama_file=f.name,
                         set_ssr_id_penjangkauan=set_penjangkauan,
                         set_nik_reaktif=set_nik_rkt, set_ssr_id_reaktif=set_ssr_id_rkt, 
                         set_prep_valid=set_prep_vld,
-                        df_log_review=set_error_historis # <--- Tambahan parameter
+                        df_log_review=set_error_historis
                     )
                     
                     if not df_res.empty:
-                        df_res['KATEGORI DATA'] = 'Rujukan' if is_rujukan else 'Penjangkauan' # Paksa ke uppercase key
+                        # ❌ BARIS INI TELAH DIHAPUS: (Tidak perlu ditambah KATEGORI DATA lagi)
+                        # df_res['KATEGORI DATA'] = 'Rujukan' if is_rujukan else 'Penjangkauan'
+                        
                         all_errs.append(df_res)
                 except Exception: pass
 
@@ -1094,6 +1095,9 @@ if tombol_proses:
                     elif 'JUSTIFIKASI' in c_clean: rename_map[c] = 'JUSTIFIKASI'
                 
                 df_bawah = df_bawah.rename(columns=rename_map)
+
+                # 🔥 PENGAMAN KRUSIAL: Membuang duplikasi nama kolom agar AttributeError (.str) lenyap!
+                df_bawah = df_bawah.loc[:, ~df_bawah.columns.duplicated()].copy()
 
             # 🎯 Simpan total entri global ke memory Streamlit
             st.session_state['total_entri'] = total_records
