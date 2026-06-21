@@ -335,6 +335,44 @@ def ambil_database_layanan():
     finally:
         conn.close()
 
+def ambil_set_layanan_prep_valid():
+    """
+    Mengambil daftar kombinasi Lembaga SSR dan Nama Layanan PrEP yang valid
+    dari database_layanan, kemudian mengembalikannya dalam bentuk set of tuples
+    dengan format lowercase untuk validasi lintas file rujukan.
+    """
+    set_prep_valid = set()
+    conn = dapatkan_koneksi_neon()
+    
+    if conn is None:
+        return set_prep_valid
+        
+    try:
+        with conn.cursor() as cur:
+            # Query mengambil data dari tabel database_layanan yang sudah Anda miliki
+            # Menggunakan LOWER() untuk standarisasi data text ke huruf kecil
+            query = """
+                SELECT LOWER(lembaga_ssr_iu), LOWER(nama_layanan) 
+                FROM database_layanan 
+                WHERE jenis IS NOT NULL;
+            """
+            cur.execute(query)
+            rows = cur.fetchall()
+            
+            for row in rows:
+                ssr_val = str(row[0]).strip() if row[0] else None
+                layanan_val = str(row[1]).strip() if row[1] else None
+                
+                # Memastikan data tidak kosong atau string representasi nan sebelum dimasukkan ke set
+                if ssr_val and layanan_val and ssr_val != 'nan' and layanan_val != 'nan':
+                    set_prep_valid.add((ssr_val, layanan_val))
+                    
+    except Exception as e:
+        print(f"Error saat mengekstrak set layanan PrEP valid: {e}")
+    finally:
+        conn.close()
+        
+    return set_prep_valid
 
 # ==============================================================================
 # KATEGORI 5: OPERASI PROSES REVIEW DATA VALIDASI (3 TABEL UTAMA)
