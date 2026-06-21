@@ -1103,14 +1103,22 @@ if tombol_proses:
             df_pjj_raw = pd.DataFrame()
             df_rjk_raw = pd.DataFrame()
             
-            # 🔥 FIX CRASH UTAMA: Pastikan df_bawah terisi dan kolom kategori data dibuat jika terlewat mapping
-            if not df_bawah.empty:
-                if 'KATEGORI DATA' not in df_bawah.columns:
-                    df_bawah['KATEGORI DATA'] = '-'
+            # 🔥 PERBAIKAN TOTAL: Pastikan kolom dijamin terbuat baik ketika df_bawah kosong maupun berisi
+            if df_bawah is None:
+                df_bawah = pd.DataFrame()
                 
-                # Gunakan .astype(str) sebelum .str.upper() agar aman dari objek Non-string (NaN/Missing values)
-                df_pjj_raw = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.upper() == 'PENJANGKAUAN']
-                df_rjk_raw = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.upper() == 'RUJUKAN']
+            if 'KATEGORI DATA' not in df_bawah.columns:
+                # Cari juga apakah ada nama kolom mirip yang mengandung kata 'KATEGORI' agar tidak double kolom
+                kolom_mirip = [c for c in df_bawah.columns if 'KATEGORI' in str(c).upper()]
+                if kolom_mirip:
+                    df_bawah = df_bawah.rename(columns={kolom_mirip[0]: 'KATEGORI DATA'})
+                else:
+                    df_bawah['KATEGORI DATA'] = '-'
+            
+            # Melakukan pemfilteran aman dengan tambahan .str.strip() untuk membuang spasi hantu
+            if not df_bawah.empty:
+                df_pjj_raw = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.strip().str.upper() == 'PENJANGKAUAN'].copy()
+                df_rjk_raw = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.strip().str.upper() == 'RUJUKAN'].copy()
 
             st.session_state['df_err_penj'] = df_pjj_raw
             st.session_state['df_err_ruj'] = df_rjk_raw
