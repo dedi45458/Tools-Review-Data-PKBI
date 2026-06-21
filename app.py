@@ -1283,10 +1283,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         tot_data_penj = st.session_state.get('total_entri_penjangkauan', 0)
         tot_data_ruj = st.session_state.get('total_entri_rujukan', 0)
         
+        # Ambil total temuan baris secara murni dari session state jika sudah diproses tombol eksekusi
         tot_err_penj = st.session_state.get('temuan_penjangkauan', 0)
         tot_err_ruj = st.session_state.get('temuan_rujukan', 0)
         
-        # Hitung baris temuan secara dinamis jika session state belum terisi
+        # Hitung baris temuan secara dinamis jika session state belum terisi sempurna
         df_semua_error = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama'))
         
         if (tot_err_penj == 0 and tot_err_ruj == 0) and (df_semua_error is not None and not df_semua_error.empty):
@@ -1318,15 +1319,20 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # Melakukan filtering berbasis string kapital murni
             mask_rujukan = df_semua_error['INDIKATOR KESALAHAN DATA'].str.strip().str.upper().isin(ind_rujukan)
             
-            df_err_penj_unik = df_semua_error[~mask_rujukan].drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KLIEN"])
-            df_err_ruj_unik = df_semua_error[mask_rujukan].drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KLIEN"])
+            # 🔥 PERBAIKAN UTAMA: Hapus .drop_duplicates() agar tetap menjaga total baris (misal: 50 baris)
+            df_err_penj_asli = df_semua_error[~mask_rujukan]
+            df_err_ruj_asli = df_semua_error[mask_rujukan]
             
-            tot_err_penj = len(df_err_penj_unik)
-            tot_err_ruj = len(df_err_ruj_unik)
+            tot_err_penj = len(df_err_penj_asli)
+            tot_err_ruj = len(df_err_ruj_asli)
 
-        # Perhitungan Akurasi Akhir yang Valid untuk Tampilan UI
-        akurasi_penj = st.session_state.get('akurasi_penjangkauan', (100.0 if tot_data_penj == 0 else max(0.0, 100.0 - (tot_err_penj / tot_data_penj * 100))))
-        akurasi_ruj = st.session_state.get('akurasi_rujukan', (100.0 if tot_data_ruj == 0 else max(0.0, 100.0 - (tot_err_ruj / tot_data_ruj * 100))))
+        # 🔥 SINKRONISASI KARTU SKOR: Ambil nilai real dari backend tombol_proses jika tersedia
+        tot_err_penj = st.session_state.get('temuan_penjangkauan', tot_err_penj)
+        tot_err_ruj = st.session_state.get('temuan_rujukan', tot_err_ruj)
+
+        # Perhitungan Akurasi Akhir yang Valid dan Dinamis untuk Tampilan UI (Tidak Terkunci di 100%)
+        akurasi_penj = st.session_state.get('akurasi_penjangkauan', (100.0 if tot_data_penj == 0 else max(0.0, (tot_data_penj - tot_err_penj) / tot_data_penj * 100)))
+        akurasi_ruj = st.session_state.get('akurasi_rujukan', (100.0 if tot_data_ruj == 0 else max(0.0, (tot_data_ruj - tot_err_ruj) / tot_data_ruj * 100)))
         
         teks_akurasi_penj = f"{akurasi_penj:.2f}%" if tot_data_penj > 0 else "100.00%"
         teks_akurasi_ruj = f"{akurasi_ruj:.2f}%" if tot_data_ruj > 0 else "100.00%"
