@@ -845,9 +845,16 @@ def jalankan_review_data(
     info_cbs_di_penjangkauan_per_klien = {}
     edukasi_vct_di_penjangkauan_per_klien = {}
     edukasi_prep_di_penjangkauan_per_klien = {}
-
+    
     df_pj_aktif = locals().get('df_penjangkauan', st.session_state.get('df_penjangkauan_aktif', None))
-
+    
+    # ✨ PENYEMPURNAAN: Proteksi otomatis jika variabel luar lupa di-.upper()
+    if 'set_ssr_id_penjangkauan' in locals() or 'set_ssr_id_penjangkauan' in globals():
+        try:
+            set_ssr_id_penjangkauan = {str(x).strip().upper() for x in set_ssr_id_penjangkauan if str(x).strip() not in ['', 'nan', 'None']}
+        except Exception:
+            pass
+    
     if is_file_rujukan and df_pj_aktif is not None and not df_pj_aktif.empty:
         col_info_pj = next((c for c in df_pj_aktif.columns if "INFORMASI" in str(c).upper() and "DIBERIKAN" in str(c).upper()), "")
         col_ruj_pj = next((c for c in df_pj_aktif.columns if "RUJUKAN" in str(c).upper()), "")
@@ -862,8 +869,9 @@ def jalankan_review_data(
             txt_info = str(r_pj.get(col_info_pj, '')).strip() if col_info_pj else ""
             txt_ruj = str(r_pj.get(col_ruj_pj, '')).strip() if col_ruj_pj else ""
             
-            list_info_pj = txt_info.replace("'", "").replace(" ", "").split(',')
-            list_ruj_pj = txt_ruj.replace("'", "").replace(" ", "").replace(".0", "").split(',')
+            # ✨ PENYEMPURNAAN: Ditambahkan .replace(".0", "") untuk mengantisipasi angka desimal dari Excel
+            list_info_pj = [k.strip() for k in txt_info.replace("'", "").replace(" ", "").replace(".0", "").split(',') if k.strip()]
+            list_ruj_pj = [k.strip() for k in txt_ruj.replace("'", "").replace(" ", "").replace(".0", "").split(',') if k.strip()]
             
             if '12' in list_info_pj:
                 info_cbs_di_penjangkauan_per_klien[kunci_pj] = True
@@ -871,13 +879,13 @@ def jalankan_review_data(
                 edukasi_vct_di_penjangkauan_per_klien[kunci_pj] = True
             if '10' in list_info_pj and '5' in list_ruj_pj:
                 edukasi_prep_di_penjangkauan_per_klien[kunci_pj] = True
-
+    
     if is_file_rujukan:
         SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_RUJUKAN
     else:
         aturan_kustom = st.session_state.get('aturan_kustom', [])
         SEMUA_ATURAN_AKTIF = ATURAN_VALIDASI_BAWAAN + aturan_kustom
-
+    
     # LOOP BARIS DATA UNTUK EVALUASI
     for idx in range(start_row_idx, len(df)):
         row = df.iloc[idx]
@@ -892,7 +900,7 @@ def jalankan_review_data(
         
         nik_raw = str(row.get(col_nik, '')).strip()
         nik_clean = nik_raw.replace("'", "").replace('.0', '').strip()
-
+    
         v_tipe_sasaran = str(row.get(col_tipe_sasaran, '')).replace('.0', '').strip()
         umur = row.get(col_umur, None)
         jk = str(row.get(col_jk, '')).replace('.0', '').strip()
@@ -902,25 +910,25 @@ def jalankan_review_data(
         lokasi = str(row.get(col_lokasi, row.get('Lokasi Outreach / Jenis Sosial Media', ''))).strip()
         
         info_diberikan = str(row.get(col_info, '')).strip() if col_info else ''
-        rujukan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
+        rujakan = str(row.get(col_ruj, '')).strip() if col_ruj else ''
         no_hp = str(row.get('No. HP / Nama Akun', '')).strip()
         
         vc1 = str(row.get(col_vc1, row.get('Virtual & Tatap Muka', ''))).replace('.0', '').strip()
-
+    
         log_kie = sum(_safe_float(row.get(c, 0)) for c in col_kie_list)
         log_kon = sum(_safe_float(row.get(c, 0)) for c in col_kon_list)
         log_pel = sum(_safe_float(row.get(c, 0)) for c in col_pel_list)
         log_jar = sum(_safe_float(row.get(c, 0)) for c in col_jar_list)
         log_swab = sum(_safe_float(row.get(c, 0)) for c in col_swab_list)
         jarum_kembali = _safe_float(row.get('Jumlah Jarum Suntik Kembali', 0))
-
+    
         tgl_raw = row.get(col_tanggal, None)
         tgl_p = pd.to_datetime(tgl_raw, errors='coerce', format='%d/%m/%Y') if pd.notna(tgl_raw) and '/' in str(tgl_raw) else pd.to_datetime(tgl_raw, errors='coerce')
-
+    
         kunci_klien_ref = f"{v_ssr}_{id_clean}"
         count_untuk_ssr_id = dict_ssr_id_counts.get(kunci_klien_ref, 0)
         local_id_counts = {id_clean: count_untuk_ssr_id} 
-
+    
         pernah_dapat_info_hiv = dict_pernah_hiv.get(kunci_klien_ref, False) if id_clean else False
         pernah_dapat_rujuk_tes = dict_pernah_rujuk.get(kunci_klien_ref, False) if id_clean else False
         
@@ -936,28 +944,28 @@ def jalankan_review_data(
             is_layanan_prep_db = True
         else:
             is_layanan_prep_db = (v_ssr.lower(), layanan_clean) in set_prep_valid
-
+    
         if is_file_rujukan and col_nama_layanan:
             v_nama_layanan = str(row.get(col_nama_layanan, '-')).strip()
             if v_nama_layanan.lower() in ['nan', 'none', '']: v_nama_layanan = '-'
         else:
             v_nama_layanan = '-'
-
-        rujukan_clean_text = rujukan.replace("'", "").replace(".0", "").strip()
+    
+        rujakan_clean_text = rujukan.replace("'", "").replace(".0", "").strip()
         if '.' in rujukan_clean_text and ',' not in rujukan_clean_text:
-            rujukan_clean_text = rujukan_clean_text.replace('.', ',')
+            rujakan_clean_text = rujukan_clean_text.replace('.', ',')
         
         list_kode_rujukan = [
             k.strip() 
             for k in rujukan_clean_text.split(',') 
             if k.strip() not in ['', 'nan', 'None']
         ]
-
+    
         def jembatan_cek_kode(nilai_input, kode_target):
             if nilai_input and kode_target:
                 return str(kode_target).strip() in list_kode_rujukan
             return False
-
+    
         context_data = {
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
@@ -985,7 +993,7 @@ def jalankan_review_data(
             'edukasi_vct_di_penjangkauan_per_klien': edukasi_vct_di_penjangkauan_per_klien,
             'edukasi_prep_di_penjangkauan_per_klien': edukasi_prep_di_penjangkauan_per_klien
         }
-
+    
         for rule in SEMUA_ATURAN_AKTIF:
             nama_ind = rule["nama"]
             try:
@@ -1020,7 +1028,7 @@ def jalankan_review_data(
                     })
             except Exception: 
                 pass
-
+    
     return pd.DataFrame(list_kesalahan)
 
     
