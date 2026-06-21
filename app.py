@@ -291,18 +291,40 @@ def hitung_dan_ambil_log_db():
     if conn:
         try:
             with conn.cursor() as cur:
-                # Ambil data langsung menggunakan query Postgres
-                cur.execute("SELECT Kategori_Data, Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi FROM log_hasil_review_data")
+                # 1. Ambil data dengan susunan kolom yang jelas
+                cur.execute("""
+                    SELECT Kategori_Data, Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi 
+                    FROM log_hasil_review_data
+                """)
                 rows = cur.fetchall()
+                
                 for r in rows:
-                    ssr, tgl, id_klien, ind, is_rev, just = r
-                    key = f"{str(ssr).upper()}_{str(tgl)}_{str(id_klien)}_{str(ind)}"
-                    dict_revisi[key] = is_rev
-                    if just: dict_justifikasi[key] = just
+                    kat_data, ssr, tgl, id_klien, ind, is_rev, just = r
+                    
+                    # 2. 🟢 PERBAIKAN UTAMA: Masukkan Kategori_Data dan standarisasi string (.upper() / .strip())
+                    v_kat = str(kat_data).strip()  # Sesuai v_kategori ("Rujukan" / "Penjangkauan")
+                    v_ssr = str(ssr).strip().upper()
+                    v_tgl = str(tgl).strip()
+                    v_id  = str(id_klien).replace("'", "").strip()
+                    v_ind = str(ind).strip()
+                    
+                    # Bentuk key yang identik dengan key_db di engine utama
+                    key = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
+                    
+                    # 3. Masukkan ke dictionary hanya jika BELUM direvisi (is_revisi == False atau None)
+                    if not is_rev: 
+                        dict_revisi[key] = True
+                    
+                    # Simpan catatan justifikasi jika ada isi teksnya
+                    if just and str(just).strip() not in ['', 'nan', 'None']: 
+                        dict_justifikasi[key] = str(just).strip()
+                        
         except Exception as e:
+            # Anda bisa mencetak error jika dibutuhkan untuk debugging: print(f"Error DB: {e}")
             pass
         finally:
             conn.close()
+            
     return dict_revisi, dict_justifikasi
 
 # ==========================================================
@@ -962,10 +984,9 @@ def jalankan_review_data(
         for rule in SEMUA_ATURAN_AKTIF:
             nama_ind = rule["nama"]
             try:
-                # Memasukkan lingkungan lokal ke dalam evaluasi lambda global jika diperlukan
                 if rule["periksa"](context_data):
-                    # Kunci unik pencocokan database
-                    key_db = f"{v_ssr}_{v_tanggal}_{id_clean}_{nama_ind}"
+                    # 🌟 FIX KUNCI COCOK: Ditambahkan v_kategori di depan agar presisi dengan database Neon
+                    key_db = f"{v_kategori}_{v_ssr}_{v_tanggal}_{id_clean}_{nama_ind}"
                     
                     status_validasi = "-"
                     checked_state = False
@@ -974,11 +995,13 @@ def jalankan_review_data(
                     if key_db in dict_justifikasi:
                         status_validasi = f"⚠️ Terdeteksi Kembali (Riwayat Justifikasi: {justif_val})"
                         
+                    # 🟢 KONDISI SASARAN ANDA:
+                    # Jika kombinasi parameter ada di dict_revisi (artinya data lama di Neon is_revisi masih False/belum diperbaiki)
                     if key_db in dict_revisi:
-                        status_validasi = "kesalahan pada ID yang berulang (belum dilakukan revisi)"
+                        status_validasi = "Kesalahan pada ID yang berulang (belum direvisi)"
                         checked_state = True
-
-                    # 🌟 FIX PENAMAAN KUNCI DICTIONARY OUTPUT: Menggunakan Huruf Kapital Sesuai Cleansing Map
+    
+                    # Append data ke list kesalahan
                     list_kesalahan.append({
                         "Pilih": checked_state,
                         "Kategori Data": v_kategori,
