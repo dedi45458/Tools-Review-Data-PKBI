@@ -1133,7 +1133,7 @@ if tombol_proses:
             
             # KALKULASI AKURASI DATA
             akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
-            | akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
+            akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
             
             st.session_state['akurasi_penjangkauan'] = akurasi_pjj
             st.session_state['akurasi_rujukan'] = akurasi_rjk
