@@ -601,31 +601,49 @@ def ambil_hasil_review_utama_terakhir():
         conn.close()
 
 def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
-    """Menyimpan log metrik akurasi saat validasi berjalan."""
+    """Menyimpan log metrik akurasi saat validasi berjalan menggunakan skema UPSERT."""
     conn = dapatkan_koneksi_neon()
-    if not conn: return False
+    if not conn: 
+        return False
     try:
         with conn.cursor() as cur:
-            # Otomatis membuat tabel jika kamu belum sempat membuatnya di Neon
+            # 1. Pastikan tabel dibuat dengan constraint UNIQUE pada kolom 'kategori'
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS metrik_akurasi (
                     id SERIAL PRIMARY KEY,
-                    kategori VARCHAR(50), 
+                    kategori VARCHAR(50) UNIQUE, 
                     total_proses INT, 
                     total_temuan INT, 
                     akurasi FLOAT, 
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
-                INSERT INTO metrik_akurasi (kategori, total_proses, total_temuan, akurasi) 
-                VALUES (%s, %s, %s, %s);
-            """, (kategori, total_proses, total_temuan, akurasi))
+            """)
+            
+            # 2. Gunakan ON CONFLICT untuk memperbarui data jika kategori sudah ada (UPSERT)
+            query_upsert = """
+                INSERT INTO metrik_akurasi (kategori, total_proses, total_temuan, akurasi, created_at) 
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (kategori) 
+                DO UPDATE SET 
+                    total_proses = EXCLUDED.total_proses,
+                    total_temuan = EXCLUDED.total_temuan,
+                    akurasi = EXCLUDED.akurasi,
+                    created_at = CURRENT_TIMESTAMP;
+            """
+            
+            # Pastikan parameter kategori dipaksa menjadi lowercase agar konsisten saat dibaca di UI
+            cur.execute(query_upsert, (kategori.lower().strip(), total_proses, total_temuan, akurasi))
+            
         conn.commit()
         return True
-    except Exception:
-        conn.rollback()
+    except Exception as e:
+        if conn: 
+            conn.rollback()
+        # Anda bisa mencetak print(f"Error DB: {e}") di sini untuk mempermudah debugging jika diperlukan
         return False
     finally:
-        conn.close()
+        if conn: 
+            conn.close()
 
 
 def ambil_metrik_akurasi_terakhir():
