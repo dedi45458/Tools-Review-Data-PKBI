@@ -218,6 +218,41 @@ def ambil_data_rujukan_hiv_positif():
     finally:
         conn.close()
 
+def ambil_set_reaktif_sebelumnya():
+    """
+    Mengambil data riwayat HIV positif dan mengubahnya menjadi dua Set:
+    1. Set NIK
+    2. Set Kunci SSR_ID
+    """
+    # 1. Panggil fungsi yang baru saja Anda buat
+    df_riwayat = ambil_data_rujukan_hiv_positif()
+    
+    set_nik = set()
+    set_ssr_id = set()
+    
+    if df_riwayat.empty:
+        return set_nik, set_ssr_id
+        
+    for _, row in df_riwayat.iterrows():
+        # --- Ekstraksi dan Pembersihan NIK ---
+        nik_raw = str(row.get('nik', '')).strip()
+        # Bersihkan NIK dari tanda petik, spasi, dan akhiran float (.0)
+        nik_clean = nik_raw.replace("'", "").replace('.0', '').strip()
+        
+        if nik_clean and nik_clean.lower() not in ['nan', 'none', '']:
+            set_nik.add(nik_clean)
+            
+        # --- Ekstraksi dan Pembersihan Lembaga SSR + ID Klien ---
+        ssr = str(row.get('lembaga_ssr', '')).strip().upper()
+        idk_raw = str(row.get('id_klien', '')).strip()
+        idk_clean = idk_raw.replace("'", "").strip()
+        
+        if ssr and idk_clean:
+            kunci = f"{ssr}_{idk_clean}"
+            set_ssr_id.add(kunci)
+            
+    return set_nik, set_ssr_id
+
 def buat_tabel_dan_index_layanan():
     """Membuat tabel database_layanan sekaligus index kombinasi di Neon PostgreSQL."""
     query_tabel = """
