@@ -1133,26 +1133,31 @@ if tombol_proses:
             
             # KALKULASI AKURASI DATA
             akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
-            akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
+            | akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
             
             st.session_state['akurasi_penjangkauan'] = akurasi_pjj
             st.session_state['akurasi_rujukan'] = akurasi_rjk
             st.session_state['temuan_penjangkauan'] = total_temuan_pjj
             st.session_state['temuan_rujukan'] = total_temuan_rjk
             
-            # SINKRONISASI KE DATABASE NEON DENGAN SKEMA UPSERT
-            if not st.session_state.get('db_tercatat_batch', False):
-                try:
-                    from database import simpan_metrik_akurasi_db
-                    if total_proses_pjj > 0: 
-                        simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
-                    if total_proses_rjk > 0: 
-                        simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
-                        
-                    st.toast("💾 Sinkronisasi metrik akurasi ke Cloud Neon Database berhasil!", icon="✅")
-                    st.session_state['db_tercatat_batch'] = True
-                except Exception as e:
-                    st.error(f"Gagal memproses pencatatan metrik ke database Neon: {e}")
+            # 🔥 PERBAIKAN UTAMA: Paksa reset flag di awal proses agar selalu menyimpan data terbaru
+            st.session_state['db_tercatat_batch'] = False
+
+            try:
+                from database import simpan_metrik_akurasi_db
+                
+                # Simpan metrik Penjangkauan (jika filenya ada atau jika ada temuan)
+                if total_proses_pjj > 0 or total_temuan_pjj > 0:
+                    simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
+                
+                # Simpan metrik Rujukan (jika filenya ada atau jika ada temuan)
+                if total_proses_rjk > 0 or total_temuan_rjk > 0:
+                    simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
+                    
+                st.toast("💾 Sinkronisasi metrik akurasi ke Cloud Neon Database berhasil!", icon="✅")
+                st.session_state['db_tercatat_batch'] = True
+            except Exception as e:
+                st.error(f"Gagal memproses pencatatan metrik ke database Neon: {e}")
 
             # =========================================================================
             # CLEANSING DATA & FILTER DUPLIKAT SEBELUM MASUK TABEL DETAIL
