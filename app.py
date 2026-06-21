@@ -832,6 +832,10 @@ def jalankan_review_data(
             id_pj = str(r_pj.get(col_id_pj, '')).replace("'", "").strip().upper() 
             kunci_pj = f"{ssr_pj}_{id_pj}"
             
+            # 🔥 TAMBAHAN/PERBAIKAN: Masukkan secara live ke set validasi
+            if id_pj and id_pj not in ['NAN', '', '-', 'NONE'] and ssr_pj and ssr_pj not in ['NAN', '']:
+                set_ssr_id_penjangkauan.add(kunci_pj)
+            
             txt_info = str(r_pj.get(col_info_pj, '')).strip() if col_info_pj else ""
             txt_ruj = str(r_pj.get(col_ruj_pj, '')).strip() if col_ruj_pj else ""
             
