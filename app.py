@@ -1103,9 +1103,14 @@ if tombol_proses:
             df_pjj_raw = pd.DataFrame()
             df_rjk_raw = pd.DataFrame()
             
-            if not df_bawah.empty and 'KATEGORI DATA' in df_bawah.columns:
-                df_pjj_raw = df_bawah[df_bawah['KATEGORI DATA'].str.upper() == 'PENJANGKAUAN']
-                df_rjk_raw = df_bawah[df_bawah['KATEGORI DATA'].str.upper() == 'RUJUKAN']
+            # 🔥 FIX CRASH UTAMA: Pastikan df_bawah terisi dan kolom kategori data dibuat jika terlewat mapping
+            if not df_bawah.empty:
+                if 'KATEGORI DATA' not in df_bawah.columns:
+                    df_bawah['KATEGORI DATA'] = '-'
+                
+                # Gunakan .astype(str) sebelum .str.upper() agar aman dari objek Non-string (NaN/Missing values)
+                df_pjj_raw = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.upper() == 'PENJANGKAUAN']
+                df_rjk_raw = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.upper() == 'RUJUKAN']
 
             st.session_state['df_err_penj'] = df_pjj_raw
             st.session_state['df_err_ruj'] = df_rjk_raw
@@ -1195,7 +1200,7 @@ if tombol_proses:
                     from database import simpan_paket_validasi_ke_tiga_tabel
                     if not df_bawah.empty:
                         # 1. TABEL PENJANGKAUAN
-                        df_pjj_only = df_bawah[df_bawah['KATEGORI DATA'].str.title() == 'Penjangkauan']
+                        df_pjj_only = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.title() == 'Penjangkauan']
                         list_insert_tabel_1 = []
                         if not df_pjj_only.empty:
                             DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state.get('aturan_kustom', []))]
@@ -1207,11 +1212,12 @@ if tombol_proses:
                                         list_insert_tabel_1.append((ssr_name, ind_err, hitung_kesalahan))
 
                         # 2. TABEL RUJUKAN
-                        df_rjk_only = df_bawah[df_bawah['KATEGORI DATA'].str.title() == 'Rujukan'].copy()
+                        df_rjk_only = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.title() == 'Rujukan'].copy()
                         list_insert_tabel_2 = []
                         if not df_rjk_only.empty:
                             df_agregasi = df_rjk_only.groupby(['LEMBAGA SSR', 'INDIKATOR KESALAHAN DATA']).size().reset_index(name='JUMLAH KESALAHAN')
-                            tanggal_skr = datetime.now().date()
+                            # 🔥 FIX IMPORT: Gunakan dt.date.today() / dt.datetime.now().date() sesuai object import library Anda
+                            tanggal_skr = dt.date.today() if 'dt' in globals() else datetime.now().date()
                             for _, row_aggr in df_agregasi.iterrows():
                                 list_insert_tabel_2.append((
                                     tanggal_skr,
