@@ -998,9 +998,17 @@ if tombol_proses:
             total_proses_rjk = 0
             
             set_nik_rkt, set_ssr_id_rkt, set_prep_vld = set(), set(), set()
+            
+            # 🔥 PERBAIKAN ISU #3: Tarik historis error dari log_hasil_review_data
+            set_error_historis = set() 
+            
             try:
                 set_nik_rkt, set_ssr_id_rkt = ambil_set_reaktif_sebelumnya()
                 set_prep_vld = ambil_set_layanan_prep_valid()
+                
+                # Tambahkan fungsi ini di file database.py Anda nantinya
+                from database import ambil_set_error_belum_direvisi
+                set_error_historis = ambil_set_error_belum_direvisi() 
             except Exception as e:
                 pass # Abaikan jika data historis belum ada
 
@@ -1016,7 +1024,7 @@ if tombol_proses:
                             if ssr and idk: set_penjangkauan.add(f"{ssr}_{idk}")
                 except Exception: pass
 
-            # Loop 2: Eksekusi Validasi (Mengumpulkan seluruh error dari multi-file)
+            # Loop 2: Eksekusi Validasi
             for f in files_review:
                 try:
                     df_target = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
@@ -1028,88 +1036,28 @@ if tombol_proses:
                     if is_rujukan: total_proses_rjk += len(df_target)
                     else: total_proses_pjj += len(df_target)
                     
+                    # 🔥 PERBAIKAN ISU #3: Lempar parameter set_error_historis ke dalam engine validasi
                     df_res = jalankan_review_data(
                         df_target, df_ref, nama_file=f.name,
                         set_ssr_id_penjangkauan=set_penjangkauan,
-                        set_nik_reaktif=set_nik_rkt, set_ssr_id_reaktif=set_ssr_id_rkt, set_prep_valid=set_prep_vld
+                        set_nik_reaktif=set_nik_rkt, set_ssr_id_reaktif=set_ssr_id_rkt, 
+                        set_prep_valid=set_prep_vld,
+                        set_error_historis=set_error_historis # <--- Tambahan parameter
                     )
                     
                     if not df_res.empty:
-                        df_res['Kategori Data'] = 'Rujukan' if is_rujukan else 'Penjangkauan'
+                        df_res['KATEGORI DATA'] = 'Rujukan' if is_rujukan else 'Penjangkauan' # Paksa ke uppercase key
                         all_errs.append(df_res)
                 except Exception: pass
 
             # =========================================================================
-            # BAGIAN EKSEKUSI UTAMA - SINKRONISASI DATABASE (DIELIMINASI DARI LOOP FILE)
+            # 🔥 PERBAIKAN ISU #1: STANDARISASI KOLOM HARUS DILAKUKAN SEBELUM KALKULASI
             # =========================================================================
-            
-            # 🎯 Simpan total entri global ke memory Streamlit
-            st.session_state['total_entri'] = total_records
-            st.session_state['total_entri_penjangkauan'] = total_proses_pjj
-            st.session_state['total_entri_rujukan'] = total_proses_rjk
-            
-            # Inisialisasi DataFrame kosong sebagai fallback default
-            df_pjj_raw = pd.DataFrame()
-            df_rjk_raw = pd.DataFrame()
             df_bawah = pd.DataFrame()
-            
             if all_errs:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
                 
-                if not df_bawah.empty and 'Kategori Data' in df_bawah.columns:
-                    df_pjj_raw = df_bawah[df_bawah['Kategori Data'].str.lower() == 'penjangkauan']
-                    df_rjk_raw = df_bawah[df_bawah['Kategori Data'].str.lower() == 'rujukan']
-            
-            # 🎯 Simpan tabel temuan spesifik ke memory Streamlit
-            st.session_state['df_err_penj'] = df_pjj_raw
-            st.session_state['df_err_ruj'] = df_rjk_raw
-            
-            # HITUNG TOTAL TEMUAN SECARA AMAN (Menggunakan drop_duplicates baris klien agar akurat)
-            total_temuan_pjj = 0
-            total_temuan_rjk = 0
-            
-            if not df_pjj_raw.empty and all(c in df_pjj_raw.columns for c in ['Lembaga SSR', 'Tanggal', 'ID Klien']):
-                total_temuan_pjj = len(df_pjj_raw.drop_duplicates(subset=['Lembaga SSR', 'Tanggal', 'ID Klien']))
-            elif not df_pjj_raw.empty:
-                total_temuan_pjj = len(df_pjj_raw)
-
-            if not df_rjk_raw.empty and all(c in df_rjk_raw.columns for c in ['Lembaga SSR', 'Tanggal', 'ID Klien']):
-                total_temuan_rjk = len(df_rjk_raw.drop_duplicates(subset=['Lembaga SSR', 'Tanggal', 'ID Klien']))
-            elif not df_rjk_raw.empty:
-                total_temuan_rjk = len(df_rjk_raw)
-            
-            # KALKULASI AKURASI DATA
-            akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
-            akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
-            
-            # 🎯 INJEKSI UNTUK KARTU SKOR UI
-            st.session_state['akurasi_penjangkauan'] = akurasi_pjj
-            st.session_state['akurasi_rujukan'] = akurasi_rjk
-            st.session_state['temuan_penjangkauan'] = total_temuan_pjj
-            st.session_state['temuan_rujukan'] = total_temuan_rjk
-            
-            # 🔥 SINKRONISASI KE DATABASE NEON DENGAN SKEMA UPSERT (Hanya berjalan jika batch belum tercatat)
-            if not st.session_state.get('db_tercatat_batch', False):
-                try:
-                    from database import simpan_metrik_akurasi_db
-                    
-                    # Simpan data Penjangkauan jika berkasnya diproses
-                    if total_proses_pjj > 0: 
-                        simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
-                    # Simpan data Rujukan jika berkasnya diproses
-                    if total_proses_rjk > 0: 
-                        simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
-                        
-                    st.toast("💾 Sinkronisasi metrik akurasi ke Cloud Neon Database berhasil!", icon="✅")
-                    st.session_state['db_tercatat_batch'] = True
-                            
-                except Exception as e:
-                    st.error(f"Gagal memproses pencatatan metrik ke database Neon: {e}")
-
-            # =========================================================================
-            # 🔥 PERBAIKAN TOTAL: STANDARISASI NAMA KOLOM & CLEANSING DATA
-            # =========================================================================
-            if not df_bawah.empty:
+                # RENAME KOLOM SEKARANG JUGA
                 rename_map = {}
                 for c in df_bawah.columns:
                     c_clean = str(c).strip().upper()
@@ -1127,7 +1075,53 @@ if tombol_proses:
                     elif 'JUSTIFIKASI' in c_clean: rename_map[c] = 'JUSTIFIKASI'
                 
                 df_bawah = df_bawah.rename(columns=rename_map)
-                
+
+            # 🎯 Simpan total entri global ke memory Streamlit
+            st.session_state['total_entri'] = total_records
+            st.session_state['total_entri_penjangkauan'] = total_proses_pjj
+            st.session_state['total_entri_rujukan'] = total_proses_rjk
+            
+            df_pjj_raw = pd.DataFrame()
+            df_rjk_raw = pd.DataFrame()
+            
+            if not df_bawah.empty and 'KATEGORI DATA' in df_bawah.columns:
+                df_pjj_raw = df_bawah[df_bawah['KATEGORI DATA'].str.upper() == 'PENJANGKAUAN']
+                df_rjk_raw = df_bawah[df_bawah['KATEGORI DATA'].str.upper() == 'RUJUKAN']
+
+            st.session_state['df_err_penj'] = df_pjj_raw
+            st.session_state['df_err_ruj'] = df_rjk_raw
+            
+            # 🔥 PERBAIKAN ISU #2: HITUNG TOTAL TEMUAN SECARA MURNI (TANPA DROP DUPLICATES)
+            total_temuan_pjj = len(df_pjj_raw)
+            total_temuan_rjk = len(df_rjk_raw)
+            
+            # KALKULASI AKURASI DATA
+            akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
+            akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
+            
+            st.session_state['akurasi_penjangkauan'] = akurasi_pjj
+            st.session_state['akurasi_rujukan'] = akurasi_rjk
+            st.session_state['temuan_penjangkauan'] = total_temuan_pjj
+            st.session_state['temuan_rujukan'] = total_temuan_rjk
+            
+            # SINKRONISASI KE DATABASE NEON DENGAN SKEMA UPSERT
+            if not st.session_state.get('db_tercatat_batch', False):
+                try:
+                    from database import simpan_metrik_akurasi_db
+                    if total_proses_pjj > 0: 
+                        simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
+                    if total_proses_rjk > 0: 
+                        simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
+                        
+                    st.toast("💾 Sinkronisasi metrik akurasi ke Cloud Neon Database berhasil!", icon="✅")
+                    st.session_state['db_tercatat_batch'] = True
+                except Exception as e:
+                    st.error(f"Gagal memproses pencatatan metrik ke database Neon: {e}")
+
+            # =========================================================================
+            # CLEANSING DATA & FILTER DUPLIKAT SEBELUM MASUK TABEL DETAIL
+            # =========================================================================
+            if not df_bawah.empty:
                 kolom_wajib = [
                     'KATEGORI DATA', 'LEMBAGA SSR', 'TANGGAL', 'ID KLIEN', 'KODE PETUGAS', 
                     'NAMA KOTA', 'NAMA LAYANAN', 'NIK', 'TIPE SASARAN', 
