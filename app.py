@@ -842,7 +842,7 @@ def jalankan_review_data(
                 # 🔥 Masukkan kombinasi SSR + ID Klien dari file penjangkauan baru ke set validasi rujukan
                 if id_pj and id_pj not in ['NAN', '', '-', 'NONE'] and ssr_pj and ssr_pj not in ['NAN', '']:
                     set_ssr_id_penjangkauan.add(kunci_pj)
-                
+                           
                 txt_info = str(r_pj.get(col_info_pj, '')).strip() if col_info_pj else ""
                 txt_ruj = str(r_pj.get(col_ruj_pj, '')).strip() if col_ruj_pj else ""
                 
@@ -852,6 +852,12 @@ def jalankan_review_data(
                 if '12' in list_info_pj: info_cbs_di_penjangkauan_per_klien[kunci_pj] = True
                 if '1' in list_info_pj and '2' in list_ruj_pj: edukasi_vct_di_penjangkauan_per_klien[kunci_pj] = True
                 if '10' in list_info_pj and '5' in list_ruj_pj: edukasi_prep_di_penjangkauan_per_klien[kunci_pj] = True
+            # Debug info (Penting untuk melihat apakah ID terbaca atau tidak)
+            if 'st' in globals():
+                st.write(f"✅ Sistem memproses {len(set_ssr_id_penjangkauan)} unik ID dari file Penjangkauan untuk validasi Rujukan.")
+        else:
+            if 'st' in globals():
+                st.warning("⚠️ File Penjangkauan tidak ditemukan atau kosong. Validasi Rujukan tidak bisa dilakukan!")
 
     if is_file_rujukan:
         SEMUA_ATURAN_AKTIF = globals().get('ATURAN_VALIDASI_RUJUKAN', [])
