@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 # ==========================================================
 # IMPORT FUNGSI NEON DARI FILE database.py
 # ==========================================================
-from database import (
+rom database import (
     dapatkan_koneksi_neon,
     simpan_log_ke_neon,
     jalankan_agregasi_tren,
@@ -18,8 +18,10 @@ from database import (
     tambah_keyword_medsos_db,
     ambil_status_storage_neon,
     
-    # 🛠️ REFERENSI DATA MASTER
+    # 🛠️ REFERENSI DATA MASTER (DISESUAIKAN)
     ambil_data_rujukan_hiv_positif,  
+    ambil_set_reaktif_sebelumnya,       # ✨ Tambahkan ini untuk validasi is_reaktif_sebelumnya
+    ambil_set_layanan_prep_valid,       # ✨ Tambahkan ini untuk validasi PrEP
     ambil_database_layanan,          
     
     # 🛠️ PROSES SIMPAN DATA REVIEWS
@@ -942,7 +944,6 @@ if tombol_proses:
             
             set_nik_rkt, set_ssr_id_rkt, set_prep_vld = set(), set(), set()
             try:
-                from database import ambil_set_reaktif_sebelumnya, ambil_set_layanan_prep_valid
                 set_nik_rkt, set_ssr_id_rkt = ambil_set_reaktif_sebelumnya()
                 set_prep_vld = ambil_set_layanan_prep_valid()
             except Exception as e:
