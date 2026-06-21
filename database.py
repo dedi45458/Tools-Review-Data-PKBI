@@ -789,3 +789,35 @@ def ambil_metrik_akurasi_terakhir():
         conn.close()
         
     return metrik_default, ts_metrik
+
+def ambil_set_error_belum_direvisi():
+    """
+    Mengambil seluruh riwayat log kesalahan yang status revisinya masih False (belum direvisi)
+    dari tabel log_hasil_review_data, kemudian mengembalikannya dalam bentuk DataFrame.
+    """
+    conn = dapatkan_koneksi_neon()
+    if not conn:
+        return pd.DataFrame()
+        
+    try:
+        # Tarik data log kesalahan historis yang belum diperbaiki
+        query = """
+            SELECT 
+                kategori_data AS "KATEGORI DATA", 
+                lembaga_ssr AS "LEMBAGA SSR", 
+                tanggal AS "TANGGAL", 
+                id_klien AS "ID KLIEN", 
+                indikator_kesalahan_data AS "INDIKATOR KESALAHAN DATA", 
+                is_revisi, 
+                justifikasi AS "JUSTIFIKASI"
+            FROM public.log_hasil_review_data
+            WHERE is_revisi = FALSE;
+        """
+        df_historis = pd.read_sql(query, conn)
+        return df_historis
+        
+    except Exception as e:
+        print(f"Error saat mengambil log error belum direvisi: {e}")
+        return pd.DataFrame()
+    finally:
+        conn.close()
