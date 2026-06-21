@@ -629,7 +629,8 @@ def jalankan_review_data(
     set_ssr_id_penjangkauan=None, 
     set_nik_reaktif=None, 
     set_ssr_id_reaktif=None, 
-    set_prep_valid=None
+    set_prep_valid=None,
+    df_log_review=None  # 🔥 TAMBAHAN: Menerima data log_hasil_review_data dari Pre-Processing
 ):
     # Inisialisasi fallback pengaman Cross-Check Variables
     if set_ssr_id_penjangkauan is None: set_ssr_id_penjangkauan = set()
@@ -678,7 +679,7 @@ def jalankan_review_data(
         if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values).lower() or 'laki-laki' in str(df.iloc[0].values).lower()):
             start_row_idx = 1
             
-    # 🔥 DETEKSI CERDAS (DIPERBAIKI): Mengecek substring, bukan exact match
+    # 🔥 DETEKSI CERDAS: Mengecek substring, bukan exact match
     col_upper_all = [str(c).upper() for c in df.columns]
     is_file_rujukan = any(any(k in c for c in col_upper_all) for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
     
@@ -698,6 +699,19 @@ def jalankan_review_data(
         dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
     except Exception:
         dict_revisi, dict_justifikasi = {}, {}
+
+    # 🔥 TAMBAHAN: Ekstrak log historis dari df_log_review jika dilempar dari Pre-Processing
+    set_id_berulang_log = set()
+    if df_log_review is not None and not df_log_review.empty:
+        # Menghasilkan key format: Kategori_SSR_Tanggal_IDKlien_Indikator
+        df_log_review['key_log'] = (
+            df_log_review['Kategori Data'].astype(str).str.strip() + "_" +
+            df_log_review['Lembaga SSR'].astype(str).str.strip().str.upper() + "_" +
+            df_log_review['Tanggal'].astype(str).str.strip() + "_" +
+            df_log_review['ID Klien'].astype(str).str.strip().str.upper() + "_" +
+            df_log_review['INDIKATOR KESALAHAN DATA'].astype(str).str.strip()
+        )
+        set_id_berulang_log = set(df_log_review['key_log'].unique())
 
     ref_ssr_id_to_nik, ref_nik_ssr_to_id = {}, {}
     dict_pernah_cbs, dict_pernah_prep_rujukan = {}, {}
@@ -732,7 +746,7 @@ def jalankan_review_data(
                     if '5' in rujukans: dict_pernah_prep_rujukan[key_klien] = True
 
     # ==========================================================
-    # DETEKSI KOLOM DINAMIS (DIPINDAH KE ATAS AGAR AMAN)
+    # DETEKSI KOLOM DINAMIS
     # ==========================================================
     col_id_klien = next((c for c in df.columns if "ID KLIEN" in str(c).upper() or "ID_KLIEN" in str(c).upper()), "ID Klien")
     col_ssr = next((c for c in df.columns if "LEMBAGA SSR" in str(c).upper() or "SSR" in str(c).upper()), "Lembaga SSR")
@@ -752,7 +766,7 @@ def jalankan_review_data(
     col_vc1 = next((c for c in df.columns if "VIRTUAL" in str(c).upper() or "VC1" in str(c).upper() or "TATAP MUKA" in str(c).upper()), "")
     col_nama_layanan = next((c for c in df.columns if "NAMA LAYANAN" in str(c).upper()), "")
     
-    # 🟢 Pemetaan Identitas Klien (Sudah memakai kolom dinamis)
+    # Pemetaan Identitas Klien
     df['id_mapped'] = df.get(col_id_klien, pd.Series(dtype=str)).astype(str).str.replace("'", "").str.strip().str.upper()
     df['ssr_id_key'] = df.get(col_ssr, pd.Series(dtype=str)).astype(str).str.strip().str.upper() + "_" + df['id_mapped']
     dict_ssr_id_counts = df.iloc[start_row_idx:]['ssr_id_key'].value_counts().to_dict()
@@ -769,8 +783,8 @@ def jalankan_review_data(
         col_ruj_temp = next((c for c in df.columns if "RUJUKAN" in str(c).upper()), None)
         if col_ruj_temp:
             for _, r in df.iloc[start_row_idx:].iterrows():
-                k_ssr = str(r.get(col_ssr, '')).strip().upper() # <-- Pakai col dinamis
-                k_id = str(r.get(col_id_klien, '')).replace("'", "").strip().upper() # <-- Pakai col dinamis
+                k_ssr = str(r.get(col_ssr, '')).strip().upper()
+                k_id = str(r.get(col_id_klien, '')).replace("'", "").strip().upper()
                 if periksa_rujukan(r.get(col_ruj_temp)):
                     rujakan_vct_per_klien[f"{k_ssr}_{k_id}"] = True
 
@@ -941,8 +955,13 @@ def jalankan_review_data(
                     if key_db in dict_justifikasi:
                         status_validasi = f"⚠️ Terdeteksi Kembali (Riwayat Justifikasi: {justif_val})"
                         
-                    if key_db in dict_revisi:
+                    elif key_db in dict_revisi:
                         status_validasi = "Kesalahan pada ID yang berulang (belum direvisi)"
+                        checked_state = True
+                    
+                    # 🔥 TAMBAHAN LOGIKA: Jika terdeteksi di log_review dari Pre-Processing
+                    elif key_db in set_id_berulang_log:
+                        status_validasi = "ID Berulang"
                         checked_state = True
     
                     list_kesalahan.append({
@@ -960,9 +979,7 @@ def jalankan_review_data(
                         "Validasi Hasil Review": status_validasi, 
                         "Justifikasi": justif_val
                     })
-            # 🟢 PENGAMAN DIPERBAIKI: Kita tidak lagi menelan error mentah-mentah
             except Exception as e: 
-                # Uncomment baris di bawah jika Anda ingin memunculkan log error ke console
                 print(f"Error pada saat evaluasi Aturan [{nama_ind}] di Baris ke-{idx}: {e}")
                 pass
 
