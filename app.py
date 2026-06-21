@@ -821,30 +821,37 @@ def jalankan_review_data(
 
     df_pj_aktif = locals().get('df_penjangkauan', st.session_state.get('df_penjangkauan_aktif', None) if 'st' in globals() else None)
 
-    if is_file_rujukan and df_pj_aktif is not None and not df_pj_aktif.empty:
-        col_info_pj = next((c for c in df_pj_aktif.columns if "INFORMASI" in str(c).upper() and "DIBERIKAN" in str(c).upper()), "")
-        col_ruj_pj = next((c for c in df_pj_aktif.columns if "RUJUKAN" in str(c).upper()), "")
-        col_id_pj = next((c for c in df_pj_aktif.columns if "ID KLIEN" in str(c).upper() or "ID_KLIEN" in str(c).upper()), "ID Klien")
-        col_ssr_pj = next((c for c in df_pj_aktif.columns if "LEMBAGA SSR" in str(c).upper() or "SSR" in str(c).upper()), "Lembaga SSR")
-        
-        for _, r_pj in df_pj_aktif.iterrows():
-            ssr_pj = str(r_pj.get(col_ssr_pj, '')).strip().upper()
-            id_pj = str(r_pj.get(col_id_pj, '')).replace("'", "").strip().upper() 
-            kunci_pj = f"{ssr_pj}_{id_pj}"
+    # ==============================================================================
+    # PERUBAHAN DISINI: VALIDASI MURNI FILE-TO-FILE JIKA RUJUKAN DI-UPLOAD
+    # ==============================================================================
+    if is_file_rujukan:
+        # 🌟 RESET TOTAL: Kosongkan database historis, buat penampung baru murni untuk file saat ini
+        set_ssr_id_penjangkauan = set() 
+
+        if df_pj_aktif is not None and not df_pj_aktif.empty:
+            col_info_pj = next((c for c in df_pj_aktif.columns if "INFORMASI" in str(c).upper() and "DIBERIKAN" in str(c).upper()), "")
+            col_ruj_pj = next((c for c in df_pj_aktif.columns if "RUJUKAN" in str(c).upper()), "")
+            col_id_pj = next((c for c in df_pj_aktif.columns if "ID KLIEN" in str(c).upper() or "ID_KLIEN" in str(c).upper()), "ID Klien")
+            col_ssr_pj = next((c for c in df_pj_aktif.columns if "LEMBAGA SSR" in str(c).upper() or "SSR" in str(c).upper()), "Lembaga SSR")
             
-            # 🔥 TAMBAHAN/PERBAIKAN: Masukkan secara live ke set validasi
-            if id_pj and id_pj not in ['NAN', '', '-', 'NONE'] and ssr_pj and ssr_pj not in ['NAN', '']:
-                set_ssr_id_penjangkauan.add(kunci_pj)
-            
-            txt_info = str(r_pj.get(col_info_pj, '')).strip() if col_info_pj else ""
-            txt_ruj = str(r_pj.get(col_ruj_pj, '')).strip() if col_ruj_pj else ""
-            
-            list_info_pj = txt_info.replace("'", "").replace(" ", "").split(',')
-            list_ruj_pj = txt_ruj.replace("'", "").replace(" ", "").replace(".0", "").split(',')
-            
-            if '12' in list_info_pj: info_cbs_di_penjangkauan_per_klien[kunci_pj] = True
-            if '1' in list_info_pj and '2' in list_ruj_pj: edukasi_vct_di_penjangkauan_per_klien[kunci_pj] = True
-            if '10' in list_info_pj and '5' in list_ruj_pj: edukasi_prep_di_penjangkauan_per_klien[kunci_pj] = True
+            for _, r_pj in df_pj_aktif.iterrows():
+                ssr_pj = str(r_pj.get(col_ssr_pj, '')).strip().upper()
+                id_pj = str(r_pj.get(col_id_pj, '')).replace("'", "").strip().upper() 
+                kunci_pj = f"{ssr_pj}_{id_pj}"
+                
+                # 🔥 Masukkan kombinasi SSR + ID Klien dari file penjangkauan baru ke set validasi rujukan
+                if id_pj and id_pj not in ['NAN', '', '-', 'NONE'] and ssr_pj and ssr_pj not in ['NAN', '']:
+                    set_ssr_id_penjangkauan.add(kunci_pj)
+                
+                txt_info = str(r_pj.get(col_info_pj, '')).strip() if col_info_pj else ""
+                txt_ruj = str(r_pj.get(col_ruj_pj, '')).strip() if col_ruj_pj else ""
+                
+                list_info_pj = txt_info.replace("'", "").replace(" ", "").split(',')
+                list_ruj_pj = txt_ruj.replace("'", "").replace(" ", "").replace(".0", "").split(',')
+                
+                if '12' in list_info_pj: info_cbs_di_penjangkauan_per_klien[kunci_pj] = True
+                if '1' in list_info_pj and '2' in list_ruj_pj: edukasi_vct_di_penjangkauan_per_klien[kunci_pj] = True
+                if '10' in list_info_pj and '5' in list_ruj_pj: edukasi_prep_di_penjangkauan_per_klien[kunci_pj] = True
 
     if is_file_rujukan:
         SEMUA_ATURAN_AKTIF = globals().get('ATURAN_VALIDASI_RUJUKAN', [])
