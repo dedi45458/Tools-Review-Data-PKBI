@@ -1032,33 +1032,40 @@ if tombol_proses:
             total_proses_rjk = 0
             
             set_nik_rkt, set_ssr_id_rkt, set_prep_vld = set(), set(), set()
-            
-            # 🔥 PERBAIKAN ISU #3: Tarik historis error dari log_hasil_review_data
             set_error_historis = pd.DataFrame() 
 
             try:
                 set_nik_rkt, set_ssr_id_rkt = ambil_set_reaktif_sebelumnya()
                 set_prep_vld = ambil_set_layanan_prep_valid()
-                
-                # Fungsi ini harus mengembalikan DataFrame hasil query dari tabel log_hasil_review_data
                 set_error_historis = ambil_set_error_belum_direvisi() 
             except Exception as e:
-                # Opsional: Berikan log/print error kecil untuk mempermudah debugging jika DB gagal terhubung
                 print(f"Gagal mengambil data historis log review: {e}")
-                # Jika gagal, set_error_historis tetap berupa DataFrame kosong (Aman bagi Pandas)
                 set_error_historis = pd.DataFrame()
 
-            # Loop 1: Kumpulkan set ID Penjangkauan
+            # =========================================================================
+            # 🔥 PERBAIKAN LOOP 1: Kumpulkan set ID & Simpan File Mentah ke Memori
+            # =========================================================================
+            list_df_penj = []
             for f in files_review:
                 try:
                     temp_df = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     col_upper = [str(c).upper() for c in temp_df.columns]
+                    
+                    # Deteksi jika ini adalah file Penjangkauan
                     if not any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS']):
+                        list_df_penj.append(temp_df) # Simpan dataframe utuh ke dalam list
+                        
                         for _, row in temp_df.iterrows():
                             ssr = str(row.get('Lembaga SSR', '')).strip().upper()
-                            idk = str(row.get('ID Klien', '')).replace("'", "").strip()
+                            idk = str(row.get('ID Klien', '')).replace("'", "").strip().upper() # Wajib uppercase!
                             if ssr and idk: set_penjangkauan.add(f"{ssr}_{idk}")
                 except Exception: pass
+            
+            # 💾 SIMPAN KE SESSION STATE: Agar engine Rujukan tidak 'buta' saat melakukan validasi file-to-file
+            if list_df_penj:
+                st.session_state['df_penjangkauan_aktif'] = pd.concat(list_df_penj, ignore_index=True)
+            else:
+                st.session_state['df_penjangkauan_aktif'] = pd.DataFrame()
 
             # Loop 2: Eksekusi Validasi
             for f in files_review:
