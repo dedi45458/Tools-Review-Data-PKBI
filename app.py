@@ -1217,6 +1217,10 @@ if tombol_proses:
                         conn.close()
                 except Exception: pass
 
+                # 1. BUAT SALINAN FULL UNTUK TAMPILAN UI & AGREGASI
+                df_full = df_bawah.copy()
+
+                # 2. PROSES FILTER HANYA UNTUK DATA YANG AKAN MASUK DB (AGAR TIDAK DUPLIKAT)
                 indices_to_drop = []
                 for idx, row in df_bawah.iterrows():
                     kat = str(row.get('KATEGORI DATA', '')).strip().lower()
@@ -1230,11 +1234,16 @@ if tombol_proses:
                 if indices_to_drop:
                     df_bawah = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
 
-                # SINKRONISASI KE 3 TABEL DETAIL AGREGASI
+                # 3. KIRIM DF_FULL KE UI (MENGANDUNG 50 BARIS LENGKAP)
+                st.session_state['df_tabel_bawah'] = df_full
+
+                # 4. SINKRONISASI KE 3 TABEL DETAIL AGREGASI (MENGGUNAKAN DF_FULL AGAR PERHITUNGAN AKURAT)
                 try:
                     from database import simpan_paket_validasi_ke_tiga_tabel
-                    if not df_bawah.empty:
-                        df_pjj_only = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.title() == 'Penjangkauan']
+                    # Kita tetap cek apakah ada data baru untuk dimasukkan ke detail (df_bawah)
+                    if not df_full.empty:
+                        # AGREGASI MENGGUNAKAN DF_FULL (Agar hitungan 50 baris masuk ke dashboard)
+                        df_pjj_only = df_full[df_full['KATEGORI DATA'].astype(str).str.title() == 'Penjangkauan']
                         list_insert_tabel_1 = []
                         if not df_pjj_only.empty:
                             DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state.get('aturan_kustom', []))]
@@ -1245,7 +1254,7 @@ if tombol_proses:
                                     if hitung_kesalahan > 0:
                                         list_insert_tabel_1.append((ssr_name, ind_err, hitung_kesalahan))
 
-                        df_rjk_only = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.title() == 'Rujukan'].copy()
+                        df_rjk_only = df_full[df_full['KATEGORI DATA'].astype(str).str.title() == 'Rujukan'].copy()
                         list_insert_tabel_2 = []
                         if not df_rjk_only.empty:
                             df_agregasi = df_rjk_only.groupby(['LEMBAGA SSR', 'INDIKATOR KESALAHAN DATA']).size().reset_index(name='JUMLAH KESALAHAN')
@@ -1258,6 +1267,7 @@ if tombol_proses:
                                     int(row_aggr.get('JUMLAH KESALAHAN', 0))
                                 ))
 
+                        # INSERT DETAIL MENGGUNAKAN DF_BAWAH (Hanya data baru saja agar tidak duplikat di tabel hasil_review_data)
                         list_insert_tabel_3 = []
                         for _, row_all in df_bawah.iterrows():
                             list_insert_tabel_3.append((
@@ -1276,12 +1286,6 @@ if tombol_proses:
                             st.error("❌ Terjadi kesalahan teknis transaksi multi-tabel. Data gagal disimpan.")
                 except Exception as e:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database (Sistem Crash): {str(e)}")
-            else:
-                st.session_state['df_tabel_atas'] = pd.DataFrame()
-                st.session_state['df_tabel_bawah'] = pd.DataFrame()
-                st.session_state['df_err_penj'] = pd.DataFrame()
-                st.session_state['df_err_ruj'] = pd.DataFrame()
-                st.info("✨ Proses selesai: Tidak ditemukan indikator kesalahan data pada file yang Anda unggah.")
 
             # AUTO-REFRESH UI DENGAN DATA DARI DB
             try:
