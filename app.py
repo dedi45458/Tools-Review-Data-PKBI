@@ -1017,10 +1017,11 @@ if tombol_proses:
             df_ref = None
             if file_referensi_aman is not None:
                 try: 
+                    file_referensi_aman.seek(0) # Pengaman pointer
                     df_ref = pd.read_excel(file_referensi_aman)
                 except Exception: 
                     pass
-            
+
             # -----------------------------------------------------------------
             # LANGKAH UTAMA: PRE-PROCESSING & KUMPULKAN PARAMETER CROSS-CHECK
             # -----------------------------------------------------------------
@@ -1043,44 +1044,52 @@ if tombol_proses:
                 set_error_historis = pd.DataFrame()
 
             # =========================================================================
-            # 🔥 PERBAIKAN LOOP 1: Kumpulkan set ID & Simpan File Mentah ke Memori
+            # 🔥 PERBAIKAN LOOP 1: BACA FILE 1 KALI SAJA UNTUK MENCEGAH BUG EOF
             # =========================================================================
             list_df_penj = []
+            daftar_data_file = [] # Menyimpan tuple (nama_file, df_target, is_rujukan)
+
             for f in files_review:
                 try:
+                    f.seek(0) # 🔥 KUNCI PERBAIKAN: Kembalikan kursor file ke baris pertama
                     temp_df = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     col_upper = [str(c).upper() for c in temp_df.columns]
                     
-                    # Deteksi jika ini adalah file Penjangkauan
-                    if not any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS']):
-                        list_df_penj.append(temp_df) # Simpan dataframe utuh ke dalam list
+                    # Deteksi jenis file
+                    is_ruj = any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
+                    
+                    # Simpan dataframe yang SUDAH DIBACA untuk dipakai di Loop 2
+                    daftar_data_file.append((f.name, temp_df, is_ruj))
+                    
+                    # Jika ini file Penjangkauan, ekstrak ID-nya untuk set_penjangkauan
+                    if not is_ruj:
+                        list_df_penj.append(temp_df) 
                         
                         for _, row in temp_df.iterrows():
                             ssr = str(row.get('Lembaga SSR', '')).strip().upper()
-                            idk = str(row.get('ID Klien', '')).replace("'", "").strip().upper() # Wajib uppercase!
+                            idk = str(row.get('ID Klien', '')).replace("'", "").strip().upper()
                             if ssr and idk: set_penjangkauan.add(f"{ssr}_{idk}")
-                except Exception: pass
+                except Exception as e:
+                    print(f"Gagal membaca file {f.name}: {e}")
             
-            # 💾 SIMPAN KE SESSION STATE: Agar engine Rujukan tidak 'buta' saat melakukan validasi file-to-file
+            # 💾 SIMPAN KE SESSION STATE
             if list_df_penj:
                 st.session_state['df_penjangkauan_aktif'] = pd.concat(list_df_penj, ignore_index=True)
             else:
                 st.session_state['df_penjangkauan_aktif'] = pd.DataFrame()
 
-            # Loop 2: Eksekusi Validasi
-            for f in files_review:
+            # =========================================================================
+            # 🔥 PERBAIKAN LOOP 2: EKSEKUSI TANPA MEMBACA ULANG EXCEL
+            # =========================================================================
+            for nama_file, df_target, is_rujukan in daftar_data_file:
                 try:
-                    df_target = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     total_records += len(df_target)
-                    
-                    col_upper = [str(c).upper() for c in df_target.columns]
-                    is_rujukan = any(k in col_upper for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
                     
                     if is_rujukan: total_proses_rjk += len(df_target)
                     else: total_proses_pjj += len(df_target)
                     
                     df_res = jalankan_review_data(
-                        df_target, df_ref, nama_file=f.name,
+                        df_target, df_ref, nama_file=nama_file,
                         set_ssr_id_penjangkauan=set_penjangkauan,
                         set_nik_reaktif=set_nik_rkt, set_ssr_id_reaktif=set_ssr_id_rkt, 
                         set_prep_valid=set_prep_vld,
@@ -1088,20 +1097,19 @@ if tombol_proses:
                     )
                     
                     if not df_res.empty:
-                        # ❌ BARIS INI TELAH DIHAPUS: (Tidak perlu ditambah KATEGORI DATA lagi)
-                        # df_res['KATEGORI DATA'] = 'Rujukan' if is_rujukan else 'Penjangkauan'
-                        
                         all_errs.append(df_res)
-                except Exception: pass
+                except Exception as e: 
+                    print(f"Error saat validasi {nama_file}: {e}")
 
             # =========================================================================
-            # 🔥 PERBAIKAN ISU #1: STANDARISASI KOLOM HARUS DILAKUKAN SEBELUM KALKULASI
+            # PROSES RENAME KOLOM DAN SINKRONISASI DATABASE 
+            # (Kode ini sama persis dengan yang Anda miliki)
             # =========================================================================
             df_bawah = pd.DataFrame()
             if all_errs:
                 df_bawah = pd.concat(all_errs, ignore_index=True)
                 
-                # RENAME KOLOM SEKARANG JUGA
+                # RENAME KOLOM
                 rename_map = {}
                 for c in df_bawah.columns:
                     c_clean = str(c).strip().upper()
@@ -1119,8 +1127,6 @@ if tombol_proses:
                     elif 'JUSTIFIKASI' in c_clean: rename_map[c] = 'JUSTIFIKASI'
                 
                 df_bawah = df_bawah.rename(columns=rename_map)
-
-                # 🔥 PENGAMAN KRUSIAL: Membuang duplikasi nama kolom agar AttributeError (.str) lenyap!
                 df_bawah = df_bawah.loc[:, ~df_bawah.columns.duplicated()].copy()
 
             # 🎯 Simpan total entri global ke memory Streamlit
@@ -1131,19 +1137,16 @@ if tombol_proses:
             df_pjj_raw = pd.DataFrame()
             df_rjk_raw = pd.DataFrame()
             
-            # 🔥 PERBAIKAN TOTAL: Pastikan kolom dijamin terbuat baik ketika df_bawah kosong maupun berisi
             if df_bawah is None:
                 df_bawah = pd.DataFrame()
                 
             if 'KATEGORI DATA' not in df_bawah.columns:
-                # Cari juga apakah ada nama kolom mirip yang mengandung kata 'KATEGORI' agar tidak double kolom
                 kolom_mirip = [c for c in df_bawah.columns if 'KATEGORI' in str(c).upper()]
                 if kolom_mirip:
                     df_bawah = df_bawah.rename(columns={kolom_mirip[0]: 'KATEGORI DATA'})
                 else:
                     df_bawah['KATEGORI DATA'] = '-'
             
-            # Melakukan pemfilteran aman dengan tambahan .str.strip() untuk membuang spasi hantu
             if not df_bawah.empty:
                 df_pjj_raw = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.strip().str.upper() == 'PENJANGKAUAN'].copy()
                 df_rjk_raw = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.strip().str.upper() == 'RUJUKAN'].copy()
@@ -1151,11 +1154,9 @@ if tombol_proses:
             st.session_state['df_err_penj'] = df_pjj_raw
             st.session_state['df_err_ruj'] = df_rjk_raw
             
-            # 🔥 PERBAIKAN ISU #2: HITUNG TOTAL TEMUAN SECARA MURNI (TANPA DROP DUPLICATES)
             total_temuan_pjj = len(df_pjj_raw)
             total_temuan_rjk = len(df_rjk_raw)
             
-            # KALKULASI AKURASI DATA
             akurasi_pjj = max(0.00, round(((total_proses_pjj - total_temuan_pjj) / total_proses_pjj) * 100, 2)) if total_proses_pjj > 0 else 100.00
             akurasi_rjk = max(0.00, round(((total_proses_rjk - total_temuan_rjk) / total_proses_rjk) * 100, 2)) if total_proses_rjk > 0 else 100.00
             
@@ -1164,17 +1165,12 @@ if tombol_proses:
             st.session_state['temuan_penjangkauan'] = total_temuan_pjj
             st.session_state['temuan_rujukan'] = total_temuan_rjk
             
-            # 🔥 PERBAIKAN UTAMA: Paksa reset flag di awal proses agar selalu menyimpan data terbaru
             st.session_state['db_tercatat_batch'] = False
 
             try:
                 from database import simpan_metrik_akurasi_db
-                
-                # Simpan metrik Penjangkauan (jika filenya ada atau jika ada temuan)
                 if total_proses_pjj > 0 or total_temuan_pjj > 0:
                     simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
-                
-                # Simpan metrik Rujukan (jika filenya ada atau jika ada temuan)
                 if total_proses_rjk > 0 or total_temuan_rjk > 0:
                     simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
                     
@@ -1183,9 +1179,7 @@ if tombol_proses:
             except Exception as e:
                 st.error(f"Gagal memproses pencatatan metrik ke database Neon: {e}")
 
-            # =========================================================================
             # CLEANSING DATA & FILTER DUPLIKAT SEBELUM MASUK TABEL DETAIL
-            # =========================================================================
             if not df_bawah.empty:
                 kolom_wajib = [
                     'KATEGORI DATA', 'LEMBAGA SSR', 'TANGGAL', 'ID KLIEN', 'KODE PETUGAS', 
@@ -1240,7 +1234,6 @@ if tombol_proses:
                 try:
                     from database import simpan_paket_validasi_ke_tiga_tabel
                     if not df_bawah.empty:
-                        # 1. TABEL PENJANGKAUAN
                         df_pjj_only = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.title() == 'Penjangkauan']
                         list_insert_tabel_1 = []
                         if not df_pjj_only.empty:
@@ -1252,12 +1245,10 @@ if tombol_proses:
                                     if hitung_kesalahan > 0:
                                         list_insert_tabel_1.append((ssr_name, ind_err, hitung_kesalahan))
 
-                        # 2. TABEL RUJUKAN
                         df_rjk_only = df_bawah[df_bawah['KATEGORI DATA'].astype(str).str.title() == 'Rujukan'].copy()
                         list_insert_tabel_2 = []
                         if not df_rjk_only.empty:
                             df_agregasi = df_rjk_only.groupby(['LEMBAGA SSR', 'INDIKATOR KESALAHAN DATA']).size().reset_index(name='JUMLAH KESALAHAN')
-                            # 🔥 FIX IMPORT: Gunakan dt.date.today() / dt.datetime.now().date() sesuai object import library Anda
                             tanggal_skr = dt.date.today() if 'dt' in globals() else datetime.now().date()
                             for _, row_aggr in df_agregasi.iterrows():
                                 list_insert_tabel_2.append((
@@ -1267,7 +1258,6 @@ if tombol_proses:
                                     int(row_aggr.get('JUMLAH KESALAHAN', 0))
                                 ))
 
-                        # 3. TABEL UTAMA MASTER
                         list_insert_tabel_3 = []
                         for _, row_all in df_bawah.iterrows():
                             list_insert_tabel_3.append((
