@@ -1297,6 +1297,9 @@ if tombol_proses:
                 st.session_state['df_tabel_bawah'] = df_utama_db
                 st.session_state['ts_terakhir_utama'] = ts_utama
                 
+                # 🔥 TAMBAHKAN BARIS INI agar skrip render Anda bisa membaca tanggalnya
+                st.session_state['tanggal_terakhir_review'] = ts_pjj
+                
                 if ts_rjk:
                     st.session_state['tanggal_terakhir_rujukan_str'] = ts_rjk.strftime('%d-%m-%Y pukul %H:%M WIB') if hasattr(ts_rjk, 'strftime') else str(ts_rjk)
             except Exception as e:
