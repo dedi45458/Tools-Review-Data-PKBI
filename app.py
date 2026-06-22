@@ -1219,7 +1219,12 @@ if tombol_proses:
 
                 # 1. BUAT SALINAN FULL UNTUK TAMPILAN UI & AGREGASI
                 df_full = df_bawah.copy()
-
+                
+                # 🔥 FIX: ISI DATA KOSONG AGAR GROUPBY TIDAK MENGABAIKAN BARIS
+                df_full['LEMBAGA SSR'] = df_full['LEMBAGA SSR'].fillna('-').astype(str).str.strip()
+                df_full['INDIKATOR KESALAHAN DATA'] = df_full['INDIKATOR KESALAHAN DATA'].fillna('-').astype(str).str.strip()
+                df_full['KATEGORI DATA'] = df_full['KATEGORI DATA'].fillna('-').astype(str).str.strip()
+                
                 # 2. PROSES FILTER HANYA UNTUK DATA YANG AKAN MASUK DB (AGAR TIDAK DUPLIKAT)
                 indices_to_drop = []
                 for idx, row in df_bawah.iterrows():
@@ -1233,31 +1238,44 @@ if tombol_proses:
                 
                 if indices_to_drop:
                     df_bawah = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
-
+                
                 # 3. KIRIM DF_FULL KE UI (MENGANDUNG 50 BARIS LENGKAP)
                 st.session_state['df_tabel_bawah'] = df_full
-
-                # 4. SINKRONISASI KE 3 TABEL DETAIL AGREGASI (MENGGUNAKAN DF_FULL AGAR PERHITUNGAN AKURAT)
+                
+                # 4. SINKRONISASI KE 3 TABEL DETAIL AGREGASI
                 try:
                     from database import simpan_paket_validasi_ke_tiga_tabel
-                    # Kita tetap cek apakah ada data baru untuk dimasukkan ke detail (df_bawah)
+                    
+                    # 🔥 DEBUG: MONITOR JUMLAH BARIS
+                    st.write("--- DEBUG PROSES AGREGASI ---")
+                    st.write(f"Total baris yang tampil di UI (df_full): {len(df_full)}")
+                    st.write(f"Total baris yang akan disimpan ke DB (df_bawah): {len(df_bawah)}")
+                    
                     if not df_full.empty:
-                        # AGREGASI MENGGUNAKAN DF_FULL (Agar hitungan 50 baris masuk ke dashboard)
-                        df_pjj_only = df_full[df_full['KATEGORI DATA'].astype(str).str.title() == 'Penjangkauan']
+                        # AGREGASI MENGGUNAKAN DF_FULL (Sekarang sudah di-fillna, jadi 50 baris harusnya masuk semua)
+                        df_pjj_only = df_full[df_full['KATEGORI DATA'].str.title() == 'Penjangkauan']
+                        
                         list_insert_tabel_1 = []
                         if not df_pjj_only.empty:
                             DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state.get('aturan_kustom', []))]
-                            active_ssrs_pjj = sorted(list(df_pjj_only['LEMBAGA SSR'].dropna().unique()))
+                            active_ssrs_pjj = sorted(list(df_pjj_only['LEMBAGA SSR'].unique()))
+                            
                             for ind_err in DAFTAR_INDIKATOR_AKTIF:
                                 for ssr_name in active_ssrs_pjj:
                                     hitung_kesalahan = len(df_pjj_only[(df_pjj_only['INDIKATOR KESALAHAN DATA'] == ind_err) & (df_pjj_only['LEMBAGA SSR'] == ssr_name)])
                                     if hitung_kesalahan > 0:
                                         list_insert_tabel_1.append((ssr_name, ind_err, hitung_kesalahan))
-
-                        df_rjk_only = df_full[df_full['KATEGORI DATA'].astype(str).str.title() == 'Rujukan'].copy()
+                
+                        df_rjk_only = df_full[df_full['KATEGORI DATA'].str.title() == 'Rujukan'].copy()
                         list_insert_tabel_2 = []
                         if not df_rjk_only.empty:
+                            # Groupby sekarang aman karena NaN sudah diganti '-'
                             df_agregasi = df_rjk_only.groupby(['LEMBAGA SSR', 'INDIKATOR KESALAHAN DATA']).size().reset_index(name='JUMLAH KESALAHAN')
+                            
+                            # 🔥 DEBUG: LIHAT HASIL AGREGASI
+                            st.write("Hasil Agregasi Rujukan:", df_agregasi)
+                            st.write("Total sum kesalahan di agregasi:", df_agregasi['JUMLAH KESALAHAN'].sum())
+                            
                             tanggal_skr = dt.date.today() if 'dt' in globals() else datetime.now().date()
                             for _, row_aggr in df_agregasi.iterrows():
                                 list_insert_tabel_2.append((
@@ -1266,8 +1284,8 @@ if tombol_proses:
                                     str(row_aggr.get('INDIKATOR KESALAHAN DATA', '-')).strip(),
                                     int(row_aggr.get('JUMLAH KESALAHAN', 0))
                                 ))
-
-                        # INSERT DETAIL MENGGUNAKAN DF_BAWAH (Hanya data baru saja agar tidak duplikat di tabel hasil_review_data)
+                
+                        # INSERT DETAIL MENGGUNAKAN DF_BAWAH
                         list_insert_tabel_3 = []
                         for _, row_all in df_bawah.iterrows():
                             list_insert_tabel_3.append((
@@ -1278,7 +1296,7 @@ if tombol_proses:
                                 str(row_all.get('TIPE SASARAN', '-')), str(row_all.get('INDIKATOR KESALAHAN DATA', '-')),
                                 str(row_all.get('VALIDASI HASIL REVIEW', '-')), str(row_all.get('JUSTIFIKASI', '-'))
                             ))
-
+                
                         sukses = simpan_paket_validasi_ke_tiga_tabel(list_insert_tabel_1, list_insert_tabel_2, list_insert_tabel_3)
                         if sukses:
                             st.toast("💾 Sinkronisasi aman ke 3 tabel Detail Agregasi Neon Database berhasil!", icon="✅")
