@@ -963,29 +963,29 @@ def jalankan_review_data(
             nama_ind = rule.get("nama", "Unknown Rule")
             try:
                 if rule["periksa"](context_data):
-                    key_db = f"{v_kategori}_{v_ssr}_{v_tanggal}_{id_clean}_{nama_ind}"
+                    # Penyeragaman format tanggal agar match dengan database log
+                    v_tanggal_clean = v_tanggal.split(' ')[0].strip()
+                    key_db = f"{v_kategori}_{v_ssr}_{v_tanggal_clean}_{id_clean}_{nama_ind}"
                     
                     status_validasi = "-"
                     checked_state = False
                     justif_val = dict_justifikasi.get(key_db, "")
                     
+                    # 1. Prioritas Utama: Jika sudah ada riwayat justifikasi
                     if key_db in dict_justifikasi:
                         status_validasi = f"⚠️ Terdeteksi Kembali (Riwayat Justifikasi: {justif_val})"
+                        checked_state = False
                         
-                    elif key_db in dict_revisi:
+                    # 2. Prioritas Kedua: Jika terdeteksi berulang di DB Revisi ATAU Log Review Pre-Processing
+                    elif key_db in dict_revisi or key_db in set_id_berulang_log:
                         status_validasi = "Kesalahan pada ID yang berulang (belum direvisi)"
-                        checked_state = True
-                    
-                    # 🔥 TAMBAHAN LOGIKA: Jika terdeteksi di log_review dari Pre-Processing
-                    elif key_db in set_id_berulang_log:
-                        status_validasi = "ID Berulang"
                         checked_state = True
     
                     list_kesalahan.append({
                         "Pilih": checked_state,
                         "Kategori Data": v_kategori,
                         "Lembaga SSR": v_ssr,
-                        "Tanggal": v_tanggal, 
+                        "Tanggal": v_tanggal_clean, 
                         "ID Klien": id_clean, 
                         "Kode Petugas": v_petugas, 
                         "Nama Kota": v_kota, 
@@ -1102,8 +1102,7 @@ if tombol_proses:
                     print(f"Error saat validasi {nama_file}: {e}")
 
             # =========================================================================
-            # PROSES RENAME KOLOM DAN SINKRONISASI DATABASE 
-            # (Kode ini sama persis dengan yang Anda miliki)
+            # PROSES RENAME KOLOM DAN SINKRONISASI DATABASE
             # =========================================================================
             df_bawah = pd.DataFrame()
             if all_errs:
@@ -1174,7 +1173,7 @@ if tombol_proses:
                 if total_proses_rjk > 0 or total_temuan_rjk > 0:
                     simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
                     
-                st.toast("💾 Sinkronisasi metrik akurasi ke Cloud Neon Database berhasil!", icon="✅")
+                st.toast("💾 Sinkronisasi metrik akurasi ke Database berhasil!", icon="✅")
                 st.session_state['db_tercatat_batch'] = True
             except Exception as e:
                 st.error(f"Gagal memproses pencatatan metrik ke database Neon: {e}")
