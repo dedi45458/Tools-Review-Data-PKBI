@@ -703,13 +703,19 @@ def jalankan_review_data(
     # 🔥 TAMBAHAN: Ekstrak log historis dari df_log_review jika dilempar dari Pre-Processing
     set_id_berulang_log = set()
     if df_log_review is not None and not df_log_review.empty:
+        # Gunakan nama kolom dari database: TANGGAL, KATEGORI DATA, dll.
+        if 'TANGGAL' in df_log_review.columns:
+            df_log_review['Tanggal_Clean'] = df_log_review['TANGGAL'].astype(str).str.split(' ').str[0].str.strip()
+        else:
+            df_log_review['Tanggal_Clean'] = ""
+
         # Menghasilkan key format: Kategori_SSR_Tanggal_IDKlien_Indikator
         df_log_review['key_log'] = (
-            df_log_review['Kategori Data'].astype(str).str.strip() + "_" +
-            df_log_review['Lembaga SSR'].astype(str).str.strip().str.upper() + "_" +
-            df_log_review['Tanggal'].astype(str).str.strip() + "_" +
-            df_log_review['ID Klien'].astype(str).str.strip().str.upper() + "_" +
-            df_log_review['INDIKATOR KESALAHAN DATA'].astype(str).str.strip()
+            df_log_review['KATEGORI DATA'].astype(str).str.strip().str.upper() + "_" +
+            df_log_review['LEMBAGA SSR'].astype(str).str.strip().str.upper() + "_" +
+            df_log_review['Tanggal_Clean'] + "_" +
+            df_log_review['ID KLIEN'].astype(str).str.strip().str.upper() + "_" +
+            df_log_review['INDIKATOR KESALAHAN DATA'].astype(str).str.strip().str.upper()
         )
         set_id_berulang_log = set(df_log_review['key_log'].unique())
 
@@ -963,9 +969,9 @@ def jalankan_review_data(
             nama_ind = rule.get("nama", "Unknown Rule")
             try:
                 if rule["periksa"](context_data):
-                    # Penyeragaman format tanggal agar match dengan database log
+                    # 🔥 PERBAIKAN: Format Key 5 Parameter konsisten (Upper Case)
                     v_tanggal_clean = v_tanggal.split(' ')[0].strip()
-                    key_db = f"{v_kategori}_{v_ssr}_{v_tanggal_clean}_{id_clean}_{nama_ind}"
+                    key_db = f"{v_kategori.strip().upper()}_{v_ssr.strip().upper()}_{v_tanggal_clean}_{id_clean.strip().upper()}_{nama_ind.strip().upper()}"
                     
                     status_validasi = "-"
                     checked_state = False
@@ -976,7 +982,7 @@ def jalankan_review_data(
                         status_validasi = f"⚠️ Terdeteksi Kembali (Riwayat Justifikasi: {justif_val})"
                         checked_state = False
                         
-                    # 2. Prioritas Kedua: Jika terdeteksi berulang di DB Revisi ATAU Log Review Pre-Processing
+                    # 2. Prioritas Kedua: Teks memunculkan "Kesalahan pada ID berulang"
                     elif key_db in dict_revisi or key_db in set_id_berulang_log:
                         status_validasi = "Kesalahan pada ID yang berulang (belum direvisi)"
                         checked_state = True
@@ -1736,12 +1742,15 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     df_master = df_master.rename(columns=rename_dict)
             
                 # 3. 🔥 IMPLEMENTASI BARU: Penentuan Kategori Data Otomatis 🔥
-                if "Indikator Kesalahan Data" in df_master.columns:
-                    df_master["Kategori Data"] = df_master["Indikator Kesalahan Data"].apply(
-                        lambda x: "Rujukan" if str(x) in ind_rujukan else "Penjangkauan"
-                    )
-                else:
-                    df_master["Kategori Data"] = "Penjangkauan"
+                # PERBAIKAN: Jika kategori data sudah ditarik utuh dari Database, JANGAN ditimpa!
+                if "Kategori Data" not in df_master.columns:
+                    if "Indikator Kesalahan Data" in df_master.columns:
+                        ind_rujukan_caps = [str(r['nama']).strip().upper() for r in ATURAN_VALIDASI_RUJUKAN] if 'ATURAN_VALIDASI_RUJUKAN' in globals() else []
+                        df_master["Kategori Data"] = df_master["Indikator Kesalahan Data"].apply(
+                            lambda x: "Rujukan" if str(x).strip().upper() in ind_rujukan_caps else "Penjangkauan"
+                        )
+                    else:
+                        df_master["Kategori Data"] = "Penjangkauan"
             
                 # 4. Susunan Struktur Kolom Universal Baru
                 kolom_susunan_gabungan = [
