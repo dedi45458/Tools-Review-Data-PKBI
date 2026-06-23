@@ -1313,7 +1313,9 @@ if tombol_proses:
                 except Exception as e:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database (Sistem Crash): {str(e)}")
 
-            # AUTO-REFRESH UI DENGAN DATA DARI DB
+            # =========================================================================
+            # AUTO-REFRESH UI DENGAN DATA DARI DB (VERSI FIX BUG OVERWRITE)
+            # =========================================================================
             try:
                 from database import ambil_agregasi_penjangkauan_terakhir, ambil_agregasi_rujukan_terakhir, ambil_hasil_review_utama_terakhir
                 df_pjj_db, ts_pjj = ambil_agregasi_penjangkauan_terakhir()
@@ -1324,10 +1326,38 @@ if tombol_proses:
                 st.session_state['df_tabel_penjangkauan'] = df_pjj_db
                 st.session_state['df_rujukan'] = df_rjk_db
                 st.session_state['df_tabel_rujukan'] = df_rjk_db
+                
+                # 💡 LANGKAH PERBAIKAN: Jika data ditarik dari DB, suntikkan teks validasi kesalahan berulang
+                if df_utama_db is not None and not df_utama_db.empty and not set_error_historis.empty:
+                    # Buat set kunci unik dari data log database yang belum direvisi untuk pencocokan cepat
+                    set_kunci_log_historis = set()
+                    for _, row_h in set_error_historis.iterrows():
+                        kat_h = str(row_h.get("KATEGORI DATA", "")).strip().upper()
+                        ssr_h = str(row_h.get("LEMBAGA SSR", "")).strip().upper()
+                        tgl_h = str(row_h.get("TANGGAL", "")).split(' ')[0].strip().upper()
+                        id_h  = str(row_h.get("ID KLIEN", "")).strip().upper()
+                        ind_h = str(row_h.get("INDIKATOR KESALAHAN DATA", "")).strip().upper()
+                        
+                        if id_h and ind_h:
+                            set_kunci_log_historis.add(f"{kat_h}_{ssr_h}_{tgl_h}_{id_h}_{ind_h}")
+                    
+                    # Lakukan pembaruan teks secara live pada data yang akan ditampilkan ke UI
+                    for idx_db, row_db in df_utama_db.iterrows():
+                        v_kat = str(row_db.get('KATEGORI DATA', '')).strip().upper()
+                        v_ssr = str(row_db.get('LEMBAGA SSR', '')).strip().upper()
+                        v_tgl = str(row_db.get('TANGGAL', '')).split(' ')[0].strip().upper()
+                        v_id  = str(row_db.get('ID KLIEN', '')).strip().upper()
+                        v_ind = str(row_db.get('INDIKATOR KESALAHAN DATA', '')).strip().upper()
+                        
+                        kunci_cek_db = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
+                        
+                        # Jika kombinasi data dari DB ini ternyata ada di daftar belum direvisi, paksa ubah statusnya di UI
+                        if kunci_cek_db in set_kunci_log_historis:
+                            df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = "Kesalahan pada ID yang berulang (belum direvisi)"
+                
+                # Masukkan data yang sudah diperbaiki teks validasinya ke session state utama
                 st.session_state['df_tabel_bawah'] = df_utama_db
                 st.session_state['ts_terakhir_utama'] = ts_utama
-                
-                # 🔥 TAMBAHKAN BARIS INI agar skrip render Anda bisa membaca tanggalnya
                 st.session_state['tanggal_terakhir_review'] = ts_pjj
                 
                 if ts_rjk:
