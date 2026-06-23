@@ -1322,32 +1322,55 @@ if tombol_proses:
                 st.session_state['df_rujukan'] = df_rjk_db
                 st.session_state['df_tabel_rujukan'] = df_rjk_db
                 
-                # 💡 LANGKAH PERBAIKAN: Jika data ditarik dari DB, suntikkan teks validasi kesalahan berulang
+                # 💡 LANGKAH PERBAIKAN: Deteksi Kepatuhan Revisi + Pengecualian Status (Konfirmasi)
                 if df_utama_db is not None and not df_utama_db.empty and not set_error_historis.empty:
-                    # Buat set kunci unik dari data log database yang belum direvisi untuk pencocokan cepat
-                    set_kunci_log_historis = set()
+                    
+                    # 1. Buat dua "Daftar Hitam" terpisah berdasarkan status revisi masa lalu
+                    kunci_belum_direvisi = set()
+                    kunci_sudah_direvisi = set() 
+                    
                     for _, row_h in set_error_historis.iterrows():
+                        ind_h = str(row_h.get("INDIKATOR KESALAHAN DATA", "")).strip().upper()
+                        
+                        # 🔥 KUNCI PERBAIKAN: Jika ada kata (KONFIRMASI), skip/abaikan, jangan masukkan ke daftar cek UI
+                        if "(KONFIRMASI)" in ind_h:
+                            continue
+                            
                         kat_h = str(row_h.get("KATEGORI DATA", "")).strip().upper()
                         ssr_h = str(row_h.get("LEMBAGA SSR", "")).strip().upper()
                         tgl_h = str(row_h.get("TANGGAL", "")).split(' ')[0].strip().upper()
                         id_h  = str(row_h.get("ID KLIEN", "")).strip().upper()
-                        ind_h = str(row_h.get("INDIKATOR KESALAHAN DATA", "")).strip().upper()
+                        status_rev = row_h.get("is_revisi", False) 
+                        
+                        kunci_gabung = f"{kat_h}_{ssr_h}_{tgl_h}_{id_h}_{ind_h}"
                         
                         if id_h and ind_h:
-                            set_kunci_log_historis.add(f"{kat_h}_{ssr_h}_{tgl_h}_{id_h}_{ind_h}")
+                            if status_rev == True:
+                                kunci_sudah_direvisi.add(kunci_gabung)
+                            else:
+                                kunci_belum_direvisi.add(kunci_gabung)
                     
-                    # Lakukan pembaruan teks secara live pada data yang akan ditampilkan ke UI
+                    # 2. Lakukan pengecekan live pada data baru yang mau tampil di UI
                     for idx_db, row_db in df_utama_db.iterrows():
+                        v_ind = str(row_db.get('INDIKATOR KESALAHAN DATA', '')).strip().upper()
+                        
+                        # 🔥 KUNCI PERBAIKAN: Jika data baru di DB juga mengandung (KONFIRMASI), biarkan normal, jangan distempel berulang
+                        if "(KONFIRMASI)" in v_ind:
+                            continue
+                            
                         v_kat = str(row_db.get('KATEGORI DATA', '')).strip().upper()
                         v_ssr = str(row_db.get('LEMBAGA SSR', '')).strip().upper()
                         v_tgl = str(row_db.get('TANGGAL', '')).split(' ')[0].strip().upper()
                         v_id  = str(row_db.get('ID KLIEN', '')).strip().upper()
-                        v_ind = str(row_db.get('INDIKATOR KESALAHAN DATA', '')).strip().upper()
                         
                         kunci_cek_db = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
                         
-                        # Jika kombinasi data dari DB ini ternyata ada di daftar belum direvisi, paksa ubah statusnya di UI
-                        if kunci_cek_db in set_kunci_log_historis:
+                        # KONDISI A: Dulu diklaim TRUE (sudah direvisi), tapi sekarang muncul lagi
+                        if kunci_cek_db in kunci_sudah_direvisi:
+                            df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)"
+                            
+                        # KONDISI B: Memang dari dulu belum direvisi (is_revisi = FALSE)
+                        elif kunci_cek_db in kunci_belum_direvisi:
                             df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = "Kesalahan pada ID yang berulang (belum direvisi)"
                 
                 # Masukkan data yang sudah diperbaiki teks validasinya ke session state utama
