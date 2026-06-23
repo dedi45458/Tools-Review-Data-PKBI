@@ -1798,7 +1798,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     )
                     
                     # ==========================================================
-                    # 8. Tombol Eksekusi Penyimpanan & Perpindahan Data (SOLUSI POIN 2)
+                    # 8. Tombol Eksekusi Penyimpanan & Perpindahan Data (SOLUSI FIX REFRESH)
                     # ==========================================================
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_save, _ = st.columns([1, 2])
@@ -1841,8 +1841,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                             text_justifikasi    # Text Justifikasi
                                         ))
                                         
-                                        # 🔥 SOLUSI UTAMA POIN 2: Ambil indeks asli session state dari df_view_gabungan
-                                        indeks_asli_session = df_view_gabungan.iloc[idx]["_indeks_asli_master"]
+                                        # 🎯 PERBAIKAN DI SINI: Ambil nilai kolom _indeks_asli_master berdasarkan indeks `idx` baris editor langsung!
+                                        indeks_asli_session = df_view_gabungan.at[idx, "_indeks_asli_master"]
                                         indeks_master_terpilih.append(indeks_asli_session)
                                 
                                 # Kirim data ke database jika ada baris yang valid
