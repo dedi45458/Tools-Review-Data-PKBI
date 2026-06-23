@@ -1279,11 +1279,6 @@ if tombol_proses:
                         if not df_rjk_only.empty:
                             # Groupby sekarang aman karena NaN sudah diganti '-'
                             df_agregasi = df_rjk_only.groupby(['LEMBAGA SSR', 'INDIKATOR KESALAHAN DATA']).size().reset_index(name='JUMLAH KESALAHAN')
-                            
-                            # 🔥 DEBUG: LIHAT HASIL AGREGASI
-                            st.write("Hasil Agregasi Rujukan:", df_agregasi)
-                            st.write("Total sum kesalahan di agregasi:", df_agregasi['JUMLAH KESALAHAN'].sum())
-                            
                             tanggal_skr = dt.date.today() if 'dt' in globals() else datetime.now().date()
                             for _, row_aggr in df_agregasi.iterrows():
                                 list_insert_tabel_2.append((
