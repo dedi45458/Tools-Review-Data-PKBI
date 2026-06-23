@@ -570,20 +570,21 @@ def ambil_hasil_review_utama_terakhir():
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
     try:
+        # 🛡️ PERBAIKAN: Alias kolom diubah menjadi Title Case agar cocok dengan Script UI
         query = """
             SELECT 
-                kategori_data AS "KATEGORI DATA", 
-                lembaga_ssr AS "LEMBAGA SSR", 
-                kode_petugas AS "KODE PETUGAS", 
-                nama_kota AS "NAMA KOTA", 
-                nama_layanan AS "NAMA LAYANAN", 
-                tanggal AS "TANGGAL", 
-                id_klien AS "ID KLIEN", 
+                kategori_data AS "Kategori Data", 
+                lembaga_ssr AS "Lembaga SSR", 
+                kode_petugas AS "Kode Petugas", 
+                nama_kota AS "Nama Kota", 
+                nama_layanan AS "Nama Layanan", 
+                tanggal AS "Tanggal", 
+                id_klien AS "ID Klien", 
                 nik AS "NIK", 
-                tipe_sasaran AS "TIPE SASARAN", 
-                indikator_kesalahan AS "INDIKATOR KESALAHAN DATA", 
-                validasi_hasil_review AS "VALIDASI HASIL REVIEW", 
-                justifikasi AS "JUSTIFIKASI"
+                tipe_sasaran AS "Tipe Sasaran", 
+                indikator_kesalahan AS "Indikator Kesalahan Data", 
+                validasi_hasil_review AS "Validasi Hasil Review", 
+                justifikasi AS "Justifikasi"
             FROM hasil_review_data
             WHERE created_at >= (SELECT MAX(created_at) FROM hasil_review_data) - INTERVAL '5 second'
         """
