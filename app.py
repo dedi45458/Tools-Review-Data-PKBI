@@ -1605,7 +1605,20 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     kolom_indikator = 'INDIKATOR KESALAHAN DATA'
                     
                     if 'Jumlah per indikator' not in df_render_ruj.columns and 'LEMBAGA SSR' in df_render_ruj.columns:
-                        df_render_ruj = df_render_ruj.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
+                        # 🎯 PERBAIKAN UTAMA: Deteksi kolom jumlah kesalahan secara dinamis agar aman & anti-shrink
+                        kolom_target_jumlah = 'JUMLAH KESALAHAN'
+                        if kolom_target_jumlah not in df_render_ruj.columns:
+                            # Fallback seandainya ada ketidaksesuaian huruf kapital/kecil kolom
+                            opsi_kolom = [c for c in df_render_ruj.columns if 'JUMLAH' in str(c).upper() or 'KESALAHAN' in str(c).upper()]
+                            if opsi_kolom:
+                                kolom_target_jumlah = opsi_kolom[0]
+                        
+                        # Jika kolom jumlah ditemukan, hitung dengan .sum(), bukan .size() baris
+                        if kolom_target_jumlah in df_render_ruj.columns:
+                            df_render_ruj = df_render_ruj.groupby([kolom_indikator, 'LEMBAGA SSR'])[kolom_target_jumlah].sum().unstack(fill_value=0)
+                        else:
+                            df_render_ruj = df_render_ruj.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
+                            
                         df_render_ruj['Jumlah per indikator'] = df_render_ruj.sum(axis=1)
                         df_render_ruj = df_render_ruj.reset_index()
                         
