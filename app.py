@@ -1761,12 +1761,17 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         else:
                             df_master[col] = "-"
             
-                # 5. Filter Berdasarkan Lembaga SSR
+                # ==========================================================
+                # 5. Filter Berdasarkan Lembaga SSR & Kategori Data (BERSEBELAHAN)
+                # ==========================================================
                 pilihan_ssr = "Semua"
+                pilihan_kategori = "Semua"
                 list_ssr_unik = sorted(df_master["Lembaga SSR"].dropna().unique().tolist())
                 
-                col_filter, _ = st.columns([1, 2])
-                with col_filter:
+                # Membuat 2 kolom dengan ukuran proporsional (bisa diatur sesuai selera, misal [1, 1])
+                col_ssr, col_kat = st.columns(2)
+                
+                with col_ssr:
                     pilihan_ssr = st.selectbox(
                         "🎯 Pilih Lembaga SSR:",
                         options=["Semua"] + list_ssr_unik,
@@ -1774,8 +1779,20 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         help="Menyaring data berdasarkan Lembaga SSR."
                     )
                 
+                with col_kat:
+                    pilihan_kategori = st.selectbox(
+                        "📂 Pilih Kategori Data:",
+                        options=["Semua", "Penjangkauan", "Rujukan"],
+                        index=0,
+                        help="Menyaring data berdasarkan Kategori Data."
+                    )
+                
+                # Jalankan logika filter secara akumulatif (saling menyaring)
                 if pilihan_ssr != "Semua":
                     df_master = df_master[df_master["Lembaga SSR"] == pilihan_ssr]
+                    
+                if pilihan_kategori != "Semua":
+                    df_master = df_master[df_master["Kategori Data"] == pilihan_kategori]
                     
                 df_view_gabungan = df_master[kolom_susunan_gabungan + ["_indeks_asli_master"]].copy()
             
@@ -1789,7 +1806,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 # 7. Render Data Editor
                 # ==========================================================
                 if df_view_gabungan.empty:
-                    st.info(f"✨ Tidak ada data kesalahan untuk Lembaga SSR: **{pilihan_ssr}**")
+                    # 🔥 DIUBAH: Pesan informasi dinamis sesuai kombinasi filter yang dipilih
+                    st.info(f"✨ Tidak ada data kesalahan untuk Lembaga SSR: **{pilihan_ssr}** dengan Kategori Data: **{pilihan_kategori}**")
                 else:
                     # Kirim data ke editor (sembunyikan kolom internal _indeks_asli_master dari mata user)
                     df_hasil_edit = st.data_editor(
