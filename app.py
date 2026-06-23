@@ -969,24 +969,32 @@ def jalankan_review_data(
             nama_ind = rule.get("nama", "Unknown Rule")
             try:
                 if rule["periksa"](context_data):
-                    # 🔥 PERBAIKAN: Format Key 5 Parameter konsisten (Upper Case)
+                    # 🔥 1. Format Key 5 Parameter konsisten (Upper Case)
                     v_tanggal_clean = v_tanggal.split(' ')[0].strip()
                     key_db = f"{v_kategori.strip().upper()}_{v_ssr.strip().upper()}_{v_tanggal_clean}_{id_clean.strip().upper()}_{nama_ind.strip().upper()}"
                     
-                    status_validasi = "-"
-                    checked_state = False
-                    justif_val = dict_justifikasi.get(key_db, "")
+                    # 🔥 2. Cek apakah kombinasi data ini sudah ada di Database Log Neon
+                    ada_di_log_db = (key_db in dict_justifikasi) or (key_db in dict_revisi) or (key_db in set_id_berulang_log)
                     
-                    # 1. Prioritas Utama: Jika sudah ada riwayat justifikasi
-                    if key_db in dict_justifikasi:
-                        status_validasi = f"⚠️ Terdeteksi Kembali (Riwayat Justifikasi: {justif_val})"
+                    if ada_di_log_db:
+                        # 🎯 LOGIKA BARU SESUAI PERMINTAAN: 
+                        if "(konfirmasi)" in nama_ind.lower():
+                            # Jika indikator ini butuh konfirmasi dan SUDAH pernah diproses di masa lalu,
+                            # maka ABAIKAN dan JANGAN dimunculkan ke tabel UI.
+                            continue 
+                        else:
+                            # Jika indikator biasa (non-konfirmasi) tapi belum direvisi di aplikasi sumber,
+                            # munculkan teks peringatan dan otomatis tercentang.
+                            status_validasi = "Kesalahan pada ID yang berulang (belum direvisi)"
+                            checked_state = True
+                            justif_val = dict_justifikasi.get(key_db, "")
+                    else:
+                        # Jika data ini benar-benar kesalahan baru yang belum pernah masuk Log Neon
+                        status_validasi = "-"
                         checked_state = False
-                        
-                    # 2. Prioritas Kedua: Teks memunculkan "Kesalahan pada ID berulang"
-                    elif key_db in dict_revisi or key_db in set_id_berulang_log:
-                        status_validasi = "Kesalahan pada ID yang berulang (belum direvisi)"
-                        checked_state = True
+                        justif_val = ""
     
+                    # 3. Masukkan ke dalam daftar hanya jika tidak terkena perintah 'continue' di atas
                     list_kesalahan.append({
                         "Pilih": checked_state,
                         "Kategori Data": v_kategori,
