@@ -1793,7 +1793,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     df_hasil_edit = st.data_editor(
                         df_view_gabungan,
                         use_container_width=True,
-                        hide_index=False,  # 🔥 WAJIB FALSE: Diperlukan agar indeks asli dataframe master tetap terjaga saat penghapusan baris
+                        hide_index=False,  # 🔥 WAJIB FALSE: Menjaga konsistensi indeks asli master
                         key="editor_validasi_tunggal",
                         column_config={
                             "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang jika data telah direvisi/diperbaiki", default=False),
@@ -1830,6 +1830,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                     text_justifikasi = str(row_edit['Justifikasi']).strip()
                                     
                                     is_konfirmasi = "konfirmasi" in ind_text.lower()
+                                    status_revisi = bool(row_edit['Pilih'])
                                     
                                     # Proteksi: Abaikan input justifikasi jika baris tersebut bukan tipe konfirmasi
                                     if not is_konfirmasi:
@@ -1841,32 +1842,37 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                             text_justifikasi = ""
                                     
                                     # Trigger simpan: jika kotak 'Pilih' dicentang ATAU justifikasi konfirmasi terisi
-                                    if bool(row_edit['Pilih']) or (is_konfirmasi and text_justifikasi != ""):
-                                        status_revisi = bool(row_edit['Pilih'])
+                                    if status_revisi or (is_konfirmasi and text_justifikasi != ""):
                                         
-                                        # 🔥 PERBAIKAN: Ditambahkan row_edit.get('Kategori Data') di urutan pertama tuple
+                                        # 🛡️ PERBAIKAN BUG A: Memastikan format parameter terpetakan dengan benar
                                         list_log_db.append((
                                             str(row_edit.get('Kategori Data', '-')),
                                             str(row_edit.get('Lembaga SSR', '-')),
-                                            str(row_edit.get('Tanggal', '-')),
+                                            str(row_edit.get('Tanggal', '-')), # Format string tanggal aman untuk DB text/date
                                             str(row_edit.get('ID Klien', '-')),
                                             ind_text,
                                             status_revisi,      # BOOLEAN
                                             text_justifikasi    # TEXT
                                         ))
                                         
-                                        # 🔥 PERBAIKAN: Menghapus typo 'indeks_baris_terpilesh'
                                         indeks_baris_terpilih.append(idx)
                                 
                                 # Kirim ke Neon Database jika ada baris yang memenuhi kriteria simpan
                                 if len(list_log_db) > 0:
                                     if simpan_log_ke_neon(list_log_db):
                                         
-                                        # 🔥 PERBAIKAN: Menambahkan errors='ignore' agar drop indeks lebih aman
+                                        # 🛡️ PERBAIKAN BUG B: Drop baris dari kedua session state secara bersamaan SEBELUM melakukan reset_index
                                         if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None:
-                                            st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(indeks_baris_terpilih, errors='ignore').reset_index(drop=True)
+                                            st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(indeks_baris_terpilih, errors='ignore')
+                                        
                                         if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
-                                            st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(indeks_baris_terpilih, errors='ignore').reset_index(drop=True)
+                                            st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(indeks_baris_terpilih, errors='ignore')
+                                        
+                                        # Lakukan re-index secara independen setelah ekstraksi drop selesai dilakukan
+                                        if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None:
+                                            st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].reset_index(drop=True)
+                                        if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
+                                            st.session_state['df_review_utama'] = st.session_state['df_review_utama'].reset_index(drop=True)
                                         
                                         st.success(f"🎉 Sukses memindahkan {len(list_log_db)} baris data ke tabel log_hasil_review_data!")
                                         
