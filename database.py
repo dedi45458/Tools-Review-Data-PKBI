@@ -127,7 +127,10 @@ def hitung_dan_ambil_log_db():
                 rows = cur.fetchall()
                 for r in rows:
                     kat, ssr, tgl, id_klien, ind, is_rev, just = r
-                    key = f"{str(ssr).upper()}_{str(tgl)}_{str(id_klien)}_{str(ind)}"
+                    
+                    # 🔥 PERBAIKAN: Format Key WAJIB menggunakan 5 Parameter (Kategori_SSR_Tanggal_ID_Indikator)
+                    key = f"{str(kat).strip().upper()}_{str(ssr).strip().upper()}_{str(tgl).split(' ')[0].strip()}_{str(id_klien).strip().upper()}_{str(ind).strip().upper()}"
+                    
                     dict_revisi[key] = is_rev
                     if just: 
                         dict_justifikasi[key] = just
