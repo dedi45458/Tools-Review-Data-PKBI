@@ -1259,11 +1259,6 @@ if tombol_proses:
                 try:
                     from database import simpan_paket_validasi_ke_tiga_tabel
                     
-                    # 🔥 DEBUG: MONITOR JUMLAH BARIS
-                    st.write("--- DEBUG PROSES AGREGASI ---")
-                    st.write(f"Total baris yang tampil di UI (df_full): {len(df_full)}")
-                    st.write(f"Total baris yang akan disimpan ke DB (df_bawah): {len(df_bawah)}")
-                    
                     if not df_full.empty:
                         # AGREGASI MENGGUNAKAN DF_FULL (Sekarang sudah di-fillna, jadi 50 baris harusnya masuk semua)
                         df_pjj_only = df_full[df_full['KATEGORI DATA'].str.title() == 'Penjangkauan']
