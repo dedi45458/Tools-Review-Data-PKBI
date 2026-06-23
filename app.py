@@ -1762,14 +1762,15 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             df_master[col] = "-"
             
                 # ==========================================================
-                # 5. Filter Berdasarkan Lembaga SSR & Kategori Data (BERSEBELAHAN)
+                # 5. Filter Berdasarkan Lembaga SSR & Kategori Data (RINGKAS & BERSEBELAHAN)
                 # ==========================================================
                 pilihan_ssr = "Semua"
                 pilihan_kategori = "Semua"
                 list_ssr_unik = sorted(df_master["Lembaga SSR"].dropna().unique().tolist())
                 
-                # Membuat 2 kolom dengan ukuran proporsional (bisa diatur sesuai selera, misal [1, 1])
-                col_ssr, col_kat = st.columns(2)
+                # 💡 PERBAIKAN: Ditambahkan 'col_spacer' di kanan agar dropdown tidak melar ke samping
+                # Rasio [1.2, 1.2, 2.6] membuat kotak dropdown pas dengan panjang teks umum
+                col_ssr, col_kat, col_spacer = st.columns([1.2, 1.2, 2.6])
                 
                 with col_ssr:
                     pilihan_ssr = st.selectbox(
@@ -1787,7 +1788,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         help="Menyaring data berdasarkan Kategori Data."
                     )
                 
-                # Jalankan logika filter secara akumulatif (saling menyaring)
+                # 'col_spacer' sengaja dibiarkan kosong tidak diisi apa-apa
+                
+                # Jalankan logika filter secara akumulatif
                 if pilihan_ssr != "Semua":
                     df_master = df_master[df_master["Lembaga SSR"] == pilihan_ssr]
                     
