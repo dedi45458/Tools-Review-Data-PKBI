@@ -1775,7 +1775,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 # Bersihkan kolom justifikasi dari awal jika baris tersebut bukan bertipe '(konfirmasi)'
                 for idx, row in df_view_gabungan.iterrows():
                     if "konfirmasi" not in str(row['Indikator Kesalahan Data']).lower():
-                        df_view_gabungan.at[idx, 'Justifikasi'] = "🔒 Terkunci (Bukan Konfirmasi)"
+                        df_view_gabungan.at[idx, 'Justifikasi'] = "🔒"
             
                 # ==========================================================
                 # 7. Render Data Editor
