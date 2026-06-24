@@ -1324,6 +1324,8 @@ if tombol_proses:
                 
                 # 💡 LANGKAH PERBAIKAN: Deteksi Kepatuhan Revisi (Fraud/Repeat Error Detection)
                 if df_utama_db is not None and not df_utama_db.empty and not set_error_historis.empty:
+                    # 🔥 TAMBAHKAN BARIS INI: Ubah semua kolom df_utama_db menjadi UPPERCASE agar sinkron dengan loop di bawah
+                    df_utama_db.columns = df_utama_db.columns.str.upper()
                     
                     kunci_belum_direvisi = set()
                     kunci_sudah_direvisi = set() 
@@ -1359,26 +1361,26 @@ if tombol_proses:
                     
                     # 2. LAKUKAN PENCOCOKAN KE DATA UI YANG AKAN TAMPIL
                     for idx_db, row_db in df_utama_db.iterrows():
-                        v_ind = str(row_db.get('INDIKATOR KESALAHAN DATA', '')).strip().upper()
+                        v_ind = str(row_db.get('Indikator Kesalahan Data', '')).strip().upper() # 🛠️ Ubah ke Title Case
                         
                         if "(KONFIRMASI)" in v_ind:
                             continue
                             
-                        v_kat = str(row_db.get('KATEGORI DATA', '')).strip().upper()
-                        v_ssr = str(row_db.get('LEMBAGA SSR', '')).strip().upper()
+                        v_kat = str(row_db.get('Kategori Data', '')).strip().upper()         # 🛠️ Ubah ke Title Case
+                        v_ssr = str(row_db.get('Lembaga SSR', '')).strip().upper()           # 🛠️ Ubah ke Title Case
                         
-                        v_tgl_raw = str(row_db.get('TANGGAL', '')).strip()
+                        v_tgl_raw = str(row_db.get('Tanggal', '')).strip()                   # 🛠️ Ubah ke Title Case
                         v_tgl = v_tgl_raw.split(' ')[0].strip().upper() if v_tgl_raw else ""
                         
-                        v_id  = str(row_db.get('ID KLIEN', '')).strip().upper()
+                        v_id  = str(row_db.get('ID KLIEN', '')).strip().upper()               # 🛠️ Ubah ke Title Case
                         
                         kunci_cek_db = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
                         
                         # PROSES PENYUNTIKAN STEMPEL KE UI
                         if kunci_cek_db in kunci_sudah_direvisi:
-                            df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)"
+                            df_utama_db.at[idx_db, 'Validasi Hasil Review'] = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)" # 🛠️ Ubah ke Title Case
                         elif kunci_cek_db in kunci_belum_direvisi:
-                            df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = "Kesalahan pada ID yang berulang (belum direvisi)"
+                            df_utama_db.at[idx_db, 'Validasi Hasil Review'] = "Kesalahan pada ID yang berulang (belum direvisi)"           # 🛠️ Ubah ke Title Case
                             
                 # Simpan kembali data yang sudah distempel ke dalam session state
                 st.session_state['df_tabel_bawah'] = df_utama_db
