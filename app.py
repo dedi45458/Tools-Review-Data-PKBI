@@ -483,26 +483,20 @@ with st.sidebar:
             if file_master is not None:
                 try:
                     df_check = pd.read_excel(file_master)
-                    # Normalisasi nama kolom untuk pengecekan tipe data secara aman
+                    # Normalisasi nama kolom menjadi huruf kecil dan hapus spasi (agar pengecekan akurat)
                     kolom_terdeteksi = [str(c).strip().lower() for c in df_check.columns]
                     
-                    # Deteksi Tipe A: Apakah ini Database Layanan?
-                    is_data_layanan = any("lembaga" in c or "ssr" in c for c in kolom_terdeteksi) and any("layanan" in c for c in kolom_terdeteksi)
+                    # 🔍 1. Aturan Deteksi Database HIV+ (Wajib ada 'id klien' DAN 'tanggal')
+                    is_database_hiv = ("id klien" in kolom_terdeteksi) and ("tanggal" in kolom_terdeteksi)
                     
-                    if is_data_layanan:
-                        st.info("🏥 **Terdeteksi:** Database Fasyankes / SSR")
-                        if st.button("🔄 Update Database Fasyankes", use_container_width=False, key="btn_exec_layanan"):
-                            with st.spinner("Sedang memproses database fasyankes..."):
-                                from database import import_database_layanan
-                                sukses, pesan = import_database_layanan(df_check)
-                                if sukses:
-                                    st.success("✅ Database Fasyankes telah diperbarui!")
-                                else:
-                                    st.error("❌ Gagal mengupdate database fasyankes")
+                    # 🔍 2. Aturan Deteksi Database Layanan (Wajib ada unsur SSR/IU DAN 'nama layanan')
+                    # Menggunakan any() untuk ssr/iu agar fleksibel jika di excel tertulis "Lembaga SSR" atau "Lembaga SSR/IU"
+                    ada_unsur_ssr = any("ssr" in c or "iu" in c or "lembaga" in c for c in kolom_terdeteksi)
+                    is_data_layanan = ada_unsur_ssr and ("nama layanan" in kolom_terdeteksi)
                     
-                    # Deteksi Tipe B: Berarti ini Data HIV+ Semester Lalu
-                    else:
-                        st.info("📋 **Terdeteksi:** Berkas Database HIV+")
+                    # --- PERAKITAN LOGIKA PERCABANGAN (IF-ELSE) ---
+                    if is_database_hiv:
+                        st.info("📋 **Terdeteksi:** Database HIV+")
                         if st.button("🔄 Update Database HIV+", use_container_width=False, key="btn_exec_hiv"):
                             with st.spinner("Sedang memproses data rujukan HIV..."):
                                 from database import import_data_HIV
@@ -511,6 +505,22 @@ with st.sidebar:
                                 else:
                                     st.error("❌ Gagal mengupdate database HIV+.")
                                     
+                    elif is_data_layanan:
+                        st.info("🏥 **Terdeteksi:** Database Fasyankes")
+                        if st.button("🔄 Update Database Fasyankes", use_container_width=False, key="btn_exec_layanan"):
+                            with st.spinner("Sedang memproses database fasyankes..."):
+                                from database import import_database_layanan
+                                sukses, pesan = import_database_layanan(df_check)
+                                if sukses:
+                                    st.success("✅ Database Fasyankes telah diperbarui!")
+                                else:
+                                    st.error(f"❌ Gagal mengupdate database fasyankes: {pesan}")
+                                    
+                    else:
+                        st.warning("⚠️ **Format File Tidak Dikenali!** \n\n"
+                                   "- Untuk **Database HIV+**, pastikan memiliki kolom: `ID Klien` dan `Tanggal`.\n"
+                                   "- Untuk **Database Layanan**, pastikan memiliki kolom: `Lembaga SSR` (atau sejenisnya) dan `Nama Layanan`.")
+                        
                 except Exception as e:
                     st.error(f"⚠️ Gagal membaca struktur berkas Excel: {e}")
             
