@@ -1309,7 +1309,7 @@ if tombol_proses:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database (Sistem Crash): {str(e)}")
 
             # =========================================================================
-            # AUTO-REFRESH UI DENGAN DATA DARI DB (VERSI FIX BUG OVERWRITE)
+            # AUTO-REFRESH UI DENGAN DATA DARI DB (VERSI FIX KEPATUHAN REVISI)
             # =========================================================================
             try:
                 from database import ambil_agregasi_penjangkauan_terakhir, ambil_agregasi_rujukan_terakhir, ambil_hasil_review_utama_terakhir
@@ -1322,58 +1322,65 @@ if tombol_proses:
                 st.session_state['df_rujukan'] = df_rjk_db
                 st.session_state['df_tabel_rujukan'] = df_rjk_db
                 
-                # 💡 LANGKAH PERBAIKAN: Deteksi Kepatuhan Revisi + Pengecualian Status (Konfirmasi)
+                # 💡 LANGKAH PERBAIKAN: Deteksi Kepatuhan Revisi (Fraud/Repeat Error Detection)
                 if df_utama_db is not None and not df_utama_db.empty and not set_error_historis.empty:
                     
-                    # 1. Buat dua "Daftar Hitam" terpisah berdasarkan status revisi masa lalu
                     kunci_belum_direvisi = set()
                     kunci_sudah_direvisi = set() 
                     
+                    # 1. RAKIT DAFTAR KUNCI DARI LOG DATABASE
                     for _, row_h in set_error_historis.iterrows():
                         ind_h = str(row_h.get("INDIKATOR KESALAHAN DATA", "")).strip().upper()
                         
-                        # 🔥 KUNCI PERBAIKAN: Jika ada kata (KONFIRMASI), skip/abaikan, jangan masukkan ke daftar cek UI
+                        # Jika indikator tersebut adalah indikator butuh Konfirmasi, ABAIKAN (jangan distempel)
                         if "(KONFIRMASI)" in ind_h:
                             continue
                             
                         kat_h = str(row_h.get("KATEGORI DATA", "")).strip().upper()
                         ssr_h = str(row_h.get("LEMBAGA SSR", "")).strip().upper()
-                        tgl_h = str(row_h.get("TANGGAL", "")).split(' ')[0].strip().upper()
+                        
+                        # Ekstrak tanggal (antisipasi jika format DB memiliki jam/waktu seperti di CSV)
+                        tgl_raw = str(row_h.get("TANGGAL", "")).strip()
+                        tgl_h = tgl_raw.split(' ')[0].strip().upper() if tgl_raw else ""
+                        
                         id_h  = str(row_h.get("ID KLIEN", "")).strip().upper()
-                        status_rev = row_h.get("is_revisi", False) 
+                        
+                        # 🔥 PERBAIKAN: Deteksi status 'true' / 'false' dengan aman (menyesuaikan format data di CSV Anda)
+                        status_rev = row_h.get("is_revisi", False)
+                        is_rev_bool = True if (status_rev is True or str(status_rev).strip().lower() == 'true') else False
                         
                         kunci_gabung = f"{kat_h}_{ssr_h}_{tgl_h}_{id_h}_{ind_h}"
                         
                         if id_h and ind_h:
-                            if status_rev == True:
+                            if is_rev_bool:
                                 kunci_sudah_direvisi.add(kunci_gabung)
                             else:
                                 kunci_belum_direvisi.add(kunci_gabung)
                     
-                    # 2. Lakukan pengecekan live pada data baru yang mau tampil di UI
+                    # 2. LAKUKAN PENCOCOKAN KE DATA UI YANG AKAN TAMPIL
                     for idx_db, row_db in df_utama_db.iterrows():
                         v_ind = str(row_db.get('INDIKATOR KESALAHAN DATA', '')).strip().upper()
                         
-                        # 🔥 KUNCI PERBAIKAN: Jika data baru di DB juga mengandung (KONFIRMASI), biarkan normal, jangan distempel berulang
                         if "(KONFIRMASI)" in v_ind:
                             continue
                             
                         v_kat = str(row_db.get('KATEGORI DATA', '')).strip().upper()
                         v_ssr = str(row_db.get('LEMBAGA SSR', '')).strip().upper()
-                        v_tgl = str(row_db.get('TANGGAL', '')).split(' ')[0].strip().upper()
+                        
+                        v_tgl_raw = str(row_db.get('TANGGAL', '')).strip()
+                        v_tgl = v_tgl_raw.split(' ')[0].strip().upper() if v_tgl_raw else ""
+                        
                         v_id  = str(row_db.get('ID KLIEN', '')).strip().upper()
                         
                         kunci_cek_db = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
                         
-                        # KONDISI A: Dulu diklaim TRUE (sudah direvisi), tapi sekarang muncul lagi
+                        # PROSES PENYUNTIKAN STEMPEL KE UI
                         if kunci_cek_db in kunci_sudah_direvisi:
                             df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)"
-                            
-                        # KONDISI B: Memang dari dulu belum direvisi (is_revisi = FALSE)
                         elif kunci_cek_db in kunci_belum_direvisi:
                             df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = "Kesalahan pada ID yang berulang (belum direvisi)"
-                
-                # Masukkan data yang sudah diperbaiki teks validasinya ke session state utama
+                            
+                # Simpan kembali data yang sudah distempel ke dalam session state
                 st.session_state['df_tabel_bawah'] = df_utama_db
                 st.session_state['ts_terakhir_utama'] = ts_utama
                 st.session_state['tanggal_terakhir_review'] = ts_pjj
@@ -1382,7 +1389,7 @@ if tombol_proses:
                     st.session_state['tanggal_terakhir_rujukan_str'] = ts_rjk.strftime('%d-%m-%Y pukul %H:%M WIB') if hasattr(ts_rjk, 'strftime') else str(ts_rjk)
             except Exception as e:
                 st.warning(f"⚠️ Berhasil simpan data, namun gagal me-refresh visualisasi dashboard UI ({e})")
-
+            
             st.session_state['proses_selesai'] = True
             import time
             time.sleep(1.2) 
