@@ -122,20 +122,23 @@ def hitung_dan_ambil_log_db():
     if conn:
         try:
             with conn.cursor() as cur:
-                # Ambil data langsung menggunakan query Postgres
                 cur.execute("SELECT Kategori_Data, Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi FROM log_hasil_review_data")
                 rows = cur.fetchall()
                 for r in rows:
                     kat, ssr, tgl, id_klien, ind, is_rev, just = r
                     
-                    # 🔥 PERBAIKAN: Format Key WAJIB menggunakan 5 Parameter (Kategori_SSR_Tanggal_ID_Indikator)
+                    # Format Key menggunakan 5 Parameter Kapital
                     key = f"{str(kat).strip().upper()}_{str(ssr).strip().upper()}_{str(tgl).split(' ')[0].strip()}_{str(id_klien).strip().upper()}_{str(ind).strip().upper()}"
                     
-                    dict_revisi[key] = is_rev
-                    if just: 
-                        dict_justifikasi[key] = just
+                    # Pastikan konversi ke boolean Python murni
+                    is_rev_bool = True if (is_rev is True or str(is_rev).strip().lower() == 'true') else False
+                    dict_revisi[key] = is_rev_bool
+                    
+                    if just and str(just).strip() not in ['', 'nan', 'None']: 
+                        dict_justifikasi[key] = str(just).strip()
         except Exception as e:
-            st.error(f"Gagal mengambil riwayat Log Review: {e}")
+            if 'st' in globals():
+                st.error(f"Gagal mengambil riwayat Log Review: {e}")
         finally:
             conn.close()
     return dict_revisi, dict_justifikasi
