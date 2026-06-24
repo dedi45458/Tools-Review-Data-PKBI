@@ -642,7 +642,23 @@ def jalankan_review_data(
     if df_asli.empty: return pd.DataFrame(list_kesalahan)
     
     df = df_asli.copy()
-    
+
+    # 🎯 TAMBAHAN: Penyeragam Tanggal agar format Excel (DD/MM/YYYY) sinkron dengan Database (YYYY-MM-DD)
+    def normalisasi_tanggal(tgl_str):
+        tgl_str = str(tgl_str).strip().split(' ')[0]
+        if not tgl_str or tgl_str.lower() == 'none' or tgl_str == 'nan': return ""
+        try:
+            if '/' in tgl_str:
+                parts = tgl_str.split('/')
+                if len(parts) == 3:
+                    if len(parts[2]) == 4: return f"{parts[2]}-{parts[1]}-{parts[0]}"
+                    elif len(parts[0]) == 4: return f"{parts[0]}-{parts[1]}-{parts[2]}"
+            elif '-' in tgl_str:
+                parts = tgl_str.split('-')
+                if len(parts) == 3 and len(parts[0]) == 4: return tgl_str
+        except: pass
+        return tgl_str.upper()
+
     # ==========================================================
     # LOGIKA PERBAIKAN HEADER BERTINGKAT (MERGED CELLS)
     # ==========================================================
@@ -969,27 +985,29 @@ def jalankan_review_data(
             nama_ind = rule.get("nama", "Unknown Rule")
             try:
                 if rule["periksa"](context_data):
-                    # 🔥 1. Format Key 5 Parameter konsisten (Upper Case)
-                    v_tanggal_clean = v_tanggal.split(' ')[0].strip()
+                    # 🔥 1. Format Key 5 Parameter Konsisten (Menggunakan Normalisasi Tanggal)
+                    v_tanggal_clean = normalisasi_tanggal(v_tanggal)
                     key_db = f"{v_kategori.strip().upper()}_{v_ssr.strip().upper()}_{v_tanggal_clean}_{id_clean.strip().upper()}_{nama_ind.strip().upper()}"
                     
                     # 🔥 2. Cek apakah kombinasi data ini sudah ada di Database Log Neon
                     ada_di_log_db = (key_db in dict_justifikasi) or (key_db in dict_revisi) or (key_db in set_id_berulang_log)
                     
                     if ada_di_log_db:
-                        # 🎯 LOGIKA BARU SESUAI PERMINTAAN: 
                         if "(konfirmasi)" in nama_ind.lower():
-                            # Jika indikator ini butuh konfirmasi dan SUDAH pernah diproses di masa lalu,
-                            # maka ABAIKAN dan JANGAN dimunculkan ke tabel UI.
-                            continue 
+                            continue # Abaikan indikator konfirmasi
                         else:
-                            # Jika indikator biasa (non-konfirmasi) tapi belum direvisi di aplikasi sumber,
-                            # munculkan teks peringatan dan otomatis tercentang.
-                            status_validasi = "Kesalahan pada ID yang berulang (belum direvisi)"
+                            # 🎯 LOGIKA FRAUD DETECTION DI AKAR VALIDASI
+                            # Cek status boolean di DB: True = Fraud/Bohong, False = Memang belum direvisi
+                            is_rev_bool = dict_revisi.get(key_db, False)
+                            
+                            if is_rev_bool:
+                                status_validasi = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)"
+                            else:
+                                status_validasi = "Kesalahan pada ID yang berulang (belum direvisi)"
+                            
                             checked_state = True
                             justif_val = dict_justifikasi.get(key_db, "")
                     else:
-                        # Jika data ini benar-benar kesalahan baru yang belum pernah masuk Log Neon
                         status_validasi = "-"
                         checked_state = False
                         justif_val = ""
@@ -1359,8 +1377,8 @@ if tombol_proses:
                             pass
                         return tgl_str.upper()
             
-                    kunci_belum_direvisi = set()
-                    kunci_sudah_direvisi = set() 
+                    # 🎯 PERBAIKAN: Gunakan Dictionary untuk menghindari error duplikasi dan memastikan status TRUE menang
+                    kamus_riwayat_revisi = {}
                     
                     # 2. RAKIT DAFTAR KUNCI DARI LOG DATABASE HISTORIS
                     for _, row_h in set_error_historis.iterrows():
@@ -1389,10 +1407,12 @@ if tombol_proses:
                         kunci_gabung = f"{kat_h}_{ssr_h}_{tgl_h}_{id_h}_{ind_h}"
                         
                         if id_h and ind_h:
-                            if is_rev_bool:
-                                kunci_sudah_direvisi.add(kunci_gabung)
+                            # Jika kunci sudah ada, dan data baru bernilai True (Fraud), timpa nilai lamanya!
+                            if kunci_gabung in kamus_riwayat_revisi:
+                                if is_rev_bool:
+                                    kamus_riwayat_revisi[kunci_gabung] = True
                             else:
-                                kunci_belum_direvisi.add(kunci_gabung)
+                                kamus_riwayat_revisi[kunci_gabung] = is_rev_bool
                     
                     # 3. MATCHING & SUNTIK STEMPEL KE LIVE DATA UI
                     # Pastikan nama kolom df_utama_db seragam uppercase agar aman dibaca script bawah
@@ -1413,12 +1433,14 @@ if tombol_proses:
                         kunci_cek_db = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
                         
                         # Proses Stamping ke DataFrame Utama UI (Diisi ke kolom besar & kecil agar aman)
-                        if kunci_cek_db in kunci_sudah_direvisi:
-                            pesan = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)"
-                            df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = pesan
-                            df_utama_db.at[idx_db, 'Validasi Hasil Review'] = pesan
-                        elif kunci_cek_db in kunci_belum_direvisi:
-                            pesan = "Kesalahan pada ID yang berulang (belum direvisi)"
+                        if kunci_cek_db in kamus_riwayat_revisi:
+                            was_revisied = kamus_riwayat_revisi[kunci_cek_db]
+                            
+                            if was_revisied == True:
+                                pesan = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)"
+                            else:
+                                pesan = "Kesalahan pada ID yang berulang (belum direvisi)"
+                                
                             df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = pesan
                             df_utama_db.at[idx_db, 'Validasi Hasil Review'] = pesan
             
