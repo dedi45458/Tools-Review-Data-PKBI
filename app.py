@@ -1000,7 +1000,7 @@ def jalankan_review_data(
                             is_rev_bool = dict_revisi.get(key_db, False)
                             
                             if is_rev_bool:
-                                status_validasi = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)"
+                                status_validasi = "⚠️ Kesalahan Berulang (Revisi sebelumnya tidak valid!)"
                             else:
                                 status_validasi = "Kesalahan pada ID yang berulang (belum direvisi)"
                             
