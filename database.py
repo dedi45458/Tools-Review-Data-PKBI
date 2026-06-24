@@ -179,11 +179,14 @@ def ambil_rekap_tren():
 # ==============================================================================
 
 def import_data_HIV(df_HIV):
-    """Mengosongkan tabel rujukan lama dan mengupload ulang data dari Excel secara massal."""
-    # 1. Bersihkan nama kolom dari spasi tidak terlihat di awal/akhir
+    """
+    Mengosongkan tabel rujukan lama dan mengupload data HIV+ baru dari Excel.
+    Menyaring baris duplikat berdasarkan parameter kombinasi yang ditentukan.
+    """
+    # Bersihkan spasi tak terlihat di awal/akhir nama kolom
     df_HIV.columns = df_HIV.columns.str.strip()
     
-    # Pemetaan kolom yang disesuaikan secara presisi dengan file Excel Anda
+    # Pemetaan dari kolom Excel ke kolom Database PostgreSQL
     pemetaan = {
         "Lembaga SR": "lembaga_sr", 
         "Lembaga SSR": "lembaga_ssr", 
@@ -197,7 +200,7 @@ def import_data_HIV(df_HIV):
         "Umur": "umur",
         "Jenis Kelamin": "jenis_kelamin", 
         "Kontak Awal": "kontak_awal", 
-        "Jenis Layanan": "jenis_layanan", # 🛠️ FIX: Sesuaikan nama agar presisi dengan Excel Anda
+        "Jenis Layanan": "jenis_layanan_detil", # Sudah disesuaikan dengan skema DDL '_detil'
         "Rujukan": "rujukan", 
         "Hasil Tes IMS": "hasil_tes_ims", 
         "Menerima Pengobatan IMS": "menerima_pengobatan_ims",
@@ -205,43 +208,48 @@ def import_data_HIV(df_HIV):
         "Hasil Tes HIV": "hasil_tes_hiv"
     }
     
-    # Pastikan semua kolom yang wajib ada di pemetaan tersedia di df
-    # Jika tidak ada di Excel, buat kolom kosong berisi None
+    # Jaminan keselamatan: jika ada kolom wajib yang tidak sengaja terhapus di Excel,
+    # isi dengan None (Null) agar proses upload tidak macet/patah di tengah jalan.
     for col_excel in pemetaan.keys():
         if col_excel not in df_HIV.columns:
             df_HIV[col_excel] = None
             
-    # Lakukan rename kolom
+    # Ganti nama kolom data frame sesuai kamus pemetaan
     df_HIV.rename(columns=pemetaan, inplace=True)
     
-    # Filter dataframe hanya mengambil kolom yang masuk ke struktur DB
+    # Filter susunan kolom agar presisi dengan urutan tabel target
     kolom_db = list(pemetaan.values())
     df_HIV = df_HIV[kolom_db].copy()
 
-    # 2. Eksekusi ke Database Neon
+    # 🛡️ PROTEKSI ANTI-DUPLIKASI (Pandas Level)
+    # Menghapus baris yang memiliki kesamaan pada 4 parameter utama
+    df_HIV.drop_duplicates(
+        subset=['lembaga_ssr', 'id_klien', 'nama_layanan', 'tanggal'], 
+        keep='first', 
+        inplace=True
+    )
+
     conn = dapatkan_koneksi_neon()
     if conn is None: return False
     try:
         with conn.cursor() as cur:
-            # Kosongkan tabel lama terlebih dahulu
+            # Kosongkan tabel rujukan lama, reset urutan ID serial mulai dari 1 lagi
             cur.execute("TRUNCATE TABLE public.data_rujukan_hiv_positif RESTART IDENTITY;")
             conn.commit()
             
-        # Pindahkan data menggunakan SQLAlchemy Engine
+        # Bulk Insert massal menggunakan SQLAlchemy Engine
         engine = create_engine(st.secrets["neon_db"]["connection_string"])
         with engine.connect() as sql_conn:
-            # Gunakan chunksize yang aman dan konversi data ke bentuk sql
             df_HIV.to_sql(
                 'data_rujukan_hiv_positif', 
                 sql_conn, 
                 if_exists='append', 
                 index=False, 
                 method='multi', 
-                chunksize=200 # 🛠️ Pengecilan chunksize untuk menghindari batasan jumlah parameter Postgres
+                chunksize=200 # Ukuran chunk kecil agar memori server Neon tetap stabil
             )
         return True
     except Exception as e:
-        import streamlit as st
         st.error(f"Gagal melakukan sinkronisasi ke database Neon: {e}")
         return False
     finally:
