@@ -814,15 +814,15 @@ def ambil_metrik_akurasi_terakhir():
 
 def ambil_set_error_belum_direvisi():
     """
-    Mengambil seluruh riwayat log kesalahan yang status revisinya masih False (belum direvisi)
-    dari tabel log_hasil_review_data, kemudian mengembalikannya dalam bentuk DataFrame.
+    Mengambil SELURUH riwayat log kesalahan (baik yang True maupun False)
+    untuk kebutuhan deteksi kepatuhan revisi (Fraud Detection) di UI.
     """
     conn = dapatkan_koneksi_neon()
     if not conn:
         return pd.DataFrame()
         
     try:
-        # Tarik data log kesalahan historis yang belum diperbaiki
+        # 🔥 PERBAIKAN: Hapus WHERE is_revisi = FALSE agar semua data log (termasuk yang 'true') ditarik.
         query = """
             SELECT 
                 kategori_data AS "KATEGORI DATA", 
@@ -832,14 +832,13 @@ def ambil_set_error_belum_direvisi():
                 indikator_kesalahan_data AS "INDIKATOR KESALAHAN DATA", 
                 is_revisi, 
                 justifikasi AS "JUSTIFIKASI"
-            FROM public.log_hasil_review_data
-            WHERE is_revisi = FALSE;
+            FROM public.log_hasil_review_data;
         """
         df_historis = pd.read_sql(query, conn)
         return df_historis
         
     except Exception as e:
-        print(f"Error saat mengambil log error belum direvisi: {e}")
+        print(f"Error saat mengambil log error historis: {e}")
         return pd.DataFrame()
     finally:
         conn.close()
