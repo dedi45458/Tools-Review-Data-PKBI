@@ -1307,14 +1307,29 @@ if tombol_proses:
                 
                         # INSERT DETAIL MENGGUNAKAN DF_BAWAH
                         list_insert_tabel_3 = []
+
                         for _, row_all in df_bawah.iterrows():
+                            # 1. Ambil status pesan validasi hasil review
+                            pesan_validasi = str(row_all.get('VALIDASI HASIL REVIEW', '-')).strip()
+                            
+                            # 2. JIKA KOLOM INI BERISI PERINGATAN KESALAHAN BERULANG, ABARKAN! (TIDAK MASUK LIST INSERT)
+                            if "Kesalahan Berulang" in pesan_validasi or "belum direvisi" in pesan_validasi:
+                                continue # Skip baris ini, langsung lanjut ke baris berikutnya
+                                
+                            # Jika lolos (tidak ada peringatan), baru masukkan ke list insert database
                             list_insert_tabel_3.append((
-                                str(row_all.get('KATEGORI DATA', '-')), str(row_all.get('LEMBAGA SSR', '-')),
-                                str(row_all.get('KODE PETUGAS', '-')), str(row_all.get('NAMA KOTA', '-')),
-                                str(row_all.get('NAMA LAYANAN', '-')), str(row_all.get('TANGGAL', '-')),
-                                str(row_all.get('ID KLIEN', '-')), str(row_all.get('NIK', '-')),
-                                str(row_all.get('TIPE SASARAN', '-')), str(row_all.get('INDIKATOR KESALAHAN DATA', '-')),
-                                str(row_all.get('VALIDASI HASIL REVIEW', '-')), str(row_all.get('JUSTIFIKASI', '-'))
+                                str(row_all.get('KATEGORI DATA', '-')), 
+                                str(row_all.get('LEMBAGA SSR', '-')),
+                                str(row_all.get('KODE PETUGAS', '-')), 
+                                str(row_all.get('NAMA KOTA', '-')),
+                                str(row_all.get('NAMA LAYANAN', '-')), 
+                                str(row_all.get('TANGGAL', '-')),
+                                str(row_all.get('ID KLIEN', '-')), 
+                                str(row_all.get('NIK', '-')),
+                                str(row_all.get('TIPE SASARAN', '-')), 
+                                str(row_all.get('INDIKATOR KESALAHAN DATA', '-')),
+                                pesan_validasi, 
+                                str(row_all.get('JUSTIFIKASI', '-'))
                             ))
                 
                         sukses = simpan_paket_validasi_ke_tiga_tabel(list_insert_tabel_1, list_insert_tabel_2, list_insert_tabel_3)
@@ -2017,16 +2032,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                         
                                         # Tampilkan pesan sukses ke pengguna
                                         st.success(f"🎉 Sukses memindahkan {len(list_log_db)} baris data ke tabel log_hasil_review_data!")
-                                        
-                                        if peringatan_justifikasi:
-                                            st.warning("⚠️ Catatan: Input Justifikasi pada baris non-konfirmasi otomatis diabaikan oleh sistem.")
                                             
                                         # Berikan jeda visual sebelum memicu pembaruan total halaman UI
                                         import time
                                         time.sleep(1.2)
                                         st.rerun()
                                     else:
-                                        st.error("❌ Gagal menyimpan ke Neon Database. Periksa koneksi data Anda.")
+                                        st.error("❌ Gagal menyimpan ke Database. Periksa koneksi data Anda.")
                                 else:
                                     st.info("ℹ️ Tidak ada data yang dicentang atau diisi Justifikasinya untuk disimpan.")
             else:
