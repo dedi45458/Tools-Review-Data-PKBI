@@ -291,7 +291,6 @@ def hitung_dan_ambil_log_db():
     if conn:
         try:
             with conn.cursor() as cur:
-                # 1. Ambil data dengan susunan kolom yang jelas
                 cur.execute("""
                     SELECT Kategori_Data, Lembaga_SSR, Tanggal, ID_Klien, Indikator_Kesalahan_Data, is_revisi, Justifikasi 
                     FROM log_hasil_review_data
@@ -301,26 +300,26 @@ def hitung_dan_ambil_log_db():
                 for r in rows:
                     kat_data, ssr, tgl, id_klien, ind, is_rev, just = r
                     
-                    # 2. 🟢 PERBAIKAN UTAMA: Masukkan Kategori_Data dan standarisasi string (.upper() / .strip())
-                    v_kat = str(kat_data).strip()  # Sesuai v_kategori ("Rujukan" / "Penjangkauan")
+                    # 🟢 STANDARISASI KAPITAL: WAJIB SINKRON 100% DENGAN ENGINE VALIDASI
+                    v_kat = str(kat_data).strip().upper()  # Menjadi "RUJUKAN" / "PENJANGKAUAN"
                     v_ssr = str(ssr).strip().upper()
-                    v_tgl = str(tgl).strip()
-                    v_id  = str(id_klien).replace("'", "").strip()
-                    v_ind = str(ind).strip()
+                    v_tgl = str(tgl).split(' ')[0].strip() # Hanya ambil YYYY-MM-DD
+                    v_id  = str(id_klien).replace("'", "").strip().upper()
+                    v_ind = str(ind).strip().upper()
                     
-                    # Bentuk key yang identik dengan key_db di engine utama
+                    # Bentuk key gabungan unik
                     key = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
                     
-                    # 3. Masukkan ke dictionary hanya jika BELUM direvisi (is_revisi == False atau None)
-                    if not is_rev: 
-                        dict_revisi[key] = True
+                    # 🎯 SOLUSI UTAMA: Simpan nilai boolean asli dari database (True/False) ke dictionary
+                    # Jangan gunakan 'if not is_rev' agar status TRUE tidak terbuang!
+                    is_rev_bool = True if (is_rev is True or str(is_rev).strip().lower() == 'true') else False
+                    dict_revisi[key] = is_rev_bool
                     
-                    # Simpan catatan justifikasi jika ada isi teksnya
+                    # Simpan catatan justifikasi jika ada teksnya
                     if just and str(just).strip() not in ['', 'nan', 'None']: 
                         dict_justifikasi[key] = str(just).strip()
                         
         except Exception as e:
-            # Anda bisa mencetak error jika dibutuhkan untuk debugging: print(f"Error DB: {e}")
             pass
         finally:
             conn.close()
