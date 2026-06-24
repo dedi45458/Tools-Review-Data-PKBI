@@ -180,37 +180,72 @@ def ambil_rekap_tren():
 
 def import_data_HIV(df_HIV):
     """Mengosongkan tabel rujukan lama dan mengupload ulang data dari Excel secara massal."""
+    # 1. Bersihkan nama kolom dari spasi tidak terlihat di awal/akhir
     df_HIV.columns = df_HIV.columns.str.strip()
+    
+    # Pemetaan kolom yang disesuaikan secara presisi dengan file Excel Anda
     pemetaan = {
-        "Lembaga SR": "lembaga_sr", "Lembaga SSR": "lembaga_ssr", "Kode Petugas": "kode_petugas",
-        "Nama Kota": "nama_kota", "Nama Layanan": "nama_layanan", "Tanggal": "tanggal",
-        "ID Klien": "id_klien", "NIK": "nik", "Tipe Klien": "tipe_klien", "Umur": "umur",
-        "Jenis Kelamin": "jenis_kelamin", "Kontak Awal": "kontak_awal", "Jenis Layanan": "jenis_layanan_detil", 
-        "Rujukan": "rujukan", "Hasil Tes IMS": "hasil_tes_ims", "Menerima Pengobatan IMS": "menerima_pengobatan_ims",
-        "Menerima Hasil VCT": "menerima_hasil_vct", "Hasil Tes HIV": "hasil_tes_hiv"
+        "Lembaga SR": "lembaga_sr", 
+        "Lembaga SSR": "lembaga_ssr", 
+        "Kode Petugas": "kode_petugas",
+        "Nama Kota": "nama_kota", 
+        "Nama Layanan": "nama_layanan", 
+        "Tanggal": "tanggal",
+        "ID Klien": "id_klien", 
+        "NIK": "nik", 
+        "Tipe Klien": "tipe_klien", 
+        "Umur": "umur",
+        "Jenis Kelamin": "jenis_kelamin", 
+        "Kontak Awal": "kontak_awal", 
+        "Jenis Layanan": "jenis_layanan", # 🛠️ FIX: Sesuaikan nama agar presisi dengan Excel Anda
+        "Rujukan": "rujukan", 
+        "Hasil Tes IMS": "hasil_tes_ims", 
+        "Menerima Pengobatan IMS": "menerima_pengobatan_ims",
+        "Menerima Hasil VCT": "menerima_hasil_vct", 
+        "Hasil Tes HIV": "hasil_tes_hiv"
     }
+    
+    # Pastikan semua kolom yang wajib ada di pemetaan tersedia di df
+    # Jika tidak ada di Excel, buat kolom kosong berisi None
+    for col_excel in pemetaan.keys():
+        if col_excel not in df_HIV.columns:
+            df_HIV[col_excel] = None
+            
+    # Lakukan rename kolom
     df_HIV.rename(columns=pemetaan, inplace=True)
+    
+    # Filter dataframe hanya mengambil kolom yang masuk ke struktur DB
     kolom_db = list(pemetaan.values())
-    for col in kolom_db:
-        if col not in df_HIV.columns:
-            df_HIV[col] = None 
-    df_HIV = df_HIV[kolom_db]
+    df_HIV = df_HIV[kolom_db].copy()
 
+    # 2. Eksekusi ke Database Neon
     conn = dapatkan_koneksi_neon()
     if conn is None: return False
     try:
         with conn.cursor() as cur:
-            cur.execute("TRUNCATE TABLE public.data_rujukan_hiv_positif;")
+            # Kosongkan tabel lama terlebih dahulu
+            cur.execute("TRUNCATE TABLE public.data_rujukan_hiv_positif RESTART IDENTITY;")
             conn.commit()
+            
+        # Pindahkan data menggunakan SQLAlchemy Engine
         engine = create_engine(st.secrets["neon_db"]["connection_string"])
         with engine.connect() as sql_conn:
-            df_HIV.to_sql('data_rujukan_hiv_positif', sql_conn, if_exists='append', index=False, method='multi', chunksize=500)
+            # Gunakan chunksize yang aman dan konversi data ke bentuk sql
+            df_HIV.to_sql(
+                'data_rujukan_hiv_positif', 
+                sql_conn, 
+                if_exists='append', 
+                index=False, 
+                method='multi', 
+                chunksize=200 # 🛠️ Pengecilan chunksize untuk menghindari batasan jumlah parameter Postgres
+            )
         return True
     except Exception as e:
+        import streamlit as st
         st.error(f"Gagal melakukan sinkronisasi ke database Neon: {e}")
         return False
     finally:
-        conn.close()
+        if conn: conn.close()
 
 def ambil_data_rujukan_hiv_positif():
     """Mengambil seluruh data referensi HIV Positif dari database."""
