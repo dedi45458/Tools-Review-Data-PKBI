@@ -688,7 +688,7 @@ def ambil_metrik_akurasi_terakhir():
 # ==============================================================================
 
 def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3):
-    """Menyimpan data hasil review ke 3 tabel secara bersamaan (Database Transaction)."""
+    """Menyimpan data hasil review ke 3 tabel secara bersamaan (Database Transaction) dengan Anti-Duplikasi."""
     conn = dapatkan_koneksi_neon()
     if not conn: return False
     
@@ -703,37 +703,39 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
                 list_1_lengkap = [(tanggal_hari_ini, row[0], row[1], row[2]) for row in list_tabel_1]
                 cur.executemany("""
                     INSERT INTO agregasi_hasil_review_penjangkauan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                    VALUES (%s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan) DO NOTHING;
                 """, list_1_lengkap)
 
             # -----------------------------------------------------------------
-            # 2. 🔥 TABEL RUJUKAN (Agregasi - Sudah Diubah ke 4 Kolom Sesuai DDL Baru)
+            # 2. TABEL RUJUKAN (Agregasi - 4 Kolom)
             # -----------------------------------------------------------------
             if list_tabel_2:
-                # Karena dari tombol proses UI kita sudah mengirimkan tuple lengkap (4 kolom):
-                # (tanggal_skr, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
                 cur.executemany("""
                     INSERT INTO agregasi_hasil_review_rujukan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                    VALUES (%s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan) DO NOTHING;
                 """, list_tabel_2)
 
             # -----------------------------------------------------------------
-            # 3. 🔥 TABEL UTAMA (MASTER DATA DETIL KLIEN - 12 Kolom)
+            # 3. 🔥 TABEL UTAMA DETIL KLIEN (Master Data - 12 Kolom)
             # -----------------------------------------------------------------
             if list_tabel_3:
-                # Memperbaiki nama kolom master agar merekam data baris mentah (bukan agregasi)
+                # Menambahkan proteksi ON CONFLICT berdasarkan 5 parameter keunikan data Anda
                 cur.executemany("""
                     INSERT INTO hasil_review_data
-                    (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justification)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (kategori_data, lembaga_ssr, tanggal, id_klien, indikator_kesalahan) 
+                    DO NOTHING;
                 """, list_tabel_3)
 
-        # Jika semua berhasil tanpa error, simpan ke database secara permanen
+        # Jika semua berhasil lolos/di-skip tanpa error keras, commit transaksi secara permanen
         conn.commit()
         return True
 
     except Exception as e:
-        # Jika ada SATU saja yang gagal, batalkan semua (rollback) agar data tidak berantakan
+        # Jika ada error selain duplikasi (misal koneksi putus), batalkan semua transaksi (rollback)
         if conn: conn.rollback()
         import streamlit as st
         st.error(f"Gagal transaksi multi-tabel: {e}")
