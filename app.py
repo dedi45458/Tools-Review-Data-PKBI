@@ -1319,7 +1319,7 @@ if tombol_proses:
                 
                         sukses = simpan_paket_validasi_ke_tiga_tabel(list_insert_tabel_1, list_insert_tabel_2, list_insert_tabel_3)
                         if sukses:
-                            st.toast("💾 Sinkronisasi aman ke 3 tabel Detail Agregasi Neon Database berhasil!", icon="✅")
+                            st.toast("💾 Sinkronisasi 3 tabel Agregasi dan detil per baris telah berhasil!", icon="✅")
                         else:
                             st.error("❌ Terjadi kesalahan teknis transaksi multi-tabel. Data gagal disimpan.")
                 except Exception as e:
