@@ -1309,46 +1309,81 @@ if tombol_proses:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database (Sistem Crash): {str(e)}")
 
             # =========================================================================
-            # AUTO-REFRESH UI DENGAN DATA DARI DB (VERSI FIX KEPATUHAN REVISI)
+            # AUTO-REFRESH UI DENGAN DATA DARI DB (VERSI FINAL ROBUST SINKRON)
             # =========================================================================
             try:
-                from database import ambil_agregasi_penjangkauan_terakhir, ambil_agregasi_rujukan_terakhir, ambil_hasil_review_utama_terakhir
+                from database import (
+                    ambil_agregasi_penjangkauan_terakhir, 
+                    ambil_agregasi_rujukan_terakhir, 
+                    ambil_hasil_review_utama_terakhir,
+                    ambil_set_error_belum_direvisi  # Pastikan fungsi ini di-import
+                )
+                
+                # 1. Tarik data live dari database utama
                 df_pjj_db, ts_pjj = ambil_agregasi_penjangkauan_terakhir()
                 df_rjk_db, ts_rjk = ambil_agregasi_rujukan_terakhir()
                 df_utama_db, ts_utama = ambil_hasil_review_utama_terakhir()
+                
+                # 🔥 PERBAIKAN 1: Panggil data log historis secara segar di sini agar tidak kosong
+                set_error_historis = ambil_set_error_belum_direvisi()
                 
                 st.session_state['df_tabel_atas'] = df_pjj_db 
                 st.session_state['df_tabel_penjangkauan'] = df_pjj_db
                 st.session_state['df_rujukan'] = df_rjk_db
                 st.session_state['df_tabel_rujukan'] = df_rjk_db
                 
-                # 💡 LANGKAH PERBAIKAN: Deteksi Kepatuhan Revisi (Fraud/Repeat Error Detection)
-                if df_utama_db is not None and not df_utama_db.empty and not set_error_historis.empty:
-                    # 🔥 TAMBAHKAN BARIS INI: Ubah semua kolom df_utama_db menjadi UPPERCASE agar sinkron dengan loop di bawah
-                    df_utama_db.columns = df_utama_db.columns.str.upper()
+                # 💡 LOGIKA DETEKSI KEPATUHAN REVISI (REPEAT ERROR DETECTION)
+                if df_utama_db is not None and not df_utama_db.empty and set_error_historis is not None and not set_error_historis.empty:
                     
+                    # Fungsi pembantu untuk menyeragamkan format tanggal (2026-04-29 atau 29/04/2026) menjadi YYYY-MM-DD
+                    def normalisasi_tanggal(tgl_str):
+                        tgl_str = str(tgl_str).strip().split(' ')[0] # Buang komponen jam jika ada
+                        if not tgl_str or tgl_str.lower() == 'none' or tgl_str == 'nan':
+                            return ""
+                        try:
+                            # Jika formatnya DD/MM/YYYY
+                            if '/' in tgl_str:
+                                parts = tgl_str.split('/')
+                                if len(parts) == 3:
+                                    # Antisipasi jika tahun di depan atau di belakang
+                                    if len(parts[2]) == 4: # DD/MM/YYYY
+                                        return f"{parts[2]}-{parts[1]}-{parts[0]}"
+                                    elif len(parts[0]) == 4: # YYYY/MM/DD
+                                        return f"{parts[0]}-{parts[1]}-{parts[2]}"
+                            # Jika formatnya YYYY-MM-DD
+                            elif '-' in tgl_str:
+                                parts = tgl_str.split('-')
+                                if len(parts) == 3 and len(parts[0]) == 4:
+                                    return tgl_str
+                        except:
+                            pass
+                        return tgl_str.upper()
+            
                     kunci_belum_direvisi = set()
                     kunci_sudah_direvisi = set() 
                     
-                    # 1. RAKIT DAFTAR KUNCI DARI LOG DATABASE
+                    # 2. RAKIT DAFTAR KUNCI DARI LOG DATABASE HISTORIS
                     for _, row_h in set_error_historis.iterrows():
-                        ind_h = str(row_h.get("INDIKATOR KESALAHAN DATA", "")).strip().upper()
-                        
-                        # Jika indikator tersebut adalah indikator butuh Konfirmasi, ABAIKAN (jangan distempel)
+                        # Tangani ketidaksesuaian nama kolom database (antisipasi besar kecil)
+                        def get_val(row, alternatives):
+                            for alt in alternatives:
+                                if alt in row: return str(row[alt]).strip().upper()
+                            return ""
+            
+                        ind_h = get_val(row_h, ["INDIKATOR KESALAHAN DATA", "indikator_kesalahan_data"])
                         if "(KONFIRMASI)" in ind_h:
                             continue
                             
-                        kat_h = str(row_h.get("KATEGORI DATA", "")).strip().upper()
-                        ssr_h = str(row_h.get("LEMBAGA SSR", "")).strip().upper()
+                        kat_h = get_val(row_h, ["KATEGORI DATA", "kategori_data"])
+                        ssr_h = get_val(row_h, ["LEMBAGA SSR", "lembaga_ssr"])
+                        id_h  = get_val(row_h, ["ID KLIEN", "id_klien"])
                         
-                        # Ekstrak tanggal (antisipasi jika format DB memiliki jam/waktu seperti di CSV)
-                        tgl_raw = str(row_h.get("TANGGAL", "")).strip()
-                        tgl_h = tgl_raw.split(' ')[0].strip().upper() if tgl_raw else ""
+                        # Normalisasi Tanggal DB Historis
+                        tgl_raw = row_h.get("TANGGAL") if row_h.get("TANGGAL") is not None else row_h.get("tanggal", "")
+                        tgl_h = normalisasi_tanggal(tgl_raw)
                         
-                        id_h  = str(row_h.get("ID KLIEN", "")).strip().upper()
-                        
-                        # 🔥 PERBAIKAN: Deteksi status 'true' / 'false' dengan aman (menyesuaikan format data di CSV Anda)
-                        status_rev = row_h.get("is_revisi", False)
+                        # Deteksi boolean is_revisi
+                        status_rev = row_h.get("is_revisi")
                         is_rev_bool = True if (status_rev is True or str(status_rev).strip().lower() == 'true') else False
                         
                         kunci_gabung = f"{kat_h}_{ssr_h}_{tgl_h}_{id_h}_{ind_h}"
@@ -1359,36 +1394,51 @@ if tombol_proses:
                             else:
                                 kunci_belum_direvisi.add(kunci_gabung)
                     
-                    # 2. LAKUKAN PENCOCOKAN KE DATA UI YANG AKAN TAMPIL
+                    # 3. MATCHING & SUNTIK STEMPEL KE LIVE DATA UI
+                    # Pastikan nama kolom df_utama_db seragam uppercase agar aman dibaca script bawah
+                    df_utama_db.columns = df_utama_db.columns.str.upper()
+                    
                     for idx_db, row_db in df_utama_db.iterrows():
-                        v_ind = str(row_db.get('Indikator Kesalahan Data', '')).strip().upper() # 🛠️ Ubah ke Title Case
-                        
+                        v_ind = str(row_db.get('INDIKATOR KESALAHAN DATA', '')).strip().upper()
                         if "(KONFIRMASI)" in v_ind:
                             continue
                             
-                        v_kat = str(row_db.get('Kategori Data', '')).strip().upper()         # 🛠️ Ubah ke Title Case
-                        v_ssr = str(row_db.get('Lembaga SSR', '')).strip().upper()           # 🛠️ Ubah ke Title Case
+                        v_kat = str(row_db.get('KATEGORI DATA', '')).strip().upper()
+                        v_ssr = str(row_db.get('LEMBAGA SSR', '')).strip().upper()
+                        v_id  = str(row_db.get('ID KLIEN', '')).strip().upper()
                         
-                        v_tgl_raw = str(row_db.get('Tanggal', '')).strip()                   # 🛠️ Ubah ke Title Case
-                        v_tgl = v_tgl_raw.split(' ')[0].strip().upper() if v_tgl_raw else ""
-                        
-                        v_id  = str(row_db.get('ID KLIEN', '')).strip().upper()               # 🛠️ Ubah ke Title Case
+                        # Normalisasi Tanggal Live UI
+                        v_tgl = normalisasi_tanggal(row_db.get('TANGGAL', ''))
                         
                         kunci_cek_db = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
                         
-                        # PROSES PENYUNTIKAN STEMPEL KE UI
+                        # Proses Stamping ke DataFrame Utama UI (Diisi ke kolom besar & kecil agar aman)
                         if kunci_cek_db in kunci_sudah_direvisi:
-                            df_utama_db.at[idx_db, 'Validasi Hasil Review'] = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)" # 🛠️ Ubah ke Title Case
+                            pesan = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)"
+                            df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = pesan
+                            df_utama_db.at[idx_db, 'Validasi Hasil Review'] = pesan
                         elif kunci_cek_db in kunci_belum_direvisi:
-                            df_utama_db.at[idx_db, 'Validasi Hasil Review'] = "Kesalahan pada ID yang berulang (belum direvisi)"           # 🛠️ Ubah ke Title Case
-                            
-                # Simpan kembali data yang sudah distempel ke dalam session state
+                            pesan = "Kesalahan pada ID yang berulang (belum direvisi)"
+                            df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = pesan
+                            df_utama_db.at[idx_db, 'Validasi Hasil Review'] = pesan
+            
+                # 🔥 PERBAIKAN 2: FILTER & HILANGKAN BARIS YANG SUDAH DICEKLIS DARI TAMPILAN UI
+                # Jika di session_state tersimpan indeks data yang baru saja berhasil dipindahkan/disimpan,
+                # kita potong langsung baris tersebut agar tidak ikut ter-render ulang ke layar.
+                if 'indeks_master_terpilih' in st.session_state and st.session_state['indeks_master_terpilih']:
+                    idx_diapus = st.session_state['indeks_master_terpilih']
+                    df_utama_db = df_utama_db.drop(index=idx_diapus, errors='ignore').reset_index(drop=True)
+                    # Bersihkan state setelah digunakan agar tidak memotong data baru di proses berikutnya
+                    st.session_state['indeks_master_terpilih'] = []
+            
+                # Masukkan data bersih ke session state utama tampilan grid UI
                 st.session_state['df_tabel_bawah'] = df_utama_db
                 st.session_state['ts_terakhir_utama'] = ts_utama
                 st.session_state['tanggal_terakhir_review'] = ts_pjj
                 
                 if ts_rjk:
                     st.session_state['tanggal_terakhir_rujukan_str'] = ts_rjk.strftime('%d-%m-%Y pukul %H:%M WIB') if hasattr(ts_rjk, 'strftime') else str(ts_rjk)
+            
             except Exception as e:
                 st.warning(f"⚠️ Berhasil simpan data, namun gagal me-refresh visualisasi dashboard UI ({e})")
             
@@ -1878,9 +1928,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         disabled=[c for c in kolom_susunan_gabungan if c not in ["Pilih", "Justifikasi"]]
                     )
                     
-                    # ==========================================================
-                    # 8. Tombol Eksekusi Penyimpanan & Perpindahan Data (SOLUSI FIX REFRESH)
-                    # ==========================================================
+                    # ==========================================================================
+                    # 8. Tombol Eksekusi Penyimpanan & Perpindahan Data (SOLUSI FIX REFRESH PERMANEN)
+                    # ==========================================================================
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_save, _ = st.columns([1, 2])
                     with col_save:
@@ -1893,11 +1943,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                 
                                 # Iterasi data hasil edit pengguna
                                 for idx, row_edit in df_hasil_edit.iterrows():
-                                    ind_text = str(row_edit['Indikator Kesalahan Data'])
-                                    text_justifikasi = str(row_edit['Justifikasi']).strip()
+                                    ind_text = str(row_edit.get('Indikator Kesalahan Data', ''))
+                                    text_justifikasi = str(row_edit.get('Justifikasi', '')).strip()
                                     
                                     is_konfirmasi = "konfirmasi" in ind_text.lower()
-                                    status_revisi = bool(row_edit['Pilih'])
+                                    status_revisi = bool(row_edit.get('Pilih', False))
                                     
                                     # Proteksi Poin 1 (Backend): Jika diisi pada baris non-konfirmasi, paksa hapus teksnya
                                     if not is_konfirmasi:
@@ -1922,31 +1972,40 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                             text_justifikasi    # Text Justifikasi
                                         ))
                                         
-                                        # 🎯 PERBAIKAN DI SINI: Ambil nilai kolom _indeks_asli_master berdasarkan indeks `idx` baris editor langsung!
-                                        indeks_asli_session = df_view_gabungan.at[idx, "_indeks_asli_master"]
-                                        indeks_master_terpilih.append(indeks_asli_session)
+                                        # 🎯 PERBAIKAN PRESISI: Ambil nilai asli indeks master dari map dataframe UI secara aman
+                                        if idx in df_view_gabungan.index:
+                                            indeks_asli_session = df_view_gabungan.at[idx, "_indeks_asli_master"]
+                                            indeks_master_terpilih.append(indeks_asli_session)
                                 
-                                # Kirim data ke database jika ada baris yang valid
+                                # Kirim data ke database jika ada baris yang valid dicentang/diisi
                                 if len(list_log_db) > 0:
                                     if simpan_log_ke_neon(list_log_db):
                                         
-                                        # 🔥 PROSES PENGHAPUSAN: Hapus baris dari session state menggunakan Indeks Asli yang Presisi
+                                        # 🔥 KUNCI REFRESH 1: Rekam list indeks terpilih ke global Session State
+                                        # Supaya block Auto-Refresh di bagian atas memotong baris ini saat rerun dijalankan
+                                        if 'indeks_master_terpilih' not in st.session_state:
+                                            st.session_state['indeks_master_terpilih'] = []
+                                        st.session_state['indeks_master_terpilih'].extend(indeks_master_terpilih)
+                                        
+                                        # 🔥 KUNCI REFRESH 2: Hapus baris dari data memori lokal saat ini secara real-time
                                         if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None:
-                                            st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(indeks_master_terpilih, errors='ignore').reset_index(drop=True)
+                                            st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(index=indeks_master_terpilih, errors='ignore').reset_index(drop=True)
                                             
                                         if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
-                                            st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(indeks_master_terpilih, errors='ignore').reset_index(drop=True)
+                                            st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(index=indeks_master_terpilih, errors='ignore').reset_index(drop=True)
                                         
+                                        # Tampilkan pesan sukses ke pengguna
                                         st.success(f"🎉 Sukses memindahkan {len(list_log_db)} baris data ke tabel log_hasil_review_data!")
                                         
                                         if peringatan_justifikasi:
                                             st.warning("⚠️ Catatan: Input Justifikasi pada baris non-konfirmasi otomatis diabaikan oleh sistem.")
                                             
+                                        # Berikan jeda visual sebelum memicu pembaruan total halaman UI
                                         import time
                                         time.sleep(1.2)
                                         st.rerun()
                                     else:
-                                        st.error("❌ Gagal menyimpan ke Neon Database. Periksa koneksi Anda.")
+                                        st.error("❌ Gagal menyimpan ke Neon Database. Periksa koneksi data Anda.")
                                 else:
                                     st.info("ℹ️ Tidak ada data yang dicentang atau diisi Justifikasinya untuk disimpan.")
             else:
