@@ -1511,12 +1511,12 @@ if tombol_proses:
 # ==========================================================================
 # 5. RENDER LAYOUT UTAMA: DASHBOARD REVIEW DATA (VERSI TERBARU FULL INTEGRASI)
 # ==========================================================================
-if menu_pilihan == "🎯 Dashboard Review Data": [cite: 190]
+if menu_pilihan == "🎯 Dashboard Review Data":
     
-    df_historis = st.session_state.get('df_tabel_atas', pd.DataFrame()) [cite: 190]
+    df_historis = st.session_state.get('df_tabel_atas', pd.DataFrame())
     peran = st.session_state.get('peran_user', 'SSR')  # Mengambil role dari session state hasil absensi popup
     
-    if st.session_state.get('proses_selesai', False) or (df_historis is not None and not df_historis.empty): [cite: 190]
+    if st.session_state.get('proses_selesai', False) or (df_historis is not None and not df_historis.empty):
         
         # Ambil data statistik ringkasan proses dari session state 
         tot_data_penj = st.session_state.get('total_entri_penjangkauan', 0) [cite: 190]
