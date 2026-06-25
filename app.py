@@ -104,6 +104,54 @@ def set_modern_theme():
 set_modern_theme()
 
 # ==========================================================
+# 0. POPUP ABSENSI & INISIALISASI MASTER LEMBAGA (RBAC SYSTEM)
+# ==========================================================
+if "master_lembaga" not in st.session_state:
+    st.session_state.master_lembaga = [
+        {"Nama Lembaga": "BINA MUDA GEMILANG", "Status": "SSR"},
+        {"Nama Lembaga": "PKBI JAWA BARAT", "Status": "SR"},
+        {"Nama Lembaga": "GRAPIKS", "Status": "SSR"},
+        {"Nama Lembaga": "LEMBAGA KASIH INDONESIA KITA", "Status": "SSR"},
+        {"Nama Lembaga": "LENSA SUKABUMI", "Status": "SSR"},
+        {"Nama Lembaga": "PESONA BUMI PASUNDAN", "Status": "SSR"},
+        {"Nama Lembaga": "PETIK", "Status": "SSR"},
+        {"Nama Lembaga": "PKBI CABANG SUBANG", "Status": "SSR"},
+        {"Nama Lembaga": "PKBI CIREBON", "Status": "SSR"},
+        {"Nama Lembaga": "PKBI GARUT", "Status": "SSR"},
+        {"Nama Lembaga": "WAHANA CITA INDONESIA", "Status": "SSR"},
+        {"Nama Lembaga": "YAYASAN PELANGI MALUKU", "Status": "SSR"},
+        {"Nama Lembaga": "YAYASAN PONTIANAK PLUS - OUTREACH", "Status": "SSR"},
+        {"Nama Lembaga": "YAYASAN SRIKANDI PASUNDAN", "Status": "SSR"},
+        {"Nama Lembaga": "YAYASAN SRIKANDI PERINTIS", "Status": "SSR"},
+        {"Nama Lembaga": "YAYASAN VESTA INDONESIA", "Status": "SSR"}
+    ]
+
+if "user_authenticated" not in st.session_state: st.session_state.user_authenticated = False
+if "current_lembaga" not in st.session_state: st.session_state.current_lembaga = None
+if "current_role" not in st.session_state: st.session_state.current_role = None
+
+@st.dialog("📋 Absensi Kehadiran Validasi")
+def popup_absensi():
+    st.write("Silahkan pilih nama instansi/lembaga Anda untuk masuk ke sistem.")
+    list_pilihan = [l["Nama Lembaga"] for l in st.session_state.master_lembaga]
+    lembaga_pilihan = st.selectbox("Pilih Nama Lembaga:", ["-- Pilih Lembaga --"] + list_pilihan)
+    
+    if lembaga_pilihan != "-- Pilih Lembaga --":
+        role_terdeteksi = next(l["Status"] for l in st.session_state.master_lembaga if l["Nama Lembaga"] == lembaga_pilihan)
+        st.info(f"Sistem mendeteksi peran Anda sebagai: **{role_terdeteksi}**")
+        if st.button("Konfirmasi & Masuk Aplikasi", use_container_width=True):
+            st.session_state.current_lembaga = lembaga_pilihan
+            st.session_state.current_role = role_terdeteksi
+            st.session_state.user_authenticated = True
+            st.rerun()
+
+if not st.session_state.user_authenticated:
+    popup_absensi()
+    st.warning("🔒 Konten Utama Terkunci. Anda wajib mengisi absensi lembaga pada popup di atas.")
+    st.stop()
+
+
+# ==========================================================
 # 0. MANAGEMENT DEFAULT STATE & INIT DATA (Tersinkron Neon DB)
 # ==========================================================
 if 'total_entri' not in st.session_state: st.session_state['total_entri'] = 0
@@ -158,6 +206,7 @@ if ('total_entri_penjangkauan' not in st.session_state or pemicu_baca_ulang):
             conn.close()
     except Exception as e:
         pass
+
 # --- 1. REKAP HASIL REVIEW DATA PENJANGKAUAN SSR (Tabel 1) ---
 if ('df_penjangkauan' not in st.session_state or st.session_state['df_penjangkauan'] is None or pemicu_baca_ulang):
     try:
@@ -229,6 +278,7 @@ def ambil_keyword_medsos():
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Validasi Kualitas Data Penjangkauan & Rujukan</div>', unsafe_allow_html=True)
 
+
 # ==========================================================
 # FUNGSI HELPER
 # ==========================================================
@@ -253,7 +303,7 @@ def buat_fungsi_validasi_kustom(target, kondisi, pembanding):
         return lambda c: str(c.get(target, '')).strip().lower() == pembanding.strip().lower()
     return lambda c: False
 
-# 🔥 REKOMENDASI: Diletakkan di sini
+# 🔥 REKOMENDASI: Tempat Penyimpanan Fungsi PrEP Valid
 def ambil_set_layanan_prep_valid():
     """Mengambil kombinasi (Lembaga SSR, Nama Layanan) yang valid untuk PrEP dari database."""
     conn = dapatkan_koneksi_neon()
@@ -311,7 +361,6 @@ def hitung_dan_ambil_log_db():
                     key = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
                     
                     # 🎯 SOLUSI UTAMA: Simpan nilai boolean asli dari database (True/False) ke dictionary
-                    # Jangan gunakan 'if not is_rev' agar status TRUE tidak terbuang!
                     is_rev_bool = True if (is_rev is True or str(is_rev).strip().lower() == 'true') else False
                     dict_revisi[key] = is_rev_bool
                     
@@ -451,20 +500,27 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # --- PENAMBAHAN MENU NAVIGASI ---
+    # --- PENAMBAHAN MENU NAVIGASI (4 MENU SESUAI KONSEP) ---
     menu_pilihan = st.radio(
         "Navigasi Menu", 
-        ["🎯 Dashboard Review Data", "⚙️ Pengaturan Keyword Medsos"],
+        [
+            "🎯 Dashboard Review Data", 
+            "⚙️ Pengaturan Keyword Medsos",
+            "📊 Tren Agregasi Data",          # Menu Konsep Baru 1
+            "🔍 Riwayat & Log Validasi"       # Menu Konsep Baru 2
+        ],
         label_visibility="collapsed"
     )
     
     st.markdown("<div style='margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);'></div>", unsafe_allow_html=True)
     
-    # 💡 SOLUSI NYA DI SINI: Inisialisasi awal nilai default agar tidak NameError di menu lain
+    # 💡 INSISIALISASI AWAL NILAI DEFAULT AGAR TIDAK NAMEERROR DI MENU LAIN
     tombol_proses = False
+    file_master = None
+    files_review = None
     
     # =================================================================
-    # HANYA TAMPILKAN ALAT REVIEW JIKA MENU "DASHBOARD" DIPILIH
+    # 1. HANYA TAMPILKAN ALAT REVIEW JIKA MENU "DASHBOARD" DIPILIH
     # =================================================================
     if menu_pilihan == "🎯 Dashboard Review Data":
         with st.container():
@@ -483,18 +539,12 @@ with st.sidebar:
             if file_master is not None:
                 try:
                     df_check = pd.read_excel(file_master)
-                    # Normalisasi nama kolom menjadi huruf kecil dan hapus spasi (agar pengecekan akurat)
                     kolom_terdeteksi = [str(c).strip().lower() for c in df_check.columns]
                     
-                    # 🔍 1. Aturan Deteksi Database HIV+ (Wajib ada 'id klien' DAN 'tanggal')
                     is_database_hiv = ("id klien" in kolom_terdeteksi) and ("tanggal" in kolom_terdeteksi)
-                    
-                    # 🔍 2. Aturan Deteksi Database Layanan (Wajib ada unsur SSR/IU DAN 'nama layanan')
-                    # Menggunakan any() untuk ssr/iu agar fleksibel jika di excel tertulis "Lembaga SSR" atau "Lembaga SSR/IU"
                     ada_unsur_ssr = any("ssr" in c or "iu" in c or "lembaga" in c for c in kolom_terdeteksi)
                     is_data_layanan = ada_unsur_ssr and ("nama layanan" in kolom_terdeteksi)
                     
-                    # --- PERAKITAN LOGIKA PERCABANGAN (IF-ELSE) ---
                     if is_database_hiv:
                         st.info("📋 **Terdeteksi:** Database HIV+")
                         if st.button("🔄 Update Database HIV+", use_container_width=False, key="btn_exec_hiv"):
@@ -524,7 +574,6 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"⚠️ Gagal membaca struktur berkas Excel: {e}")
             
-            # Pembatas vertikal pemisah antar uploader
             st.markdown("<div style='margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 10px;'></div>", unsafe_allow_html=True)
             
             # --- 2. UPLOADER RAW DATA PENJANGKAUAN ---
@@ -541,92 +590,76 @@ with st.sidebar:
                 st.info(f"📁 {len(files_review)} file siap diproses.")
     
         st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
-        
-        # =================================================================
-        # PARAMETER VALIDASI
-        # =================================================================
-        with st.container():
-            st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>⚙️ PARAMETER VALIDASI</b>", unsafe_allow_html=True)
-            
-            with st.expander("✨ Buat Aturan Kustom Baru", expanded=False):
-                with st.form("form_tambah_aturan", clear_on_submit=True):
-                    input_nama_ind = st.text_input("Nama Indikator", placeholder="Misal: Digit NIK wajib 16")
-                    pilihan_kolom = st.selectbox("Kolom Target", ["NIK", "ID Klien", "Umur", "Lembaga SSR", "Kode Petugas", "Lokasi Outreach / Jenis Sosial Media", "Informasi Yang diberikan", "Rujukan"])
-                    pilihan_kondisi = st.selectbox("Kondisi Error Jika:", ["Panjang karakter tidak sama dengan (!=)", "Panjang karakter kurang dari ( < )", "Kosong / Blank", "Mengandung teks tertentu", "Sama dengan teks/angka tertentu"])
-                    input_pembanding = st.text_input("Nilai Pembanding", placeholder="Contoh: 16 atau Teks tertentu")
-                    
-                    submit_rule = st.form_submit_button("➕ Daftarkan Aturan", use_container_width=True)
-                    
-                    if submit_rule:
-                        if not input_nama_ind: st.error("Nama wajib diisi!")
-                        elif "Kosong" not in pilihan_kondisi and not input_pembanding: st.error("Nilai pembanding wajib diisi!")
-                        else:
-                            mapping_kunci = {"NIK": "nik_clean", "ID Klien": "id_clean", "Umur": "umur", "Lembaga SSR": "v_ssr", "Kode Petugas": "v_petugas", "Lokasi Outreach / Jenis Sosial Media": "lokasi", "Informasi Yang diberikan": "info_diberikan", "Rujukan": "rujukan"}
-                            kunci_target = mapping_kunci[pilihan_kolom]
-                            fungsi_validasi = buat_fungsi_validasi_kustom(kunci_target, pilihan_kondisi, input_pembanding)
-                            st.session_state['aturan_kustom'].append({"nama": input_nama_ind, "periksa": fungsi_validasi})
-                            st.success(f"Berhasil didaftarkan!")
-                            st.rerun()
-            
-            if st.session_state['aturan_kustom']:
-                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                with st.expander(f"📋 Aturan Aktif ({len(st.session_state['aturan_kustom'])} Terdaftar)", expanded=True):
-                    for idx, r_kustom in enumerate(st.session_state['aturan_kustom']):
-                        st.markdown(f"<div style='font-size: 0.85rem; color: #cbd5e1; padding: 4px 0;'>📌 {r_kustom['nama']}</div>", unsafe_allow_html=True)
-                    
-                    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                    if st.button("🗑️ Bersihkan Semua Aturan", use_container_width=True, type="secondary"):
-                        st.session_state['aturan_kustom'] = []
-                        st.rerun()
-    
         st.markdown("""<div style="margin-top: 35px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>""", unsafe_allow_html=True)
         tombol_proses = st.button("🚀 Jalankan Validasi", type="primary", use_container_width=True)
 
-        # ==========================================================
-        # INDIKATOR STORAGE NEON DB (PAKET FREE TIER)
-        # ==========================================================
-        storage_info = ambil_status_storage_neon()
-        
-        if storage_info:
-            # Menentukan warna teks & indikator berdasarkan tingkat kepenuhan storage
-            if storage_info['persen_terpakai'] > 85:
-                kondisi_warna = "#ff4b4b"  # Merah jika hampir penuh
-            elif storage_info['persen_terpakai'] > 60:
-                kondisi_warna = "#ffa500"  # Kuning jika mulai terisi banyak
-            else:
-                kondisi_warna = "#38bdf8"  # Biru langit modern jika aman
-                
-            # Tampilan card informasi storage ala glassmorphism
-            html_storage = f"""
-            <div style="
-                background-color: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 12px;
-                padding: 12px 14px;
-                margin-bottom: 10px;
-                font-size: 0.82rem;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            ">
-                <div style="display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 5px;">
-                    <span style="color: #cbd5e1; display: flex; align-items: center; gap: 5px;">💾 Storage</span>
-                    <span style="color: {kondisi_warna}; font-weight: 700;">{storage_info['persen_terpakai']}%</span>
-                </div>
-                <div style="color: #94a3b8; margin-bottom: 0px;">
-                    Tersisa: <strong style="color: #f8fafc;">{storage_info['sisa_mb']} MB</strong> dari {storage_info['total_mb']} MB
-                </div>
-            </div>
-            """
-            st.markdown(html_storage, unsafe_allow_html=True)
-            # Menampilkan progress bar bawaan Streamlit
-            st.progress(storage_info['persen_terpakai'] / 100.0)
+    # =================================================================
+    # 2. MENU PENGATURAN KEYWORD MEDSOS SELECTOR CONTROL
+    # =================================================================
+    elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
+        with st.container():
+            st.markdown("<b style='color: #38bdf8; font-size: 0.95rem;'>🛠️ INFO MODUL MEDSOS</b>", unsafe_allow_html=True)
+            st.caption("Gunakan area utama layar untuk melakukan penambahan, penghapusan, dan visualisasi kata kunci media sosial yang aktif.")
+
+    # =================================================================
+    # 3. MENU TREN AGREGASI DATA (KONSEP)
+    # =================================================================
+    elif menu_pilihan == "📊 Tren Agregasi Data":
+        with st.container():
+            st.markdown("<b style='color: #10b981; font-size: 0.95rem;'>📊 STATISTIK & TREN</b>", unsafe_allow_html=True)
+            st.caption("Modul ini digunakan untuk memantau performa review data dari waktu ke waktu secara real-time.")
+
+    # =================================================================
+    # 4. MENU RIWAYAT & LOG VALIDASI (KONSEP)
+    # =================================================================
+    elif menu_pilihan == "🔍 Riwayat & Log Validasi":
+        with st.container():
+            st.markdown("<b style='color: #a855f7; font-size: 0.95rem;'>🔍 AUDIT LOG VALIDASI</b>", unsafe_allow_html=True)
+            st.caption("Melihat berkas yang pernah di-upload sebelumnya serta daftar temuan *error* historis.")
+
+    # ==========================================================
+    # INDIKATOR STORAGE NEON DB (TAMPIL DI SEMUA MENU SEBAGAI FOOTER SIDEBAR)
+    # ==========================================================
+    st.markdown("<div style='margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-top: 25px;'></div>", unsafe_allow_html=True)
+    storage_info = ambil_status_storage_neon()
+    
+    if storage_info:
+        if storage_info['persen_terpakai'] > 85:
+            kondisi_warna = "#ff4b4b"
+        elif storage_info['persen_terpakai'] > 60:
+            kondisi_warna = "#ffa500"
         else:
-            st.markdown("""
-                <div style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 15px; padding: 0 5px;">
-                    ⚠️ Gagal memuat status storage database.
-                </div>
-            """, unsafe_allow_html=True)
+            kondisi_warna = "#38bdf8"
             
-        st.markdown("<div style='margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-top: 15px;'></div>", unsafe_allow_html=True)
+        html_storage = f"""
+        <div style="
+            background-color: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            font-size: 0.82rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        ">
+            <div style="display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 5px;">
+                <span style="color: #cbd5e1; display: flex; align-items: center; gap: 5px;">💾 Storage</span>
+                <span style="color: {kondisi_warna}; font-weight: 700;">{storage_info['persen_terpakai']}%</span>
+            </div>
+            <div style="color: #94a3b8; margin-bottom: 0px;">
+                Tersisa: <strong style="color: #f8fafc;">{storage_info['sisa_mb']} MB</strong> dari {storage_info['total_mb']} MB
+            </div>
+        </div>
+        """
+        st.markdown(html_storage, unsafe_allow_html=True)
+        st.progress(storage_info['persen_terpakai'] / 100.0)
+    else:
+        st.markdown("""
+            <div style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 15px; padding: 0 5px;">
+                ⚠️ Gagal memuat status storage database.
+            </div>
+        """, unsafe_allow_html=True)
+        
+    st.markdown("<div style='margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-top: 15px;'></div>", unsafe_allow_html=True)
 
 # ==========================================================
 # 3. ENGINE VALIDASI UTAMA (MENDUKUNG 2 FILE & CROSS-CHECK)
