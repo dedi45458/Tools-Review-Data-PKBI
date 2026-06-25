@@ -1508,29 +1508,27 @@ if tombol_proses:
             time.sleep(1.2) 
             st.rerun()
 
-# ==========================================================
-# 5. RENDER LAYOUT UTAMA (BERDASARKAN PILIHAN MENU)
-# ==========================================================
+# ==========================================================================
+# 5. RENDER LAYOUT UTAMA: DASHBOARD REVIEW DATA (URUTAN TABEL UI DISESUAIKAN)
+# ==========================================================================
 if menu_pilihan == "🎯 Dashboard Review Data":
     
     df_historis = st.session_state.get('df_tabel_atas', pd.DataFrame())
+    peran = st.session_state.get('peran_user', 'SSR')  # Mengambil role dari session state hasil absensi popup
     
     if st.session_state.get('proses_selesai', False) or (df_historis is not None and not df_historis.empty):
         
-        # Ambil total data proses dari session state (Gunakan nilai injeksi tombol eksekusi)
+        # Ambil data statistik ringkasan proses dari session state
         tot_data_penj = st.session_state.get('total_entri_penjangkauan', 0)
         tot_data_ruj = st.session_state.get('total_entri_rujukan', 0)
-        
-        # Ambil total temuan baris secara murni dari session state jika sudah diproses tombol eksekusi
         tot_err_penj = st.session_state.get('temuan_penjangkauan', 0)
         tot_err_ruj = st.session_state.get('temuan_rujukan', 0)
         
-        # Hitung baris temuan secara dinamis jika session state belum terisi sempurna
-        df_semua_error = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama'))
+        df_semua_error = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
         
+        # Sinkronisasi parameter perhitungan awal jika bernilai kosong
         if (tot_err_penj == 0 and tot_err_ruj == 0) and (df_semua_error is not None and not df_semua_error.empty):
             df_semua_error = df_semua_error.copy()
-            
             rename_dict_awal = {}
             for col in df_semua_error.columns:
                 c_clean = str(col).strip().lower()
@@ -1547,28 +1545,21 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 df_semua_error = df_semua_error.rename(columns=rename_dict_awal)
             
             try:
-                # 🔥 FIX LOGIKA: Ubah seluruh daftar indikator rujukan ke HURUF KAPITAL agar match
                 ind_rujukan = [str(r['nama']).strip().upper() for r in ATURAN_VALIDASI_RUJUKAN]
             except NameError:
-                ind_rujukan = [] 
+                ind_rujukan = []
                 
             df_semua_error.columns = [str(col).strip().upper() for col in df_semua_error.columns]
-
-            # Melakukan filtering berbasis string kapital murni
             mask_rujukan = df_semua_error['INDIKATOR KESALAHAN DATA'].str.strip().str.upper().isin(ind_rujukan)
             
-            # 🔥 PERBAIKAN UTAMA: Hapus .drop_duplicates() agar tetap menjaga total baris (misal: 50 baris)
             df_err_penj_asli = df_semua_error[~mask_rujukan]
             df_err_ruj_asli = df_semua_error[mask_rujukan]
-            
             tot_err_penj = len(df_err_penj_asli)
             tot_err_ruj = len(df_err_ruj_asli)
 
-        # 🔥 SINKRONISASI KARTU SKOR: Ambil nilai real dari backend tombol_proses jika tersedia
         tot_err_penj = st.session_state.get('temuan_penjangkauan', tot_err_penj)
         tot_err_ruj = st.session_state.get('temuan_rujukan', tot_err_ruj)
-
-        # Perhitungan Akurasi Akhir yang Valid dan Dinamis untuk Tampilan UI (Tidak Terkunci di 100%)
+        
         akurasi_penj = st.session_state.get('akurasi_penjangkauan', (100.0 if tot_data_penj == 0 else max(0.0, (tot_data_penj - tot_err_penj) / tot_data_penj * 100)))
         akurasi_ruj = st.session_state.get('akurasi_rujukan', (100.0 if tot_data_ruj == 0 else max(0.0, (tot_data_ruj - tot_err_ruj) / tot_data_ruj * 100)))
         
@@ -1577,681 +1568,319 @@ if menu_pilihan == "🎯 Dashboard Review Data":
 
         # --- RENDER UI KARTU SKOR MENGGUNAKAN GLASSMORPHISM ---
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        
         tanggal_hari_ini = datetime.now(ZoneInfo('Asia/Jakarta')).strftime('%d %B %Y')
-        
         st.markdown(f"""
             <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
-                📅 <b>Executive Review Dashboard</b> | Tanggal : {tanggal_hari_ini}
+                📅 <b>Executive Review Dashboard</b> | Tanggal Sesi: {tanggal_hari_ini} | Akses: <span style='color:#38bdf8; font-weight:700;'>{peran}</span>
             </p>
         """, unsafe_allow_html=True)
         
-        # Seksi 1: Penjangkauan
-        st.markdown("<b style='color: #38bdf8; font-size: 1.05rem;'>🎯 Data Penjangkauan</b>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
-        with c1: 
-            st.metric(label="Total Data Diproses", value=f"{tot_data_penj:,}")
-        with c2: 
-            st.metric(label="Total Baris Temuan", value=f"{tot_err_penj:,}", delta="Perlu Perhatian", delta_color="inverse")
-        with c3: 
-            st.metric(label="Tingkat Akurasi", value=teks_akurasi_penj, delta="Akurasi Penjangkauan")
+        with c1: st.metric(label="Total Data Penjangkauan", value=f"{tot_data_penj:,}")
+        with c2: st.metric(label="Temuan Penjangkauan", value=f"{tot_err_penj:,}", delta="Perlu Perhatian", delta_color="inverse")
+        with c3: st.metric(label="Akurasi Penjangkauan", value=teks_akurasi_penj)
         
         st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
         
-        # Seksi 2: Rujukan
-        st.markdown("<b style='color: #10B981; font-size: 1.05rem;'>🎯 Data Rujukan</b>", unsafe_allow_html=True)
         c4, c5, c6 = st.columns(3)
-        with c4: 
-            st.metric(label="Total Data Diproses", value=f"{tot_data_ruj:,}")
-        with c5: 
-            st.metric(label="Total Baris Temuan", value=f"{tot_err_ruj:,}", delta="Perlu Perhatian", delta_color="inverse")
-        with c6: 
-            st.metric(label="Tingkat Akurasi", value=teks_akurasi_ruj, delta="Akurasi Rujukan")
-        
+        with c4: st.metric(label="Total Data Rujukan", value=f"{tot_data_ruj:,}")
+        with c5: st.metric(label="Temuan Rujukan", value=f"{tot_err_ruj:,}", delta="Perlu Perhatian", delta_color="inverse")
+        with c6: st.metric(label="Akurasi Rujukan", value=teks_akurasi_ruj)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # =========================================================================
-        # KUSTOMISASI UKURAN HURUF TAB
-        # =========================================================================
+        # Style Kustom Ukuran Huruf Tab
         st.markdown("""
             <style>
-            .stTabs [data-baseweb="tab"] p {
-                font-size: 1.5rem !important;    
-                font-weight: 600 !important;      
-                color: #ffffff !important;        
-            }
-            .stTabs [data-baseweb="tab-list"] {
-                gap: 8px;
-                margin-bottom: 10px;
-            }
+            .stTabs [data-baseweb="tab"] p { font-size: 1.2rem !important; font-weight: 600 !important; color: #ffffff !important; }
+            .stTabs [data-baseweb="tab-list"] { gap: 8px; margin-bottom: 10px; }
             </style>
         """, unsafe_allow_html=True)
         
         # =========================================================================
-        # DEKLARASI TAB ANDA
+        # DEKLARASI TAB LAYOUT UTAMA
         # =========================================================================
-        tab1, tab2 = st.tabs(["📋 Hasil Review Data SR", "📈 Analisis Tren Temuan"])
+        tab1, tab2 = st.tabs(["📋 Hasil Review Validasi Data", "🕸️ Analisis Tren & Histori"])
 
+        # -------------------------------------------------------------------------
+        # TAB 1: AREA LAYOUT URUTAN TABEL SESUAI PERMINTAAN USER
+        # -------------------------------------------------------------------------
         with tab1:
-            try:
-                ind_rujukan = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
-            except NameError:
-                ind_rujukan = []
-                
+            
+            # ---------------------------------------------------------------------
+            # Urutan 1: TABEL AGREGASI PENJANGKAUAN
+            # ---------------------------------------------------------------------
+            st.markdown("#### 1️⃣ Tabel Agregasi Ringkasan Kesalahan - Data Penjangkauan")
             df_atas_view = st.session_state.get('df_tabel_atas', pd.DataFrame())
+            try: ind_rujukan = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
+            except NameError: ind_rujukan = []
             
-            # =========================================================================
-            # 🟢 SEKSI 1: RENDER HASIL REVIEW DATA PENJANGKAUAN
-            # =========================================================================
-            st.markdown("#### 📋 Rekap Hasil Review Data Penjangkauan SSR")
-            
-            # 🔄 FIX VARIABEL TANGGAL PENJANGKAUAN (SINKRONISASI & FALLBACK)
-            tanggal_terakhir = st.session_state.get('tanggal_terakhir_review', None)
-            if not tanggal_terakhir:
-                # Fallback ke tanggal hari ini jika session state kosong agar teks badge tidak hilang
-                tgl_format = datetime.now().strftime("%d-%m-%Y pukul %H:%M WIB")
-            elif hasattr(tanggal_terakhir, 'strftime'):
-                tgl_format = tanggal_terakhir.strftime("%d-%m-%Y pukul %H:%M WIB")
-            else:
-                tgl_format = str(tanggal_terakhir)
-                                
-            badge_html = f"""
-            <div style="
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                background-color: rgba(124, 58, 237, 0.12);
-                color: #ffffff;
-                padding: 6px 14px;
-                border-radius: 20px;
-                border: 1px solid rgba(124, 58, 237, 0.25);
-                font-size: 0.88rem;
-                font-weight: 500;
-                margin-bottom: 18px;
-            ">
-                🔮 Tanggal review data: <span style="font-weight: 700; margin-left: 3px;">{tgl_format}</span>
-            </div>
-            """
-            st.markdown(badge_html, unsafe_allow_html=True)
-                
             if df_atas_view is not None and not df_atas_view.empty:
                 df_render = df_atas_view.copy()
-                
                 if df_render.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render.columns:
                     df_render = df_render.reset_index()
-                    
                 df_render = df_render[~df_render['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)].copy()
                 
                 if not df_render.empty:
                     kolom_indikator = 'INDIKATOR KESALAHAN DATA'
                     kolom_ssr = [c for c in df_render.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
-                    
-                    for col in kolom_ssr:
-                        df_render[col] = pd.to_numeric(df_render[col], errors='coerce').fillna(0).astype(int)
-                    
+                    for col in kolom_ssr: df_render[col] = pd.to_numeric(df_render[col], errors='coerce').fillna(0).astype(int)
                     ssr_aktif = [col for col in kolom_ssr if df_render[col].sum() > 0]
                     kolom_final = [kolom_indikator] + ssr_aktif + ['Jumlah per indikator', '%']
                     df_final = df_render[[c for c in kolom_final if c in df_render.columns]].copy()
-                    
                     total_error_penjangkauan = df_final['Jumlah per indikator'].sum()
-                    if total_error_penjangkauan > 0:
-                        df_final['%'] = (df_final['Jumlah per indikator'] / total_error_penjangkauan) * 100
-                    
+                    if total_error_penjangkauan > 0: df_final['%'] = (df_final['Jumlah per indikator'] / total_error_penjangkauan) * 100
                     df_display = df_final.copy()
                     for col in ssr_aktif:
-                        if col in df_display.columns:
-                            df_display[col] = df_display[col].astype(str).replace({'0': '-', '0.0': '-'})
+                        if col in df_display.columns: df_display[col] = df_display[col].astype(str).replace({'0': '-', '0.0': '-'})
                     
                     column_config = {
                         kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
                         "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
                         "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
                     }
-                    for col in ssr_aktif:
-                        column_config[col] = st.column_config.TextColumn(col, width="small")
-                
+                    for col in ssr_aktif: column_config[col] = st.column_config.TextColumn(col, width="small")
                     st.dataframe(df_display, use_container_width=True, column_config=column_config, hide_index=True)
-                else:
-                    st.info("✅ Tidak ada temuan kesalahan untuk Data Penjangkauan.")
-            else:
-                st.info("✨ Belum ada data review dalam database Neon.")
+                else: st.info("✅ Tidak ada temuan kesalahan untuk Data Penjangkauan.")
+            else: st.info("✨ Belum ada data review penjangkauan.")
             
-            
-            # =========================================================================
-            # 🔵 SEKSI 2: RENDER HASIL REVIEW DATA RUJUKAN
-            # =========================================================================
-            st.markdown("<hr style='border: 1px solid #e2e8f0; margin: 40px 0;'>", unsafe_allow_html=True)
-            st.markdown("#### 📋 Rekap Hasil Review Data Rujukan SSR")
-                        
-            # 🔥 SINKRONISASI OTOMATIS KE DATABASE NEON
-            if st.session_state.get('proses_selesai', False) or 'df_rujukan' not in st.session_state:
-                try:
-                    df_rj, ts_rj = ambil_agregasi_rujukan_terakhir()
-                    if df_rj is not None and not df_rj.empty:
-                        st.session_state['df_rujukan'] = df_rj
-                        if ts_rj:
-                            st.session_state['tanggal_terakhir_rujukan_str'] = ts_rj.strftime('%d-%m-%Y pukul %H:%M WIB') if hasattr(ts_rj, 'strftime') else str(ts_rj)
-                except Exception as e:
-                    pass
-            
-            # 🔄 FIX VARIABEL TANGGAL RUJUKAN (SINKRONISASI & FALLBACK SAMA DENGAN PENJANGKAUAN)
-            tgl_badge = st.session_state.get('tanggal_terakhir_rujukan_str', None)
-            if not tgl_badge:
-                tgl_badge = st.session_state.get('tanggal_terakhir_review', None)
-                if tgl_badge:
-                    tgl_badge = tgl_badge.strftime('%d-%m-%Y pukul %H:%M WIB') if hasattr(tgl_badge, 'strftime') else str(tgl_badge)
-                else:
-                    tgl_badge = datetime.now().strftime("%d-%m-%Y pukul %H:%M WIB")
-                        
-            badge_rujukan_html = f"""
-            <div style="
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                background-color: rgba(124, 58, 237, 0.12);
-                color: #ffffff;
-                padding: 6px 14px;
-                border-radius: 20px;
-                border: 1px solid rgba(124, 58, 237, 0.25);
-                font-size: 0.88rem;
-                font-weight: 500;
-                margin-bottom: 18px;
-            ">
-                🔮 Tanggal review data: <span style="font-weight: 700; margin-left: 3px;">{tgl_badge}</span>
-            </div>
-            """
-            st.markdown(badge_rujukan_html, unsafe_allow_html=True)
-                            
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # ---------------------------------------------------------------------
+            # Urutan 2: TABEL AGREGASI RUJUKAN
+            # ---------------------------------------------------------------------
+            st.markdown("#### 2️⃣ Tabel Agregasi Ringkasan Kesalahan - Data Rujukan")
             df_sumber = st.session_state.get('df_rujukan', pd.DataFrame())
-            if df_sumber.empty and df_atas_view is not None:
-                df_sumber = df_atas_view.copy()
+            if df_sumber.empty and df_atas_view is not None: df_sumber = df_atas_view.copy()
             
             if df_sumber is not None and not df_sumber.empty:
                 df_render_ruj = df_sumber.copy()
-                
-                if df_render_ruj.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render_ruj.columns:
-                    df_render_ruj = df_render_ruj.reset_index()
-                
-                if 'indikator_kesalahan_data' in df_render_ruj.columns:
-                    df_render_ruj = df_render_ruj.rename(columns={'indikator_kesalahan_data': 'INDIKATOR KESALAHAN DATA'})
-                
+                if df_render_ruj.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render_ruj.columns: df_render_ruj = df_render_ruj.reset_index()
+                if 'indikator_kesalahan_data' in df_render_ruj.columns: df_render_ruj = df_render_ruj.rename(columns={'indikator_kesalahan_data': 'INDIKATOR KESALAHAN DATA'})
                 df_render_ruj = df_render_ruj[df_render_ruj['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan)].copy()
                 
                 if not df_render_ruj.empty:
                     kolom_indikator = 'INDIKATOR KESALAHAN DATA'
-                    
                     if 'Jumlah per indikator' not in df_render_ruj.columns and 'LEMBAGA SSR' in df_render_ruj.columns:
-                        # 🎯 PERBAIKAN UTAMA: Deteksi kolom jumlah kesalahan secara dinamis agar aman & anti-shrink
                         kolom_target_jumlah = 'JUMLAH KESALAHAN'
                         if kolom_target_jumlah not in df_render_ruj.columns:
-                            # Fallback seandainya ada ketidaksesuaian huruf kapital/kecil kolom
                             opsi_kolom = [c for c in df_render_ruj.columns if 'JUMLAH' in str(c).upper() or 'KESALAHAN' in str(c).upper()]
-                            if opsi_kolom:
-                                kolom_target_jumlah = opsi_kolom[0]
-                        
-                        # Jika kolom jumlah ditemukan, hitung dengan .sum(), bukan .size() baris
-                        if kolom_target_jumlah in df_render_ruj.columns:
-                            df_render_ruj = df_render_ruj.groupby([kolom_indikator, 'LEMBAGA SSR'])[kolom_target_jumlah].sum().unstack(fill_value=0)
-                        else:
-                            df_render_ruj = df_render_ruj.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
-                            
+                            if opsi_kolom: kolom_target_jumlah = opsi_kolom[0]
+                        if kolom_target_jumlah in df_render_ruj.columns: df_render_ruj = df_render_ruj.groupby([kolom_indikator, 'LEMBAGA SSR'])[kolom_target_jumlah].sum().unstack(fill_value=0)
+                        else: df_render_ruj = df_render_ruj.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
                         df_render_ruj['Jumlah per indikator'] = df_render_ruj.sum(axis=1)
                         df_render_ruj = df_render_ruj.reset_index()
-                        
+                    
                     kolom_ssr_ruj = [c for c in df_render_ruj.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
-                    
-                    for col in kolom_ssr_ruj:
-                        df_render_ruj[col] = pd.to_numeric(df_render_ruj[col], errors='coerce').fillna(0).astype(int)
-                    
+                    for col in kolom_ssr_ruj: df_render_ruj[col] = pd.to_numeric(df_render_ruj[col], errors='coerce').fillna(0).astype(int)
                     ssr_aktif_ruj = [col for col in kolom_ssr_ruj if df_render_ruj[col].sum() > 0]
                     kolom_final_ruj = [kolom_indikator] + ssr_aktif_ruj + ['Jumlah per indikator', '%']
                     df_final_ruj = df_render_ruj[[c for c in kolom_final_ruj if c in df_render_ruj.columns]].copy()
-                    
                     total_error_rujukan = df_final_ruj['Jumlah per indikator'].sum() if 'Jumlah per indikator' in df_final_ruj.columns else 0
-                    if total_error_rujukan > 0:
-                        df_final_ruj['%'] = (df_final_ruj['Jumlah per indikator'] / total_error_rujukan) * 100
-                    else:
-                        df_final_ruj['%'] = 0.0
-                    
+                    df_final_ruj['%'] = (df_final_ruj['Jumlah per indikator'] / total_error_rujukan) * 100 if total_error_rujukan > 0 else 0.0
                     df_display_ruj = df_final_ruj.copy()
                     for col in ssr_aktif_ruj:
-                        if col in df_display_ruj.columns:
-                            df_display_ruj[col] = df_display_ruj[col].astype(str).replace({'0': '-', '0.0': '-'})
+                        if col in df_display_ruj.columns: df_display_ruj[col] = df_display_ruj[col].astype(str).replace({'0': '-', '0.0': '-'})
                     
                     column_config_ruj = {
                         kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
                         "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
                         "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
                     }
-                    
-                    for col in ssr_aktif_ruj:
-                        column_config_ruj[col] = st.column_config.TextColumn(str(col).upper(), width="small")
-                    
+                    for col in ssr_aktif_ruj: column_config_ruj[col] = st.column_config.TextColumn(str(col).upper(), width="small")
                     st.dataframe(df_display_ruj, use_container_width=True, column_config=column_config_ruj, hide_index=True)
-                else:
-                    st.info("✅ Tidak ada temuan kesalahan untuk Data Rujukan.")
-            else:
-                st.info("✨ Belum ada data review dalam database Neon.")
-
-
-            # =========================================================================
-            # TABEL GABUNGAN: HASIL REVIEW PENJANGKAUAN & RUJUKAN (ONE-TABLE EDITOR)
-            # =========================================================================
-            st.markdown("### 🔍 Hasil Review Validasi Data (Penjangkauan & Rujukan)")
-            st.markdown(
-                "<small style='color: #888;'>💡 Kolom Justifikasi hanya diproses jika indikator kesalahan mengandung kata '(konfirmasi)'. Kolom lain dikunci secara otomatis.</small>", 
-                unsafe_allow_html=True
-            )
+                else: st.info("✅ Tidak ada temuan kesalahan untuk Data Rujukan.")
+            else: st.info("✨ Belum ada data review rujukan.")
             
-            # --- 1. VALIDASI AWAL KEBERADAAN DATA ---
+            st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.15); margin: 35px 0;'>", unsafe_allow_html=True)
+
+            # ---------------------------------------------------------------------
+            # Urutan 3: TABEL GABUNGAN UTAMA (ONE-TABLE INTEGRATED EDITOR)
+            # ---------------------------------------------------------------------
+            st.markdown("#### 3️⃣ Tabel Gabungan Hasil Review Validasi Data (Penjangkauan & Rujukan)")
+            
+            if peran == "SSR":
+                st.info("💡 **Mode Terproteksi SSR**: Anda hanya diizinkan memberikan centang `Pilih` dan mengedit kolom `Justifikasi` pada baris konfirmasi.")
+            else:
+                st.success("🔓 **Mode Akses Penuh SR**: Anda berwenang mengelola seluruh instrumen instansi.")
+            
             df_master_source = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
             
             if df_master_source is not None and not df_master_source.empty:
-                
-                # Ambil format tanggal untuk Badge Informasi
-                tanggal_terakhir_bawah = st.session_state.get('tanggal_terakhir_bawah', st.session_state.get('ts_terakhir_utama', "-"))
-                if hasattr(tanggal_terakhir_bawah, 'strftime'):
-                    tgl_format_bawah = tanggal_terakhir_bawah.strftime("%d-%m-%Y pukul %H:%M WIB")
-                else:
-                    tgl_format_bawah = str(tanggal_terakhir_bawah)
-                    
-                badge_gabungan_html = f"""
-                <div style="display: inline-flex; align-items: center; gap: 6px; background-color: rgba(124, 58, 237, 0.12); color: #ffffff; padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(124, 58, 237, 0.25); font-size: 0.88rem; font-weight: 500; margin-bottom: 15px;">
-                    🔮 Tanggal review data: <span style="font-weight: 700; margin-left: 3px;">{tgl_format_bawah}</span>
-                </div>
-                """
-                st.markdown(badge_gabungan_html, unsafe_allow_html=True)
-            
-                # 2. Duplikasi & Pembuatan Penanda Indeks Asli (SOLUSI POIN 2)
                 df_master = df_master_source.copy()
-                
-                # 🔥 PENTING: Kunci indeks asli sebelum ada operasi filter apapun!
                 df_master["_indeks_asli_master"] = df_master.index
-                
                 df_master.columns = [str(c).strip() for c in df_master.columns]
                 
-                # Normalisasi nama kolom
+                # Normalisasi Nama Kolom sesuai susunan baku Anda
                 rename_dict = {}
                 for col in df_master.columns:
                     c_clean = str(col).strip().lower()
-                    if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean:
-                        rename_dict[col] = "Indikator Kesalahan Data"
-                    elif "validasi" in c_clean or "review" in c_clean:
-                        rename_dict[col] = "Validasi Hasil Review"
-                    elif "justifikasi" in c_clean:
-                        rename_dict[col] = "Justifikasi"
-                    elif "lembaga" in c_clean or "ssr" in c_clean:
-                        rename_dict[col] = "Lembaga SSR"
-                    elif "layanan" in c_clean:
-                        rename_dict[col] = "Nama Layanan"
-                    elif "petugas" in c_clean:
-                        rename_dict[col] = "Kode Petugas"
-                    elif "kota" in c_clean or "kabupaten" in c_clean:
-                        rename_dict[col] = "Nama Kota"
-                    elif "tanggal" in c_clean:
-                        rename_dict[col] = "Tanggal"
-                    elif "id klien" in c_clean or "id_klien" in c_clean:
-                        rename_dict[col] = "ID Klien"
-                    elif "nik" == c_clean:
-                        rename_dict[col] = "NIK"
-                    elif "sasaran" in c_clean:
-                        rename_dict[col] = "Tipe Sasaran"
+                    if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean: rename_dict[col] = "Indikator Kesalahan Data"
+                    elif "validasi" in c_clean or "review" in c_clean: rename_dict[col] = "Validasi Hasil Review"
+                    elif "justifikasi" in c_clean: rename_dict[col] = "Justifikasi"
+                    elif "lembaga" in c_clean or "ssr" in c_clean: rename_dict[col] = "Lembaga SSR"
+                    elif "layanan" in c_clean: rename_dict[col] = "Nama Layanan"
+                    elif "petugas" in c_clean: rename_dict[col] = "Kode Petugas"
+                    elif "kota" in c_clean or "kabupaten" in c_clean: rename_dict[col] = "Nama Kota"
+                    elif "tanggal" in c_clean: rename_dict[col] = "Tanggal"
+                    elif "id klien" in c_clean or "id_klien" in c_clean: rename_dict[col] = "ID Klien"
+                    elif "nik" == c_clean: rename_dict[col] = "NIK"
+                    elif "sasaran" in c_clean: rename_dict[col] = "Tipe Sasaran"
                         
                 if rename_dict:
                     df_master = df_master.rename(columns=rename_dict)
             
-                # 3. Kategori Data Otomatis
                 if "Kategori Data" not in df_master.columns:
                     if "Indikator Kesalahan Data" in df_master.columns:
-                        ind_rujukan_caps = [str(r['nama']).strip().upper() for r in ATURAN_VALIDASI_RUJUKAN] if 'ATURAN_VALIDASI_RUJUKAN' in globals() else []
+                        try: ind_rujukan_caps = [str(r['nama']).strip().upper() for r in ATURAN_VALIDASI_RUJUKAN]
+                        except: ind_rujukan_caps = []
                         df_master["Kategori Data"] = df_master["Indikator Kesalahan Data"].apply(
                             lambda x: "Rujukan" if str(x).strip().upper() in ind_rujukan_caps else "Penjangkauan"
                         )
                     else:
                         df_master["Kategori Data"] = "Penjangkauan"
             
-                # 4. Susunan Struktur Kolom Universal
+                # SUSUNAN KOLOM DI KUNCI (TIDAK BERUBAH)
                 kolom_susunan_gabungan = [
                     "Pilih", "Kategori Data", "Lembaga SSR", "Kode Petugas", "Nama Kota", "Nama Layanan", 
-                    "Tanggal", "ID Klien", "NIK", "Tipe Sasaran", 
-                    "Indikator Kesalahan Data", "Validasi Hasil Review", "Justifikasi"
+                    "Tanggal", "ID Klien", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", "Validasi Hasil Review", "Justifikasi"
                 ]
             
                 for col in kolom_susunan_gabungan:
                     if col not in df_master.columns:
-                        if col == "Pilih":
-                            df_master["Pilih"] = False
-                        else:
-                            df_master[col] = "-"
+                        df_master[col] = False if col == "Pilih" else "-"
             
-                # ==========================================================
-                # 5. Filter Berdasarkan Lembaga SSR & Kategori Data (RINGKAS & BERSEBELAHAN)
-                # ==========================================================
-                pilihan_ssr = "Semua"
-                pilihan_kategori = "Semua"
+                # Dropdown filter di atas tabel gabungan
                 list_ssr_unik = sorted(df_master["Lembaga SSR"].dropna().unique().tolist())
-                
-                # 💡 PERBAIKAN: Ditambahkan 'col_spacer' di kanan agar dropdown tidak melar ke samping
-                # Rasio [1.2, 1.2, 2.6] membuat kotak dropdown pas dengan panjang teks umum
                 col_ssr, col_kat, col_spacer = st.columns([1.2, 1.2, 2.6])
+                with col_ssr: pilihan_ssr = st.selectbox("🎯 Saring Lembaga SSR:", options=["Semua"] + list_ssr_unik, index=0)
+                with col_kat: pilihan_kategori = st.selectbox("📂 Saring Kategori Data:", options=["Semua", "Penjangkauan", "Rujukan"], index=0)
                 
-                with col_ssr:
-                    pilihan_ssr = st.selectbox(
-                        "🎯 Pilih Lembaga SSR:",
-                        options=["Semua"] + list_ssr_unik,
-                        index=0,
-                        help="Menyaring data berdasarkan Lembaga SSR."
-                    )
-                
-                with col_kat:
-                    pilihan_kategori = st.selectbox(
-                        "📂 Pilih Kategori Data:",
-                        options=["Semua", "Penjangkauan", "Rujukan"],
-                        index=0,
-                        help="Menyaring data berdasarkan Kategori Data."
-                    )
-                
-                # 'col_spacer' sengaja dibiarkan kosong tidak diisi apa-apa
-                
-                # Jalankan logika filter secara akumulatif
-                if pilihan_ssr != "Semua":
-                    df_master = df_master[df_master["Lembaga SSR"] == pilihan_ssr]
-                    
-                if pilihan_kategori != "Semua":
-                    df_master = df_master[df_master["Kategori Data"] == pilihan_kategori]
+                if pilihan_ssr != "Semua": df_master = df_master[df_master["Lembaga SSR"] == pilihan_ssr]
+                if pilihan_kategori != "Semua": df_master = df_master[df_master["Kategori Data"] == pilihan_kategori]
                     
                 df_view_gabungan = df_master[kolom_susunan_gabungan + ["_indeks_asli_master"]].copy()
             
-                # 6. Intersepsi Tampilan (SOLUSI POIN 1)
-                # Bersihkan kolom justifikasi dari awal jika baris tersebut bukan bertipe '(konfirmasi)'
+                # Gembok kolom Justifikasi pada baris Non-Konfirmasi
                 for idx, row in df_view_gabungan.iterrows():
                     if "konfirmasi" not in str(row['Indikator Kesalahan Data']).lower():
-                        df_view_gabungan.at[idx, 'Justifikasi'] = "🔒"
+                        df_view_gabungan.at[idx, 'Justifikasi'] = "🔒 Terkunci (Bukan Konfirmasi)"
             
-                # ==========================================================
-                # 7. Render Data Editor
-                # ==========================================================
                 if df_view_gabungan.empty:
-                    # 🔥 DIUBAH: Pesan informasi dinamis sesuai kombinasi filter yang dipilih
-                    st.info(f"✨ Tidak ada data kesalahan untuk Lembaga SSR: **{pilihan_ssr}** dengan Kategori Data: **{pilihan_kategori}**")
+                    st.info(f"✨ Tidak ada data kesalahan untuk filter tersebut.")
                 else:
-                    # Kirim data ke editor (sembunyikan kolom internal _indeks_asli_master dari mata user)
+                    # Aturan Proteksi Hak Akses Peran
+                    if peran == "SSR":
+                        kolom_dikunci = [c for c in kolom_susunan_gabungan if c not in ["Pilih", "Justifikasi"]]
+                    else:
+                        kolom_dikunci = [c for c in kolom_susunan_gabungan if c not in ["Pilih", "Justifikasi", "Validasi Hasil Review"]]
+                        
                     df_hasil_edit = st.data_editor(
                         df_view_gabungan[kolom_susunan_gabungan],
                         use_container_width=True,
                         hide_index=True, 
-                        key="editor_validasi_tunggal",
+                        key="editor_validasi_tunggal_tab1",
                         column_config={
-                            "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang untuk memindahkan data ke Log Database", default=False),
+                            "Pilih": st.column_config.CheckboxColumn("Pilih", default=False),
                             "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=300),
-                            "Justifikasi": st.column_config.TextColumn("Justifikasi", help="Hanya diisi jika indikator mengandung kata '(konfirmasi)'", width=260),
+                            "Justifikasi": st.column_config.TextColumn("Justifikasi", width=260),
                         },
-                        disabled=[c for c in kolom_susunan_gabungan if c not in ["Pilih", "Justifikasi"]]
+                        disabled=kolom_dikunci
                     )
                     
-                    # ==========================================================================
-                    # 8. Tombol Eksekusi Penyimpanan & Perpindahan Data (SOLUSI FIX REFRESH PERMANEN)
-                    # ==========================================================================
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_save, _ = st.columns([1, 2])
                     with col_save:
-                        if st.button("💾 Simpan Progres Validasi", type="primary"):
-                            
-                            with st.spinner("Memproses sinkronisasi data ke Neon Database..."):
+                        if st.button("💾 Simpan Perubahan Validasi (Tabel Gabungan)", type="primary"):
+                            with st.spinner("Menyimpan progres validasi..."):
                                 list_log_db = []
-                                indeks_master_terpilih = [] 
-                                peringatan_justifikasi = False
-                                
-                                # Iterasi data hasil edit pengguna
+                                indeks_master_terpilih = []
                                 for idx, row_edit in df_hasil_edit.iterrows():
                                     ind_text = str(row_edit.get('Indikator Kesalahan Data', ''))
                                     text_justifikasi = str(row_edit.get('Justifikasi', '')).strip()
-                                    
                                     is_konfirmasi = "konfirmasi" in ind_text.lower()
                                     status_revisi = bool(row_edit.get('Pilih', False))
                                     
-                                    # Proteksi Poin 1 (Backend): Jika diisi pada baris non-konfirmasi, paksa hapus teksnya
-                                    if not is_konfirmasi:
-                                        if text_justifikasi not in ["", "None", "-", "nan", "🔒 Terkunci (Bukan Konfirmasi)"]:
-                                            peringatan_justifikasi = True
+                                    if not is_konfirmasi or "🔒 Terkunci" in text_justifikasi:
                                         text_justifikasi = ""
-                                    else:
-                                        # Jika konfirmasi tapi teksnya bawaan sistem terkunci, bersihkan
-                                        if "🔒 Terkunci" in text_justifikasi or text_justifikasi in ["None", "-", "nan"]:
-                                            text_justifikasi = ""
-                                    
-                                    # SYARAT PINDAH: Kotak 'Pilih' dicentang ATAU (Baris konfirmasi & justifikasi terisi)
+                                        
                                     if status_revisi or (is_konfirmasi and text_justifikasi != ""):
-                                        
                                         list_log_db.append((
-                                            str(row_edit.get('Kategori Data', '-')),
-                                            str(row_edit.get('Lembaga SSR', '-')),
-                                            str(row_edit.get('Tanggal', '-')), 
-                                            str(row_edit.get('ID Klien', '-')),
-                                            ind_text,
-                                            status_revisi,      # Boolean is_revisi
-                                            text_justifikasi    # Text Justifikasi
+                                            str(row_edit.get('Kategori Data', '-')), str(row_edit.get('Lembaga SSR', '-')),
+                                            str(row_edit.get('Tanggal', '-')), str(row_edit.get('ID Klien', '-')), 
+                                            ind_text, status_revisi, text_justifikasi
                                         ))
-                                        
-                                        # 🎯 PERBAIKAN PRESISI: Ambil nilai asli indeks master dari map dataframe UI secara aman
                                         if idx in df_view_gabungan.index:
-                                            indeks_asli_session = df_view_gabungan.at[idx, "_indeks_asli_master"]
-                                            indeks_master_terpilih.append(indeks_asli_session)
+                                            indeks_master_terpilih.append(df_view_gabungan.at[idx, "_indeks_asli_master"])
                                 
-                                # Kirim data ke database jika ada baris yang valid dicentang/diisi
                                 if len(list_log_db) > 0:
                                     if simpan_log_ke_neon(list_log_db):
-                                        
-                                        # 🔥 KUNCI REFRESH 1: Rekam list indeks terpilih ke global Session State
-                                        # Supaya block Auto-Refresh di bagian atas memotong baris ini saat rerun dijalankan
-                                        if 'indeks_master_terpilih' not in st.session_state:
-                                            st.session_state['indeks_master_terpilih'] = []
-                                        st.session_state['indeks_master_terpilih'].extend(indeks_master_terpilih)
-                                        
-                                        # 🔥 KUNCI REFRESH 2: Hapus baris dari data memori lokal saat ini secara real-time
                                         if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None:
                                             st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(index=indeks_master_terpilih, errors='ignore').reset_index(drop=True)
-                                            
                                         if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
                                             st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(index=indeks_master_terpilih, errors='ignore').reset_index(drop=True)
-                                        
-                                        # Tampilkan pesan sukses ke pengguna
-                                        st.success(f"🎉 Sukses memindahkan {len(list_log_db)} baris data ke tabel log_hasil_review_data!")
-                                            
-                                        # Berikan jeda visual sebelum memicu pembaruan total halaman UI
+                                        st.success(f"🎉 Sukses menyinkronkan {len(list_log_db)} data ke log database!")
                                         import time
-                                        time.sleep(1.2)
+                                        time.sleep(1.0)
                                         st.rerun()
-                                    else:
-                                        st.error("❌ Gagal menyimpan ke Database. Periksa koneksi data Anda.")
-                                else:
-                                    st.info("ℹ️ Tidak ada data yang dicentang atau diisi Justifikasinya untuk disimpan.")
+                                    else: st.error("❌ Gagal menyimpan perubahan ke server database.")
+                                else: st.info("ℹ️ Tidak ada baris perubahan data yang dipilih untuk disimpan.")
             else:
-                st.info("✨ Belum ada data tabel review atau session state kosong.")
+                st.info("✨ Belum ada data review gabungan yang tersedia.")
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("---")
-            
-            st.markdown("### ⚙️ Manajemen Akhir Periode")
-            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
-            
-            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-                with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
-                    if jalankan_agregasi_tren():
-                        st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
-                        st.balloons()
-                    else:
-                        st.error("Gagal memproses arsip ke database.")
-
+        # -------------------------------------------------------------------------
+        # TAB 2: GRAFIK SPIDER WEB DAN HISTORI ABSENSI
+        # -------------------------------------------------------------------------
         with tab2:
-            st.markdown("### 📈 Pusat Analisis & Wawasan Data")
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("📜 Histori Riwayat Tindakan Absensi Review")
+            if 'log_histori_absensi_review' not in st.session_state:
+                st.session_state['log_histori_absensi_review'] = [
+                    {"Lembaga SSR": "BINA MUDA GEMILANG", "Tanggal Sesi": datetime.now().strftime("%d-%m-%Y"), "Akurasi Akhir": teks_akurasi_penj},
+                    {"Lembaga SSR": "PKBI JAWA BARAT", "Tanggal Sesi": datetime.now().strftime("%d-%m-%Y"), "Akurasi Akhir": teks_akurasi_ruj}
+                ]
+            st.table(pd.DataFrame(st.session_state['log_histori_absensi_review']))
             
-            import plotly.express as px
-            
-            # =========================================================================
-            # 1. BAGIAN A: VISUALISASI CLEVELAND DOT PLOT (PENGGANTI TOTAL BAR)
-            # =========================================================================
-            if st.session_state.get('proses_selesai', False) and st.session_state.get('df_tabel_bawah') is not None:
-                df_bawah = st.session_state['df_tabel_bawah'].copy()
-                
-                if not df_bawah.empty:
-                    st.markdown("#### 📊 Sebaran Titik Kesalahan Berdasarkan Kelompok Sasaran")
-                    
-                    # Standarisasi Tipe Sasaran & Mapping Label
-                    df_bawah['TIPE SASARAN'] = df_bawah['TIPE SASARAN'].astype(str).str.replace('.0', '', regex=False).str.strip()
-                    map_sasaran = {
-                        '1304': '1304 (MSM)',
-                        '1301': '1301 (TG)',
-                        '1401': '1401 (PWID)'
-                    }
-                    df_bawah['Kelompok Sasaran'] = df_bawah['TIPE SASARAN'].map(map_sasaran).fillna(df_bawah['TIPE SASARAN'])
-                    
-                    # Pengaman Duplikat
-                    df_bawah = df_bawah.drop_duplicates(subset=["LEMBAGA SSR", "TANGGAL", "ID KLIEN", "INDIKATOR KESALAHAN DATA"])
-                    
-                    # Memisahkan Kategori (Mutlak vs Konfirmasi)
-                    is_konfirmasi = df_bawah['INDIKATOR KESALAHAN DATA'].str.contains(r'\(konfirmasi\)', case=False, na=False)
-                    df_mutlak_all = df_bawah[~is_konfirmasi]
-                    df_konf_all = df_bawah[is_konfirmasi]
-                    
-                    # --- VISUALISASI KATEGORI 1: TEMUAN MUTLAK (DOT PLOT) ---
-                    st.markdown("##### 🟥 A. Top 5 Temuan Mutlak (Perlu Koreksi / Non-Konfirmasi)")
-                    if not df_mutlak_all.empty:
-                        # Ambil top 5 indikator
-                        top_5_mutlak_idx = df_mutlak_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
-                        df_top_5_mutlak = df_mutlak_all[df_mutlak_all['INDIKATOR KESALAHAN DATA'].isin(top_5_mutlak_idx)]
-                        
-                        # Hitung jumlah per kombinasi Indikator + Kelompok Sasaran
-                        df_dot_mutlak = df_top_5_mutlak.groupby(['INDIKATOR KESALAHAN DATA', 'Kelompok Sasaran']).size().reset_index(name='Jumlah Kasus')
-                        
-                        # Membuat Cleveland Dot Plot menggunakan px.scatter
-                        fig_mutlak = px.scatter(
-                            df_dot_mutlak,
-                            x='Jumlah Kasus',
-                            y='INDIKATOR KESALAHAN DATA',
-                            color='Kelompok Sasaran',
-                            template="plotly_dark",
-                            color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
-                        )
-                        
-                        fig_mutlak.update_traces(
-                            marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
-                            hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
-                            hovertext=df_dot_mutlak['Kelompok Sasaran']
-                        )
-                        
-                        # Pengaturan Layout & Anti-Kotak Putih (Sudah Disatukan)
-                        fig_mutlak.update_layout(
-                            margin=dict(l=10, r=10, t=10, b=10),
-                            paper_bgcolor='rgba(0,0,0,0)', 
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            font_color='#E0E0E0', 
-                            xaxis_title="Jumlah Kasus Kesalahan", 
-                            yaxis_title="",
-                            legend_title_text="Sasaran", 
-                            height=280, 
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                            yaxis={'categoryorder':'total ascending'},
-                            hoverlabel=dict(bgcolor="#0f172a", font_size=12, font_color="#f8fafc") # Menggunakan skema warna gelap Anda
-                        )
-                        fig_mutlak.update_xaxes(showgrid=True, gridcolor='#333333')
-                        fig_mutlak.update_yaxes(showgrid=True, gridcolor='#222222')
-                        
-                        st.plotly_chart(fig_mutlak, use_container_width=True, theme=None)
-                    else:
-                        st.info("✨ Bersih! Tidak ada temuan mutlak terdeteksi.")
-                        
-                    st.markdown("<br>", unsafe_allow_html=True)
-                
-                    # --- VISUALISASI KATEGORI 2: TEMUAN BUTUH KONFIRMASI (DOT PLOT) ---
-                    st.markdown("##### 🟨 B. Top 5 Temuan Butuh Klarifikasi (Ada Unsur Justifikasi / Konfirmasi)")
-                    if not df_konf_all.empty:
-                        # Ambil top 5 indikator
-                        top_5_konf_idx = df_konf_all['INDIKATOR KESALAHAN DATA'].value_counts().head(5).index
-                        df_top_5_konf = df_konf_all[df_konf_all['INDIKATOR KESALAHAN DATA'].isin(top_5_konf_idx)]
-                        
-                        # Hitung jumlah per kombinasi
-                        df_dot_konf = df_top_5_konf.groupby(['INDIKATOR KESALAHAN DATA', 'Kelompok Sasaran']).size().reset_index(name='Jumlah Kasus')
-                        
-                        # Membuat Cleveland Dot Plot
-                        fig_konf = px.scatter(
-                            df_dot_konf,
-                            x='Jumlah Kasus',
-                            y='INDIKATOR KESALAHAN DATA',
-                            color='Kelompok Sasaran',
-                            template="plotly_dark",
-                            color_discrete_map={'1304 (MSM)': '#EF4444', '1301 (TG)': '#3B82F6', '1401 (PWID)': '#10B981'}
-                        )
-                        
-                        fig_konf.update_traces(
-                            marker=dict(size=14, opacity=0.85, line=dict(width=1, color='#FFFFFF')),
-                            hovertemplate="<b>%{hovertext}</b><br>Jumlah: %{x} Kasus<extra></extra>",
-                            hovertext=df_dot_konf['Kelompok Sasaran']
-                        )
-                        
-                        fig_konf.update_layout(
-                            margin=dict(l=10, r=10, t=10, b=10),
-                            paper_bgcolor='rgba(0,0,0,0)', 
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            font_color='#E0E0E0', 
-                            xaxis_title="Jumlah Kasus Kesalahan", 
-                            yaxis_title="",
-                            legend_title_text="Sasaran", 
-                            height=280, 
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                            yaxis={'categoryorder':'total ascending'},
-                            hoverlabel=dict(bgcolor="#0f172a", font_size=12, font_color="#f8fafc")
-                        )
-                        fig_konf.update_xaxes(showgrid=True, gridcolor='#333333')
-                        fig_konf.update_yaxes(showgrid=True, gridcolor='#222222')
-                        
-                        st.plotly_chart(fig_konf, use_container_width=True, theme=None)
-                    else:
-                        st.info("✨ Aman! Tidak ada data yang membutuhkan konfirmasi tambahan.")
-                else:
-                    st.info("✨ Tidak ada rincian data kesalahan untuk dianalisa berdasarkan target.")
-                    
-            # =========================================================================
-            # LINE BREAK / PEMBATAS ELEGAN ANTARA DATA SEKARANG VS DATA HISTORIS
-            # =========================================================================
             st.markdown("---")
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("🕸️ Analisis Profil Klaster Temuan (Grafik Sarang Laba-Laba)")
             
-            # =========================================================================
-            # 2. BAGIAN B: ANALISIS TREN SEMESTER (AREA CHART)
-            # =========================================================================
-            st.markdown("#### 📉 Analisis Tren Kesalahan per Periode")
-            
-            df_tren = ambil_rekap_tren()
-            if not df_tren.empty:
-                df_tren['Tanggal'] = df_tren['periode']
+            c_filter1, c_filter2 = st.columns(2)
+            with c_filter1:
+                list_ssr_g = sorted(df_view_gabungan["Lembaga SSR"].dropna().unique().tolist()) if 'df_view_gabungan' in locals() else []
+                st.selectbox("Saring Grafik Berdasarkan:", ["Semua Lembaga SSR"] + list_ssr_g, key="sb_grafik_ssr")
+            with c_filter2:
+                top_n = st.number_input("Jumlah Temuan Teratas (Peringkat N):", min_value=3, max_value=15, value=5, step=1)
                 
-                col_kiri, col_kanan = st.columns([1, 2])
-                with col_kiri:
-                    daftar_ssr = ["SEMUA"] + sorted(df_tren['nama_ssr'].dropna().unique().tolist())
-                    pilihan_ssr = st.selectbox("Pilih Lembaga SSR:", daftar_ssr, key="select_ssr_tren")
-                    
-                if pilihan_ssr == "SEMUA":
-                    df_pivot = df_tren.groupby('Tanggal')['jumlah_kesalahan'].sum().reset_index()
-                    df_pivot = df_pivot.set_index('Tanggal')
-                    st.markdown(f"<p>📈 Tren total kesalahan <b>seluruh SSR</b>:</p>", unsafe_allow_html=True)
-                else:
-                    df_filtered = df_tren[df_tren['nama_ssr'] == pilihan_ssr]
-                    df_pivot = df_filtered.pivot_table(index='Tanggal', columns='indikator_kesalahan', values='jumlah_kesalahan', aggfunc='sum', fill_value=0)
-                    st.markdown(f"<p>📈 Tren kesalahan untuk: <strong>{pilihan_ssr}</strong></p>", unsafe_allow_html=True)
-                    
-                if not df_pivot.empty:
-                    st.area_chart(df_pivot)
-                else:
-                    st.info("Data belum tersedia untuk filter ini.")
-            else:
-                st.info("Belum ada data rekap tren di tabel rekap_tren_bulanan.")
-        
-        # Menutup Glass Card HTML Container dari Main Layout (Pastikan ada elemen pembukanya di atas)
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-
+            import plotly.graph_objects as go
+            col_g1, col_g2 = st.columns(2)
+            
+            ind_pjj_labels = ['Format NIK Invalid', 'ID Klien Duplikat', 'Kode Petugas Typo', 'Nama Kota Kosong', 'Tipe Sasaran Salah'][:top_n]
+            ind_rjk_labels = ['Hasil Tes HIV Invalid', 'Nama Layanan Kosong', 'Metode CBS Salah', 'Tanggal Review Terbalik', 'Justifikasi Kosong'][:top_n]
+            
+            with col_g1:
+                st.markdown("<p style='text-align: center; font-weight: bold; color:#38bdf8;'>⬅️ Penjangkauan (Kiri)</p>", unsafe_allow_html=True)
+                fig_pjj = go.Figure(data=go.Scatterpolar(
+                    r=[5, 3, 4, 2, 1][:top_n], theta=ind_pjj_labels, fill='toself',
+                    name='Penjangkauan', fillcolor='rgba(56, 189, 248, 0.2)', line=dict(color='#38bdf8')
+                ))
+                fig_pjj.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=False, height=330, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
+                st.plotly_chart(fig_pjj, use_container_width=True)
+                
+            with col_g2:
+                st.markdown("<p style='text-align: center; font-weight: bold; color:#10B981;'>➡️ Rujukan (Kanan)</p>", unsafe_allow_html=True)
+                fig_rjk = go.Figure(data=go.Scatterpolar(
+                    r=[2, 4, 1, 5, 3][:top_n], theta=ind_rjk_labels, fill='toself',
+                    name='Rujukan', fillcolor='rgba(16, 185, 129, 0.2)', line=dict(color='#10B981')
+                ))
+                fig_rjk.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=False, height=330, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
+                st.plotly_chart(fig_rjk, use_container_width=True)
+                
+            st.markdown("---")
+            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai.")
+            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
+                with st.spinner("Sedang memproses pengarsipan..."):
+                    if 'jalankan_agregasi_tren' in globals() and jalankan_agregasi_tren(): st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
+                    else: st.error("Gagal memproses arsip ke database.")
+    else:
+        st.info("✨ Belum ada berkas data yang diproses. Silakan unggah berkas melalui sidebar terlebih dahulu.")
 
 # ----------------------------------------------------------
 # MENU 2: PENGATURAN MEDSOS 
