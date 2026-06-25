@@ -107,11 +107,11 @@ set_modern_theme()
 # 0. MANAGEMENT DEFAULT STATE & INIT DATA (Tersinkron Neon DB)
 # ==========================================================
 
-# 🛠️ --- [BARU] INISIALISASI MASTER DATA 16 LEMBAGA + 1 PERAN SR ---
+# 🛠️ --- [PERBAIKAN] INISIALISASI MASTER DATA 16 LEMBAGA (PKBI JABAR SEBAGAI SR) ---
 if "master_lembaga" not in st.session_state:
     st.session_state.master_lembaga = [
         {"Nama Lembaga": "BINA MUDA GEMILANG", "Status": "SSR"},
-        {"Nama Lembaga": "PKBI JAWA BARAT", "Status": "SSR"},
+        {"Nama Lembaga": "PKBI JAWA BARAT", "Status": "SR"},       # ✨ Diubah dari SSR menjadi SR
         {"Nama Lembaga": "GRAPIKS", "Status": "SSR"},
         {"Nama Lembaga": "LEMBAGA KASIH INDONESIA KITA", "Status": "SSR"},
         {"Nama Lembaga": "LENSA SUKABUMI", "Status": "SSR"},
@@ -126,7 +126,7 @@ if "master_lembaga" not in st.session_state:
         {"Nama Lembaga": "YAYASAN SRIKANDI PASUNDAN", "Status": "SSR"},
         {"Nama Lembaga": "YAYASAN SRIKANDI PERINTIS", "Status": "SSR"},
         {"Nama Lembaga": "YAYASAN VESTA INDONESIA", "Status": "SSR"},
-        {"Nama Lembaga": "PUSAT SR UTAMA", "Status": "SR"} # Contoh Akun Pengetesan untuk Peran SR
+        {"Nama Lembaga": "PUSAT SR UTAMA", "Status": "SR"}         # Akun Utama Peran SR
     ]
 
 # 🛠️ --- [BARU] INISIALISASI STATE UTK AUTENTIKASI ---
