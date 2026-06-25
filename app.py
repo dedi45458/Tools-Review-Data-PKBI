@@ -1882,7 +1882,10 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         
             # Ambil data metrik akurasi terakhir dari DB sebagai fallback jika session_state bernilai 0 / default
             try:
-                metrik_db = ambil_metrik_akurasi_terakhir() or {}
+                # Karena fungsi mengembalikan parameter (dict, timestamp), kita pecah ke dua variabel
+                metrik_db, _ = ambil_metrik_akurasi_terakhir(role_reviewer="SR" if peran == "SR" else "SSR", lembaga_ssr=None if peran == "SR" else peran)
+                if not isinstance(metrik_db, dict):
+                    metrik_db = {}
             except Exception:
                 metrik_db = {}
         
