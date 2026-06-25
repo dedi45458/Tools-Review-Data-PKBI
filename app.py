@@ -1971,17 +1971,17 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # =====================================================================
             # BAGIAN A: RENDER GRAFIK KLASTER REGULER (TIDAK ADA KAT_KONFIRMASI)
             # =====================================================================
-            st.markdown("#### 📊 1. Klaster Temuan Kesalahan Murni Data (Reguler)")
+            st.markdown("#### 📊 1. Ranking Temuan Kesalahan Data Murni")
             col_g1, col_g2 = st.columns(2)
             
             with col_g1:
-                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#38bdf8;'> Penjangkauan Reguler ({filter_bulan})</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#38bdf8;'> Penjangkauan ({filter_bulan})</p>", unsafe_allow_html=True)
                 fig_pjj = go.Figure(data=go.Scatterpolar(r=r_pjj_reg, theta=lbl_pjj_reg, fill='toself', name='Penjangkauan', fillcolor='rgba(56, 189, 248, 0.15)', line=dict(color='#38bdf8', width=2)))
                 fig_pjj.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
                 st.plotly_chart(fig_pjj, use_container_width=True)
                 
             with col_g2:
-                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#10B981;'> Rujukan Reguler ({filter_bulan})</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#10B981;'> Rujukan ({filter_bulan})</p>", unsafe_allow_html=True)
                 fig_rjk = go.Figure(data=go.Scatterpolar(r=r_rjk_reg, theta=lbl_rjk_reg, fill='toself', name='Rujukan', fillcolor='rgba(16, 185, 129, 0.15)', line=dict(color='#10B981', width=2)))
                 fig_rjk.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
                 st.plotly_chart(fig_rjk, use_container_width=True)
@@ -1991,7 +1991,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # =====================================================================
             # BAGIAN B: RENDER GRAFIK KLASTER DATA KONFIRMASI (ADA KAT_KONFIRMASI)
             # =====================================================================
-            st.markdown("#### 🔍 2. Klaster Validasi Khusus Data Perlu Konfirmasi")
+            st.markdown("#### 🔍 2. Ranking Validasi Khusus Data Perlu Konfirmasi")
             col_k1, col_k2 = st.columns(2)
             
             with col_k1:
