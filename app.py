@@ -1863,22 +1863,37 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     query_bulan = """
                         SELECT DISTINCT TO_CHAR(tanggal_dibuat, 'YYYY-MM') as bulan 
                         FROM agregasi_hasil_review_penjangkauan
+                        WHERE tanggal_dibuat IS NOT NULL
                         UNION
                         SELECT DISTINCT TO_CHAR(tanggal_dibuat, 'YYYY-MM') as bulan 
                         FROM agregasi_hasil_review_rujukan
+                        WHERE tanggal_dibuat IS NOT NULL
                         ORDER BY bulan ASC
                     """
                     df_bulan_db = pd.read_sql_query(query_bulan, conn_bulan)
-                    list_bulan = df_bulan_db['bulan'].tolist() if not df_bulan_db.empty else []
+                    if not df_bulan_db.empty:
+                        # Membersihkan nilai None atau kosong jika ada
+                        list_bulan = [str(b).strip() for b in df_bulan_db['bulan'].tolist() if b]
                 except Exception as e:
                     st.warning(f"Gagal mengambil daftar rentang bulan dari database: {e}")
                 finally:
                     conn_bulan.close()
                     
-            # Jika database masih kosong, berikan default bulan saat ini & bulan lalu
-            if not list_bulan:
+            # VALIDASI STRIP & AMANKAN FALLBACK (Mencegah RangeError di Streamlit)
+            # Pastikan list_bulan memiliki minimal 2 opsi unik agar slider tidak crash
+            list_bulan = sorted(list(set(list_bulan)))
+            if len(list_bulan) < 2:
                 sekarang = datetime.now()
-                list_bulan = [(sekarang - timedelta(days=30)).strftime('%Y-%m'), sekarang.strftime('%Y-%m')]
+                bulan_lalu = (sekarang - timedelta(days=30)).strftime('%Y-%m')
+                bulan_ini = sekarang.strftime('%Y-%m')
+                # Jika ada 1 elemen, masukkan bersama bulan ini/lalu
+                if len(list_bulan) == 1:
+                    if list_bulan[0] != bulan_ini:
+                        list_bulan.append(bulan_ini)
+                    else:
+                        list_bulan.insert(0, bulan_lalu)
+                else:
+                    list_bulan = [bulan_lalu, bulan_ini]
             
             # ---------------------------------------------------------------------
             # KOMPONEN FILTER KOTAK PROPORSIONAL (TIDAK MEMANJANG KE UJUNG)
@@ -1893,7 +1908,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 top_n = st.number_input("🔝 Rangking Teratas (N):", min_value=3, max_value=20, value=5, step=1, key="num_top_n")
                 
             with c_filter3:
-                # Select Slider horizontal agar pengguna bisa menggeser bulan ke kiri/kanan
+                # Sekarang dijamin aman dari RangeError karena len(list_bulan) >= 2
                 filter_bulan = st.select_slider(
                     "📅 Pilih Rentang Bulan:",
                     options=list_bulan,
