@@ -130,7 +130,7 @@ if "user_authenticated" not in st.session_state: st.session_state.user_authentic
 if "current_lembaga" not in st.session_state: st.session_state.current_lembaga = None
 if "current_role" not in st.session_state: st.session_state.current_role = None
 
-@st.dialog("📋 Absensi Kehadiran Validasi")
+@st.dialog("📋 Login Aplikasi")
 def popup_absensi():
     st.write("Silahkan pilih nama instansi/lembaga Anda untuk masuk ke sistem.")
     list_pilihan = [l["Nama Lembaga"] for l in st.session_state.master_lembaga]
