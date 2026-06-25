@@ -594,9 +594,9 @@ with st.sidebar:
         tombol_proses = st.button("🚀 Jalankan Validasi", type="primary", use_container_width=True)
             
         st.markdown("### ⚙️ Manajemen Akhir Periode")
-        st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
+        st.warning("⚠️ Gunakan tombol di bawah ini untuk mengarsipkan database.")
         
-        if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
+        if st.button("🚀 Arsipkan Data", type="primary", use_container_width=True):
             with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
                 if jalankan_agregasi_tren():
                     st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
