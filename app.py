@@ -2006,12 +2006,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 fig_rjk_k.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
                 st.plotly_chart(fig_rjk_k, use_container_width=True)
                 
-            st.markdown("---")
-            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai.")
-            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-                with st.spinner("Sedang memproses pengarsipan..."):
-                    if 'jalankan_agregasi_tren' in globals() and jalankan_agregasi_tren(): st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
-                    else: st.error("Gagal memproses arsip ke database.")
 
 # ----------------------------------------------------------
 # MENU 2: PENGATURAN MEDSOS 
