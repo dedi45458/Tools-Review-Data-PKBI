@@ -11,7 +11,6 @@ from zoneinfo import ZoneInfo
 from database import (
     dapatkan_koneksi_neon,
     simpan_log_ke_neon,
-    jalankan_agregasi_tren,
     hitung_dan_ambil_log_db,     
     ambil_keyword_medsos_db,     
     tambah_keyword_medsos_db,
