@@ -423,6 +423,10 @@ def ambil_set_layanan_prep_valid():
         
     return set_prep_valid
 
+import datetime as dt
+import pandas as pd
+import streamlit as st
+
 # ==============================================================================
 # KATEGORI 5: OPERASI PROSES REVIEW DATA VALIDASI (3 TABEL UTAMA)
 # ==============================================================================
@@ -512,7 +516,6 @@ def simpan_agregasi_rujukan_db(data_input):
     """Menyimpan data agregasi hasil review rujukan ke database (Mendukung DataFrame/List)"""
     if data_input is None: return False
     
-    # Konversi DataFrame ke List of Tuples dan tangani nilai kosong (NaN -> None)
     if isinstance(data_input, pd.DataFrame):
         if data_input.empty: return False
         df_bersih = data_input.astype(object).where(pd.notnull(data_input), None)
@@ -525,7 +528,6 @@ def simpan_agregasi_rujukan_db(data_input):
     if not conn: return False
     try:
         with conn.cursor() as cur:
-            # 🔥 SINKRONISASI: Kolom disesuaikan dengan struktur tabel asli database
             query = """
                 INSERT INTO agregasi_hasil_review_rujukan 
                 (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
@@ -542,12 +544,10 @@ def simpan_agregasi_rujukan_db(data_input):
         if conn: conn.close()
 
 def ambil_agregasi_rujukan_terakhir():
-    """🔥 SINKRON: Mengambil seluruh baris data rujukan dari batch agregasi terakhir 
-    menggunakan buffer interval 5 detik berdasarkan kolom tanggal_dibuat."""
+    """Mengambil seluruh baris data rujukan dari batch agregasi terakhir menggunakan buffer interval 5 detik."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
     try:
-        # 🔥 SINKRONISASI: Nama kolom SELECT diubah ke versi baru & pencarian menggunakan tanggal_dibuat
         query = """
             SELECT 
                 nama_ssr AS "LEMBAGA SSR", 
@@ -560,11 +560,9 @@ def ambil_agregasi_rujukan_terakhir():
         """
         df = pd.read_sql(query, conn)
         
-        # Mengambil nilai timestamp asli untuk informasi di UI tanggal badge terakhir
         max_timestamp = None
         if not df.empty:
             max_timestamp = df['tanggal_dibuat'].max()
-            # Drop kolom tanggal_dibuat agar tidak mengotori render visual tabel di Streamlit
             df = df.drop(columns=['tanggal_dibuat'])
         else:
             with conn.cursor() as cur:
@@ -586,7 +584,6 @@ def simpan_hasil_review_utama_db(data_input):
     """Menyimpan data mandiri khusus untuk tabel utama gabungan UI (Mendukung DataFrame/List)"""
     if data_input is None: return False
     
-    # Konversi DataFrame ke List of Tuples dan tangani nilai kosong (NaN -> None)
     if isinstance(data_input, pd.DataFrame):
         if data_input.empty: return False
         df_bersih = data_input.astype(object).where(pd.notnull(data_input), None)
@@ -615,11 +612,10 @@ def simpan_hasil_review_utama_db(data_input):
         if conn: conn.close()
 
 def ambil_hasil_review_utama_terakhir():
-    """🔥 SINKRON: Mengambil detail data review gabungan utama dari batch terakhir."""
+    """Mengambil detail data review gabungan utama dari batch terakhir."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
     try:
-        # 🛡️ PERBAIKAN: Alias kolom diubah menjadi Title Case agar cocok dengan Script UI
         query = """
             SELECT 
                 kategori_data AS "Kategori Data", 
@@ -650,81 +646,6 @@ def ambil_hasil_review_utama_terakhir():
     finally:
         conn.close()
 
-def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
-    """Menyimpan log metrik akurasi saat validasi berjalan menggunakan skema UPSERT."""
-    conn = dapatkan_koneksi_neon()
-    if not conn: 
-        return False
-    try:
-        with conn.cursor() as cur:
-            # 1. Pastikan tabel dibuat dengan constraint UNIQUE pada kolom 'kategori'
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS metrik_akurasi (
-                    id SERIAL PRIMARY KEY,
-                    kategori VARCHAR(50) UNIQUE, 
-                    total_proses INT, 
-                    total_temuan INT, 
-                    akurasi FLOAT, 
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            
-            # 2. Gunakan ON CONFLICT untuk memperbarui data jika kategori sudah ada (UPSERT)
-            query_upsert = """
-                INSERT INTO metrik_akurasi (kategori, total_proses, total_temuan, akurasi, created_at) 
-                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (kategori) 
-                DO UPDATE SET 
-                    total_proses = EXCLUDED.total_proses,
-                    total_temuan = EXCLUDED.total_temuan,
-                    akurasi = EXCLUDED.akurasi,
-                    created_at = CURRENT_TIMESTAMP;
-            """
-            
-            # Pastikan parameter kategori dipaksa menjadi lowercase agar konsisten saat dibaca di UI
-            cur.execute(query_upsert, (kategori.lower().strip(), total_proses, total_temuan, akurasi))
-            
-        conn.commit()
-        return True
-    except Exception as e:
-        if conn: 
-            conn.rollback()
-        # Anda bisa mencetak print(f"Error DB: {e}") di sini untuk mempermudah debugging jika diperlukan
-        return False
-    finally:
-        if conn: 
-            conn.close()
-
-
-def ambil_metrik_akurasi_terakhir():
-    """Mengambil persentase akurasi terakhir untuk ditampilkan di UI Kartu Skor."""
-    conn = dapatkan_koneksi_neon()
-    metrik_default = {'akurasi_penjangkauan': 100.0, 'akurasi_rujukan': 100.0}
-    ts_metrik = dt.datetime.now()
-    
-    if not conn: return metrik_default, ts_metrik
-    try:
-        with conn.cursor() as cur:
-            # Cek apakah tabel ada
-            cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'metrik_akurasi');")
-            tabel_ada = cur.fetchone()[0]
-            
-            if tabel_ada:
-                cur.execute("SELECT MAX(created_at) FROM metrik_akurasi")
-                max_ts = cur.fetchone()[0]
-                if max_ts:
-                    ts_metrik = max_ts
-                    cur.execute("SELECT kategori, akurasi FROM metrik_akurasi WHERE created_at = %s", (max_ts,))
-                    for row in cur.fetchall():
-                        kat = str(row[0]).lower()
-                        if 'penjangkauan' in kat: metrik_default['akurasi_penjangkauan'] = float(row[1])
-                        if 'rujukan' in kat: metrik_default['akurasi_rujukan'] = float(row[1])
-    except Exception:
-        pass # Jika eror, biarkan mengembalikan nilai 100.0 (Aman)
-    finally:
-        conn.close()
-        
-    return metrik_default, ts_metrik
 
 # ==============================================================================
 # KATEGORI 6: FUNGSI SINKRONISASI 3 TABEL & METRIK AKURASI BARU
@@ -739,9 +660,7 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
         with conn.cursor() as cur:
             tanggal_hari_ini = dt.datetime.now().date()
 
-            # -----------------------------------------------------------------
-            # 1. TABEL PENJANGKAUAN (Agregasi - 4 Kolom)
-            # -----------------------------------------------------------------
+            # 1. TABEL PENJANGKAUAN (Agregasi)
             if list_tabel_1:
                 list_1_lengkap = [(tanggal_hari_ini, row[0], row[1], row[2]) for row in list_tabel_1]
                 cur.executemany("""
@@ -750,9 +669,7 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
                     ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan) DO NOTHING;
                 """, list_1_lengkap)
 
-            # -----------------------------------------------------------------
-            # 2. TABEL RUJUKAN (Agregasi - 4 Kolom)
-            # -----------------------------------------------------------------
+            # 2. TABEL RUJUKAN (Agregasi)
             if list_tabel_2:
                 cur.executemany("""
                     INSERT INTO agregasi_hasil_review_rujukan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
@@ -760,32 +677,28 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
                     ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan) DO NOTHING;
                 """, list_tabel_2)
 
-            # -----------------------------------------------------------------
-            # 3. 🔥 TABEL UTAMA DETIL KLIEN (Master Data - 12 Kolom)
-            # -----------------------------------------------------------------
+            # 3. TABEL UTAMA DETIL KLIEN (Master Data - Fixed Typo 'justifikasi')
             if list_tabel_3:
-                # Menambahkan proteksi ON CONFLICT berdasarkan 5 parameter keunikan data Anda
                 cur.executemany("""
                     INSERT INTO hasil_review_data
-                    (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justification)
+                    (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (kategori_data, lembaga_ssr, tanggal, id_klien, indikator_kesalahan) 
                     DO NOTHING;
                 """, list_tabel_3)
 
-        # Jika semua berhasil lolos/di-skip tanpa error keras, commit transaksi secara permanen
         conn.commit()
         return True
 
     except Exception as e:
-        # Jika ada error selain duplikasi (misal koneksi putus), batalkan semua transaksi (rollback)
         if conn: conn.rollback()
-        import streamlit as st
         st.error(f"Gagal transaksi multi-tabel: {e}")
         return False
     finally:
         if conn: conn.close()
 
+
+# --- DIBAWAH INI ADALAH VERSI SINKRON UNTUK AKURASI (Menggunakan tabel akurasi_review_data) ---
 
 def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
     """Menyimpan atau memperbarui metrik ke Neon secara otomatis (UPSERT)."""
@@ -794,33 +707,41 @@ def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
         return False
     try:
         with conn.cursor() as cur:
-            # Menggunakan ON CONFLICT UPDATE untuk memperbarui data jika metrik sama persis
             cur.execute("""
-                INSERT INTO akurasi_review_data (
-                    kategori, 
-                    total_data_diproses, 
-                    total_baris_temuan, 
-                    tingkat_akurasi
-                ) 
+                CREATE TABLE IF NOT EXISTS akurasi_review_data (
+                    id SERIAL PRIMARY KEY,
+                    kategori VARCHAR(50), 
+                    total_data_diproses INT, 
+                    total_baris_temuan INT, 
+                    tingkat_akurasi FLOAT, 
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT unique_kategori_metrik UNIQUE (kategori)
+                );
+            """)
+            
+            cur.execute("""
+                INSERT INTO akurasi_review_data (kategori, total_data_diproses, total_baris_temuan, tingkat_akurasi) 
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT ON CONSTRAINT unique_kategori_metrik 
                 DO UPDATE SET 
+                    total_data_diproses = EXCLUDED.total_data_diproses,
+                    total_baris_temuan = EXCLUDED.total_baris_temuan,
                     tingkat_akurasi = EXCLUDED.tingkat_akurasi,
                     created_at = CURRENT_TIMESTAMP;
-            """, (kategori, total_proses, total_temuan, akurasi))
+            """, (kategori.lower().strip(), total_proses, total_temuan, akurasi))
             
         conn.commit()
         return True
     except Exception as e:
-        conn.rollback()
-        raise e
+        if conn: conn.rollback()
+        st.error(f"Gagal simpan metrik akurasi: {e}")
+        return False
     finally:
-        conn.close()
+        if conn: conn.close()
 
 def ambil_metrik_akurasi_terakhir():
     """Mengambil data metrik terakhir untuk UI Kartu Skor dari Neon."""
     conn = dapatkan_koneksi_neon()
-    # Nilai default jika tabel kosong atau database putus
     metrik_default = {
         'akurasi_penjangkauan': 100.0, 'temuan_penjangkauan': 0, 'total_pjj': 0,
         'akurasi_rujukan': 100.0, 'temuan_rujukan': 0, 'total_rjk': 0
@@ -833,7 +754,6 @@ def ambil_metrik_akurasi_terakhir():
         with conn.cursor() as cur:
             cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'akurasi_review_data');")
             if cur.fetchone()[0]:
-                # Mengambil kolom yang ada secara eksplisit
                 cur.execute("""
                     SELECT kategori, total_data_diproses, total_baris_temuan, tingkat_akurasi, created_at 
                     FROM akurasi_review_data 
@@ -842,7 +762,7 @@ def ambil_metrik_akurasi_terakhir():
                 """)
                 rows = cur.fetchall()
                 if rows:
-                    ts_metrik = rows[0][4]  # Indeks ke-4 adalah created_at
+                    ts_metrik = rows[0][4]
                     for row in rows:
                         kat = str(row[0]).lower()
                         if 'penjangkauan' in kat:
@@ -853,10 +773,10 @@ def ambil_metrik_akurasi_terakhir():
                             metrik_default['total_rjk'] = int(row[1])
                             metrik_default['temuan_rujukan'] = int(row[2])
                             metrik_default['akurasi_rujukan'] = float(row[3])
-    except Exception:
-        pass
+    except Exception as e:
+        st.error(f"Gagal mengambil metrik akurasi: {e}")
     finally:
-        conn.close()
+        if conn: conn.close()
         
     return metrik_default, ts_metrik
 
