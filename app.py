@@ -683,7 +683,8 @@ def jalankan_review_data(
     set_nik_reaktif=None, 
     set_ssr_id_reaktif=None, 
     set_prep_valid=None,
-    df_log_review=None  # 🔥 TAMBAHAN: Menerima data log_hasil_review_data dari Pre-Processing
+    df_log_review=None,  # Menerima data log_hasil_review_data dari Pre-Processing
+    role_reviewer='SR'   # Penyesuaian Role Reviewer agar sinkron dengan database
 ):
     # Inisialisasi fallback pengaman Cross-Check Variables
     if set_ssr_id_penjangkauan is None: set_ssr_id_penjangkauan = set()
@@ -696,7 +697,7 @@ def jalankan_review_data(
     
     df = df_asli.copy()
 
-    # 🎯 TAMBAHAN: Penyeragam Tanggal agar format Excel (DD/MM/YYYY) sinkron dengan Database (YYYY-MM-DD)
+    # Penyeragam Tanggal agar format Excel (DD/MM/YYYY) sinkron dengan Database (YYYY-MM-DD)
     def normalisasi_tanggal(tgl_str):
         tgl_str = str(tgl_str).strip().split(' ')[0]
         if not tgl_str or tgl_str.lower() == 'none' or tgl_str == 'nan': return ""
@@ -748,13 +749,13 @@ def jalankan_review_data(
         if len(df) > 0 and ('dd/mm/yyyy' in str(df.iloc[0].values).lower() or 'laki-laki' in str(df.iloc[0].values).lower()):
             start_row_idx = 1
             
-    # 🔥 DETEKSI CERDAS: Mengecek substring, bukan exact match
+    # DETEKSI CERDAS: Mengecek substring, bukan exact match
     col_upper_all = [str(c).upper() for c in df.columns]
     is_file_rujukan = any(any(k in c for c in col_upper_all) for k in ['HASIL TES HIV', 'NAMA LAYANAN', 'METODE CBS'])
     
     v_kategori = "Rujukan" if is_file_rujukan else "Penjangkauan"
-    tahun_sekarang = datetime.now().year
-    hari_ini = pd.Timestamp(datetime.now().date())
+    tahun_sekarang = dt.datetime.now().year
+    hari_ini = pd.Timestamp(dt.datetime.now().date())
 
     # PENGAMAN REGEX MEDSOS
     keywords_aktif = st.session_state.get('medsoc_keywords', []) if 'st' in globals() else []
@@ -763,28 +764,32 @@ def jalankan_review_data(
     else:
         pattern_medsos_dinamis = r'\b(TIDAK_ADA_MEDSOS_TERDAFTAR_DI_SISTEM)\b'
 
-    # Pengaman Database terintegrasi
+    # Pengaman Database terintegrasi (Disesuaikan agar menerima parameter role_reviewer jika didukung oleh fungsinya)
     try:
-        dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
+        # Jika fungsi hitung_dan_ambil_log_db sudah Anda update untuk menerima role, teruskan parameter ini
+        dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db(role_reviewer=role_reviewer)
     except Exception:
-        dict_revisi, dict_justifikasi = {}, {}
+        try:
+            dict_revisi, dict_justifikasi = hitung_dan_ambil_log_db()
+        except Exception:
+            dict_revisi, dict_justifikasi = {}, {}
 
-    # 🔥 TAMBAHAN: Ekstrak log historis dari df_log_review jika dilempar dari Pre-Processing
+    # Ekstrak log historis dari df_log_review jika dilempar dari Pre-Processing
     set_id_berulang_log = set()
     if df_log_review is not None and not df_log_review.empty:
-        # Gunakan nama kolom dari database: TANGGAL, KATEGORI DATA, dll.
         if 'TANGGAL' in df_log_review.columns:
             df_log_review['Tanggal_Clean'] = df_log_review['TANGGAL'].astype(str).str.split(' ').str[0].str.strip()
         else:
             df_log_review['Tanggal_Clean'] = ""
 
-        # Menghasilkan key format: Kategori_SSR_Tanggal_IDKlien_Indikator
+        # Menghasilkan key format unik yang disinkronkan dengan database dan menyertakan ROLE
         df_log_review['key_log'] = (
             df_log_review['KATEGORI DATA'].astype(str).str.strip().str.upper() + "_" +
             df_log_review['LEMBAGA SSR'].astype(str).str.strip().str.upper() + "_" +
             df_log_review['Tanggal_Clean'] + "_" +
             df_log_review['ID KLIEN'].astype(str).str.strip().str.upper() + "_" +
-            df_log_review['INDIKATOR KESALAHAN DATA'].astype(str).str.strip().str.upper()
+            df_log_review['INDIKATOR KESALAHAN DATA'].astype(str).str.strip().str.upper() + "_" +
+            str(role_reviewer).strip().upper()
         )
         set_id_berulang_log = set(df_log_review['key_log'].unique())
 
@@ -818,7 +823,7 @@ def jalankan_review_data(
                     if '5' in layanans or '6' in layanans: dict_pernah_cbs[key_klien] = True
                 if col_rujukan_ref:
                     rujukans = str(r[col_rujukan_ref[0]]).replace("'", "").replace(" ", "").split(',')
-                    if '5' in rujukans: dict_pernah_prep_rujukan[key_klien] = True
+                    if '5' in rujakans: dict_pernah_prep_rujukan[key_klien] = True
 
     # ==========================================================
     # DETEKSI KOLOM DINAMIS
@@ -896,11 +901,8 @@ def jalankan_review_data(
 
     df_pj_aktif = locals().get('df_penjangkauan', st.session_state.get('df_penjangkauan_aktif', None) if 'st' in globals() else None)
 
-    # ==============================================================================
-    # PERUBAHAN DISINI: VALIDASI MURNI FILE-TO-FILE JIKA RUJUKAN DI-UPLOAD
-    # ==============================================================================
+    # VALIDASI MURNI FILE-TO-FILE JIKA RUJUKAN DI-UPLOAD
     if is_file_rujukan:
-        # 🌟 RESET TOTAL: Kosongkan database historis, buat penampung baru murni untuk file saat ini
         set_ssr_id_penjangkauan = set() 
 
         if df_pj_aktif is not None and not df_pj_aktif.empty:
@@ -914,7 +916,6 @@ def jalankan_review_data(
                 id_pj = str(r_pj.get(col_id_pj, '')).replace("'", "").strip().upper() 
                 kunci_pj = f"{ssr_pj}_{id_pj}"
                 
-                # 🔥 Masukkan kombinasi SSR + ID Klien dari file penjangkauan baru ke set validasi rujukan
                 if id_pj and id_pj not in ['NAN', '', '-', 'NONE'] and ssr_pj and ssr_pj not in ['NAN', '']:
                     set_ssr_id_penjangkauan.add(kunci_pj)
                            
@@ -927,7 +928,7 @@ def jalankan_review_data(
                 if '12' in list_info_pj: info_cbs_di_penjangkauan_per_klien[kunci_pj] = True
                 if '1' in list_info_pj and '2' in list_ruj_pj: edukasi_vct_di_penjangkauan_per_klien[kunci_pj] = True
                 if '10' in list_info_pj and '5' in list_ruj_pj: edukasi_prep_di_penjangkauan_per_klien[kunci_pj] = True
-            # Debug info (Penting untuk melihat apakah ID terbaca atau tidak)
+            
             if 'st' in globals():
                 st.write(f"✅ Sistem memproses {len(set_ssr_id_penjangkauan)} unik ID dari file Penjangkauan untuk validasi Rujukan.")
         else:
@@ -999,7 +1000,7 @@ def jalankan_review_data(
             if v_nama_layanan.lower() in ['nan', 'none', '']: v_nama_layanan = '-'
         else: v_nama_layanan = '-'
 
-        rujakan_clean_text = rujakan.replace("'", "").replace(".0", "").strip()
+        rujakan_clean_text = rujukan.replace("'", "").replace(".0", "").strip()
         if '.' in rujakan_clean_text and ',' not in rujakan_clean_text:
             rujakan_clean_text = rujakan_clean_text.replace('.', ',')
         
@@ -1013,7 +1014,7 @@ def jalankan_review_data(
             'row': row, 'id_clean': id_clean, 'nik_clean': nik_clean, 'v_ssr': v_ssr, 'v_tanggal': v_tanggal,
             'v_petugas': v_petugas, 'v_kota': v_kota, 'v_tipe_sasaran': v_tipe_sasaran, 'umur': umur, 'jk': jk,
             'jns_kontak': jns_kontak, 'jns_kegiatan': jns_kegiatan, 'lokasi': lokasi, 'info_diberikan': info_diberikan,
-            'rujukan': rujakan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
+            'rujukan': rujukan, 'no_hp': no_hp, 'vc1': vc1, 'log_kie': log_kie, 'log_kon': log_kon, 'log_pel': log_pel,
             'log_jar': log_jar, 'log_swab': log_swab, 'jarum_kembali': jarum_kembali, 'tgl_p': tgl_p, 'hari_ini': hari_ini,
             'tahun_sekarang': tahun_sekarang, 'is_vo': (jns_kontak == '3'), 'is_pwid': (v_tipe_sasaran in ['1401', '1403']),
             'id_counts': local_id_counts, 'pernah_dapat_info_hiv': pernah_dapat_info_hiv, 'pernah_dapat_rujuk_tes': pernah_dapat_rujuk_tes,
@@ -1038,21 +1039,20 @@ def jalankan_review_data(
             nama_ind = rule.get("nama", "Unknown Rule")
             try:
                 if rule["periksa"](context_data):
-                    # 🔥 1. Format Key 5 Parameter Konsisten (Menggunakan Normalisasi Tanggal)
                     v_tanggal_clean = normalisasi_tanggal(v_tanggal)
-                    key_db = f"{v_kategori.strip().upper()}_{v_ssr.strip().upper()}_{v_tanggal_clean}_{id_clean.strip().upper()}_{nama_ind.strip().upper()}"
                     
-                    # 🔥 2. Cek apakah kombinasi data ini sudah ada di Database Log Neon
-                    ada_di_log_db = (key_db in dict_justifikasi) or (key_db in dict_revisi) or (key_db in set_id_berulang_log)
+                    # 🔥 PERBAIKAN KEY: Menyertakan role_reviewer di bagian akhir key_db
+                    key_db = f"{v_kategori.strip().upper()}_{v_ssr.strip().upper()}_{v_tanggal_clean}_{id_clean.strip().upper()}_{nama_ind.strip().upper()}_{str(role_reviewer).strip().upper()}"
+                    
+                    ada_di_log_db = (key_db in dict_justification) if 'dict_justification' in locals() else False
+                    if not ada_di_log_db:
+                        ada_di_log_db = (key_db in dict_justifikasi) or (key_db in dict_revisi) or (key_db in set_id_berulang_log)
                     
                     if ada_di_log_db:
                         if "(konfirmasi)" in nama_ind.lower():
-                            continue # Abaikan indikator konfirmasi
+                            continue 
                         else:
-                            # 🎯 LOGIKA FRAUD DETECTION DI AKAR VALIDASI
-                            # Cek status boolean di DB: True = Fraud/Bohong, False = Memang belum direvisi
                             is_rev_bool = dict_revisi.get(key_db, False)
-                            
                             if is_rev_bool:
                                 status_validasi = "⚠️ Kesalahan Berulang (Revisi sebelumnya tidak valid!)"
                             else:
@@ -1065,7 +1065,6 @@ def jalankan_review_data(
                         checked_state = False
                         justif_val = ""
     
-                    # 3. Masukkan ke dalam daftar hanya jika tidak terkena perintah 'continue' di atas
                     list_kesalahan.append({
                         "Pilih": checked_state,
                         "Kategori Data": v_kategori,
@@ -1096,6 +1095,10 @@ if tombol_proses:
         st.error("⚠️ Silakan unggah berkas Raw Data terlebih dahulu di sidebar!")
     else:
         with st.spinner("Sedang memproses validasi data & sinkronisasi database terintegrasi..."):
+            
+            # 🔥 AMBIL IDENTITAS LOGIN USER SAAT INI UNTUK PEMISAHAN DATA SR vs SSR
+            role_aktif = st.session_state.get('peran_user', 'SR')
+            lembaga_aktif = st.session_state.get('lembaga_user', None)
             
             # 🛠️ Tangkap uploader referensi dengan aman
             file_referensi_aman = st.session_state.get('uploader_master_tunggal', None)
@@ -1129,14 +1132,14 @@ if tombol_proses:
                 set_error_historis = pd.DataFrame()
 
             # =========================================================================
-            # 🔥 PERBAIKAN LOOP 1: BACA FILE 1 KALI SAJA UNTUK MENCEGAH BUG EOF
+            # PERBAIKAN LOOP 1: BACA FILE 1 KALI SAJA UNTUK MENCEGAH BUG EOF
             # =========================================================================
             list_df_penj = []
             daftar_data_file = [] # Menyimpan tuple (nama_file, df_target, is_rujukan)
 
             for f in files_review:
                 try:
-                    f.seek(0) # 🔥 KUNCI PERBAIKAN: Kembalikan kursor file ke baris pertama
+                    f.seek(0) # Kembalikan kursor file ke baris pertama
                     temp_df = pd.read_csv(f, low_memory=False) if f.name.endswith('.csv') else pd.read_excel(f)
                     col_upper = [str(c).upper() for c in temp_df.columns]
                     
@@ -1164,7 +1167,7 @@ if tombol_proses:
                 st.session_state['df_penjangkauan_aktif'] = pd.DataFrame()
 
             # =========================================================================
-            # 🔥 PERBAIKAN LOOP 2: EKSEKUSI TANPA MEMBACA ULANG EXCEL
+            # PERBAIKAN LOOP 2: EKSEKUSI TANPA MEMBACA ULANG EXCEL
             # =========================================================================
             for nama_file, df_target, is_rujukan in daftar_data_file:
                 try:
@@ -1173,12 +1176,14 @@ if tombol_proses:
                     if is_rujukan: total_proses_rjk += len(df_target)
                     else: total_proses_pjj += len(df_target)
                     
+                    # 🔥 PERUBAHAN: Sisipkan role_reviewer ke dalam engine validasi
                     df_res = jalankan_review_data(
                         df_target, df_ref, nama_file=nama_file,
                         set_ssr_id_penjangkauan=set_penjangkauan,
                         set_nik_reaktif=set_nik_rkt, set_ssr_id_reaktif=set_ssr_id_rkt, 
                         set_prep_valid=set_prep_vld,
-                        df_log_review=set_error_historis
+                        df_log_review=set_error_historis,
+                        role_reviewer=role_aktif
                     )
                     
                     if not df_res.empty:
@@ -1253,10 +1258,11 @@ if tombol_proses:
 
             try:
                 from database import simpan_metrik_akurasi_db
+                # 🔥 PERUBAHAN: Sisipkan role_reviewer dan lembaga_ssr
                 if total_proses_pjj > 0 or total_temuan_pjj > 0:
-                    simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj)
+                    simpan_metrik_akurasi_db('penjangkauan', total_proses_pjj, total_temuan_pjj, akurasi_pjj, role_reviewer=role_aktif, lembaga_ssr=lembaga_aktif)
                 if total_proses_rjk > 0 or total_temuan_rjk > 0:
-                    simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk)
+                    simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk, role_reviewer=role_aktif, lembaga_ssr=lembaga_aktif)
                     
                 st.toast("💾 Sinkronisasi metrik akurasi ke Database berhasil!", icon="✅")
                 st.session_state['db_tercatat_batch'] = True
@@ -1288,28 +1294,28 @@ if tombol_proses:
                 
                 df_bawah['NAMA LAYANAN'] = df_bawah.apply(sesuaikan_nama_layanan, axis=1)
 
-                # FILTER DUPLIKAT DARI DATABASE NEON
+                # 🔥 PERUBAHAN: FILTER DUPLIKAT DARI DATABASE NEON DENGAN MEYEKAN KOLOM ROLE
                 existing_master_keys = set()
                 try:
                     from database import dapatkan_koneksi_neon
                     conn = dapatkan_koneksi_neon()
                     if conn:
                         with conn.cursor() as cur:
-                            cur.execute("SELECT LOWER(kategori_data), LOWER(lembaga_ssr), LOWER(tanggal), LOWER(id_klien), LOWER(indikator_kesalahan) FROM hasil_review_data;")
+                            # Menambahkan COALESCE role_reviewer agar data lama tetap dikenali
+                            cur.execute("SELECT LOWER(kategori_data), LOWER(lembaga_ssr), LOWER(tanggal), LOWER(id_klien), LOWER(indikator_kesalahan), LOWER(COALESCE(role_reviewer, 'SR')) FROM hasil_review_data;")
                             for r in cur.fetchall():
-                                existing_master_keys.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip(), str(r[4]).strip()))
+                                existing_master_keys.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip(), str(r[4]).strip(), str(r[5]).strip()))
                         conn.close()
                 except Exception: pass
 
                 # 1. BUAT SALINAN FULL UNTUK TAMPILAN UI & AGREGASI
                 df_full = df_bawah.copy()
                 
-                # 🔥 FIX: ISI DATA KOSONG AGAR GROUPBY TIDAK MENGABAIKAN BARIS
                 df_full['LEMBAGA SSR'] = df_full['LEMBAGA SSR'].fillna('-').astype(str).str.strip()
                 df_full['INDIKATOR KESALAHAN DATA'] = df_full['INDIKATOR KESALAHAN DATA'].fillna('-').astype(str).str.strip()
                 df_full['KATEGORI DATA'] = df_full['KATEGORI DATA'].fillna('-').astype(str).str.strip()
                 
-                # 2. PROSES FILTER HANYA UNTUK DATA YANG AKAN MASUK DB (AGAR TIDAK DUPLIKAT)
+                # 2. PROSES FILTER HANYA UNTUK DATA YANG AKAN MASUK DB
                 indices_to_drop = []
                 for idx, row in df_bawah.iterrows():
                     kat = str(row.get('KATEGORI DATA', '')).strip().lower()
@@ -1317,13 +1323,16 @@ if tombol_proses:
                     tgl = str(row.get('TANGGAL', '')).strip().lower() 
                     id_klien = str(row.get('ID KLIEN', '')).strip().lower()
                     ind = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
-                    if (kat, ssr, tgl, id_klien, ind) in existing_master_keys:
+                    role_key = role_aktif.strip().lower()
+                    
+                    # Cek 6 kombinasi parameter (termasuk Role)
+                    if (kat, ssr, tgl, id_klien, ind, role_key) in existing_master_keys:
                         indices_to_drop.append(idx)
                 
                 if indices_to_drop:
                     df_bawah = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
                 
-                # 3. KIRIM DF_FULL KE UI (MENGANDUNG 50 BARIS LENGKAP)
+                # 3. KIRIM DF_FULL KE UI (MENGANDUNG SEMUA BARIS)
                 st.session_state['df_tabel_bawah'] = df_full
                 
                 # 4. SINKRONISASI KE 3 TABEL DETAIL AGREGASI
@@ -1364,9 +1373,6 @@ if tombol_proses:
                         for _, row_all in df_bawah.iterrows():
                             pesan_validasi = str(row_all.get('VALIDASI HASIL REVIEW', '-')).strip()
                             
-                            # 🚨 PERBAIKAN: Logika filter 'continue' di sini dihapus total 
-                            # agar seluruh baris bermasalah (termasuk yang berulang) tetap dimasukkan ke list_insert_tabel_3.
-                            
                             list_insert_tabel_3.append((
                                 str(row_all.get('KATEGORI DATA', '-')), 
                                 str(row_all.get('LEMBAGA SSR', '-')),
@@ -1382,7 +1388,8 @@ if tombol_proses:
                                 str(row_all.get('JUSTIFIKASI', '-'))
                             ))
                         
-                        sukses = simpan_paket_validasi_ke_tiga_tabel(list_insert_tabel_1, list_insert_tabel_2, list_insert_tabel_3)
+                        # 🔥 PERUBAHAN: Teruskan peran (role_reviewer) ke fungsi simpan
+                        sukses = simpan_paket_validasi_ke_tiga_tabel(list_insert_tabel_1, list_insert_tabel_2, list_insert_tabel_3, role_reviewer=role_aktif)
                         if sukses:
                             st.toast("💾 Sinkronisasi 3 tabel Agregasi dan detil per baris telah berhasil!", icon="✅")
                         else:
@@ -1401,12 +1408,11 @@ if tombol_proses:
                     ambil_set_error_belum_direvisi  
                 )
                 
-                # 1. Tarik data live dari database utama
-                df_pjj_db, ts_pjj = ambil_agregasi_penjangkauan_terakhir()
-                df_rjk_db, ts_rjk = ambil_agregasi_rujukan_terakhir()
-                df_utama_db, ts_utama = ambil_hasil_review_utama_terakhir()
+                # 🔥 PERUBAHAN: Tarik data dari database HANYA untuk peran aktif tersebut
+                df_pjj_db, ts_pjj = ambil_agregasi_penjangkauan_terakhir(role_reviewer=role_aktif)
+                df_rjk_db, ts_rjk = ambil_agregasi_rujukan_terakhir(role_reviewer=role_aktif)
+                df_utama_db, ts_utama = ambil_hasil_review_utama_terakhir(role_reviewer=role_aktif)
                 
-                # 🔥 PERBAIKAN 1: Panggil data log historis secara segar di sini agar tidak kosong
                 set_error_historis = ambil_set_error_belum_direvisi()
                 
                 st.session_state['df_tabel_atas'] = df_pjj_db 
@@ -1417,7 +1423,6 @@ if tombol_proses:
                 # 💡 LOGIKA DETEKSI KEPATUHAN REVISI (REPEAT ERROR DETECTION)
                 if df_utama_db is not None and not df_utama_db.empty and set_error_historis is not None and not set_error_historis.empty:
                     
-                    # Fungsi pembantu untuk menyeragamkan format tanggal menjadi YYYY-MM-DD
                     def normalisasi_tanggal(tgl_str):
                         tgl_str = str(tgl_str).strip().split(' ')[0] 
                         if not tgl_str or tgl_str.lower() == 'none' or tgl_str == 'nan':
@@ -1426,22 +1431,17 @@ if tombol_proses:
                             if '/' in tgl_str:
                                 parts = tgl_str.split('/')
                                 if len(parts) == 3:
-                                    if len(parts[2]) == 4: 
-                                        return f"{parts[2]}-{parts[1]}-{parts[0]}"
-                                    elif len(parts[0]) == 4: 
-                                        return f"{parts[0]}-{parts[1]}-{parts[2]}"
+                                    if len(parts[2]) == 4: return f"{parts[2]}-{parts[1]}-{parts[0]}"
+                                    elif len(parts[0]) == 4: return f"{parts[0]}-{parts[1]}-{parts[2]}"
                             elif '-' in tgl_str:
                                 parts = tgl_str.split('-')
-                                if len(parts) == 3 and len(parts[0]) == 4:
-                                    return tgl_str
+                                if len(parts) == 3 and len(parts[0]) == 4: return tgl_str
                         except:
                             pass
                         return tgl_str.upper()
             
-                    # 🎯 Dictionary untuk riwayat revisi
                     kamus_riwayat_revisi = {}
                     
-                    # 2. RAKIT DAFTAR KUNCI DARI LOG DATABASE HISTORIS
                     for _, row_h in set_error_historis.iterrows():
                         def get_val(row, alternatives):
                             for alt in alternatives:
@@ -1466,18 +1466,15 @@ if tombol_proses:
                         
                         if id_h and ind_h:
                             if kunci_gabung in kamus_riwayat_revisi:
-                                if is_rev_bool:
-                                    kamus_riwayat_revisi[kunci_gabung] = True
+                                if is_rev_bool: kamus_riwayat_revisi[kunci_gabung] = True
                             else:
                                 kamus_riwayat_revisi[kunci_gabung] = is_rev_bool
                     
-                    # 3. MATCHING & SUNTIK STEMPEL KE LIVE DATA UI
                     df_utama_db.columns = df_utama_db.columns.str.upper()
                     
                     for idx_db, row_db in df_utama_db.iterrows():
                         v_ind = str(row_db.get('INDIKATOR KESALAHAN DATA', '')).strip().upper()
-                        if "(KONFIRMASI)" in v_ind:
-                            continue
+                        if "(KONFIRMASI)" in v_ind: continue
                             
                         v_kat = str(row_db.get('KATEGORI DATA', '')).strip().upper()
                         v_ssr = str(row_db.get('LEMBAGA SSR', '')).strip().upper()
@@ -1488,7 +1485,6 @@ if tombol_proses:
                         
                         if kunci_cek_db in kamus_riwayat_revisi:
                             was_revisied = kamus_riwayat_revisi[kunci_cek_db]
-                            
                             if was_revisied == True:
                                 pesan = "⚠️ Kesalahan Berulang (Klaim revisi sebelumnya tidak valid!)"
                             else:
@@ -1497,13 +1493,11 @@ if tombol_proses:
                             df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = pesan
                             df_utama_db.at[idx_db, 'Validasi Hasil Review'] = pesan
             
-                # 🔥 PERBAIKAN 2: FILTER & HILANGKAN BARIS YANG SUDAH DICEKLIS DARI TAMPILAN UI
                 if 'indeks_master_terpilih' in st.session_state and st.session_state['indeks_master_terpilih']:
                     idx_diapus = st.session_state['indeks_master_terpilih']
                     df_utama_db = df_utama_db.drop(index=idx_diapus, errors='ignore').reset_index(drop=True)
                     st.session_state['indeks_master_terpilih'] = []
             
-                # Masukkan data bersih ke session state utama tampilan grid UI
                 st.session_state['df_tabel_bawah'] = df_utama_db
                 st.session_state['ts_terakhir_utama'] = ts_utama
                 st.session_state['tanggal_terakhir_review'] = ts_pjj
