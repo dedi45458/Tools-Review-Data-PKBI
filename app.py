@@ -592,20 +592,17 @@ with st.sidebar:
         st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
         st.markdown("""<div style="margin-top: 35px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>""", unsafe_allow_html=True)
         tombol_proses = st.button("🚀 Jalankan Validasi", type="primary", use_container_width=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("---")
             
-            st.markdown("### ⚙️ Manajemen Akhir Periode")
-            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
-            
-            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-                with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
-                    if jalankan_agregasi_tren():
-                        st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
-                        st.balloons()
-                    else:
-                        st.error("Gagal memproses arsip ke database.")
+        st.markdown("### ⚙️ Manajemen Akhir Periode")
+        st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
+        
+        if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
+            with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
+                if jalankan_agregasi_tren():
+                    st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
+                    st.balloons()
+                else:
+                    st.error("Gagal memproses arsip ke database.")
 
     # =================================================================
     # 2. MENU PENGATURAN KEYWORD MEDSOS SELECTOR CONTROL
