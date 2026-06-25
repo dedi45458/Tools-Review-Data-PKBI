@@ -1507,3 +1507,418 @@ if tombol_proses:
             import time
             time.sleep(1.2) 
             st.rerun()
+
+# ==========================================================================
+# 5. RENDER LAYOUT UTAMA: DASHBOARD REVIEW DATA (VERSI TERBARU FULL INTEGRASI)
+# ==========================================================================
+if menu_pilihan == "🎯 Dashboard Review Data": [cite: 190]
+    
+    df_historis = st.session_state.get('df_tabel_atas', pd.DataFrame()) [cite: 190]
+    peran = st.session_state.get('peran_user', 'SSR')  # Mengambil role dari session state hasil absensi popup
+    
+    if st.session_state.get('proses_selesai', False) or (df_historis is not None and not df_historis.empty): [cite: 190]
+        
+        # Ambil data statistik ringkasan proses dari session state 
+        tot_data_penj = st.session_state.get('total_entri_penjangkauan', 0) [cite: 190]
+        tot_data_ruj = st.session_state.get('total_entri_rujukan', 0) [cite: 190]
+        tot_err_penj = st.session_state.get('temuan_penjangkauan', 0) [cite: 190]
+        tot_err_ruj = st.session_state.get('temuan_rujukan', 0) [cite: 190]
+        
+        df_semua_error = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame())) [cite: 190]
+        
+        # Sinkronisasi parameter perhitungan awal jika bernilai kosong [cite: 191]
+        if (tot_err_penj == 0 and tot_err_ruj == 0) and (df_semua_error is not None and not df_semua_error.empty): [cite: 190, 191]
+            df_semua_error = df_semua_error.copy() [cite: 191]
+            rename_dict_awal = {} [cite: 191]
+            for col in df_semua_error.columns: [cite: 191]
+                c_clean = str(col).strip().lower() [cite: 191]
+                if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean: [cite: 191]
+                    rename_dict_awal[col] = "INDIKATOR KESALAHAN DATA" [cite: 191]
+                elif "lembaga" in c_clean or "ssr" in c_clean: [cite: 191]
+                    rename_dict_awal[col] = "LEMBAGA SSR" [cite: 191]
+                elif "tanggal" in c_clean: [cite: 191]
+                    rename_dict_awal[col] = "TANGGAL" [cite: 191]
+                elif "id klien" in c_clean or "id_klien" in c_clean: [cite: 191]
+                    rename_dict_awal[col] = "ID KLIEN" [cite: 191]
+            
+            if rename_dict_awal: [cite: 191]
+                df_semua_error = df_semua_error.rename(columns=rename_dict_awal) [cite: 191]
+            
+            try: [cite: 191]
+                ind_rujukan = [str(r['nama']).strip().upper() for r in ATURAN_VALIDASI_RUJUKAN] [cite: 191]
+            except NameError: [cite: 191, 192]
+                ind_rujukan = [] [cite: 192]
+                
+            df_semua_error.columns = [str(col).strip().upper() for col in df_semua_error.columns] [cite: 192]
+            mask_rujukan = df_semua_error['INDIKATOR KESALAHAN DATA'].str.strip().str.upper().isin(ind_rujukan) [cite: 192]
+            
+            df_err_penj_asli = df_semua_error[~mask_rujukan] [cite: 192]
+            df_err_ruj_asli = df_semua_error[mask_rujukan] [cite: 192]
+            tot_err_penj = len(df_err_penj_asli) [cite: 192]
+            tot_err_ruj = len(df_err_ruj_asli) [cite: 192]
+
+        tot_err_penj = st.session_state.get('temuan_penjangkauan', tot_err_penj) [cite: 192]
+        tot_err_ruj = st.session_state.get('temuan_rujukan', tot_err_ruj) [cite: 192]
+        
+        akurasi_penj = st.session_state.get('akurasi_penjangkauan', (100.0 if tot_data_penj == 0 else max(0.0, (tot_data_penj - tot_err_penj) / tot_data_penj * 100))) [cite: 192, 193]
+        akurasi_ruj = st.session_state.get('akurasi_rujukan', (100.0 if tot_data_ruj == 0 else max(0.0, (tot_data_ruj - tot_err_ruj) / tot_data_ruj * 100))) [cite: 193]
+        
+        teks_akurasi_penj = f"{akurasi_penj:.2f}%" if tot_data_penj > 0 else "100.00%" [cite: 193]
+        teks_akurasi_ruj = f"{akurasi_ruj:.2f}%" if tot_data_ruj > 0 else "100.00%" [cite: 193]
+
+        # --- RENDER UI KARTU SKOR MENGGUNAKAN GLASSMORPHISM ---
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True) [cite: 193]
+        tanggal_hari_ini = datetime.now(ZoneInfo('Asia/Jakarta')).strftime('%d %B %Y') [cite: 193]
+        st.markdown(f"""
+            <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'> [cite: 193, 194]
+                📅 <b>Executive Review Dashboard</b> | Tanggal Sesi: {tanggal_hari_ini} | Akses: <span style='color:#38bdf8; font-weight:700;'>{peran}</span>
+            </p> [cite: 194]
+        """, unsafe_allow_html=True) [cite: 194]
+        
+        c1, c2, c3 = st.columns(3) [cite: 194]
+        with c1: st.metric(label="Total Data Penjangkauan", value=f"{tot_data_penj:,}") [cite: 194]
+        with c2: st.metric(label="Temuan Penjangkauan", value=f"{tot_err_penj:,}", delta="Perlu Perhatian", delta_color="inverse") [cite: 194]
+        with c3: st.metric(label="Akurasi Penjangkauan", value=teks_akurasi_penj) [cite: 194]
+        
+        st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True) [cite: 194]
+        
+        c4, c5, c6 = st.columns(3) [cite: 194]
+        with c4: st.metric(label="Total Data Rujukan", value=f"{tot_data_ruj:,}") [cite: 194]
+        with c5: st.metric(label="Temuan Rujukan", value=f"{tot_err_ruj:,}", delta="Perlu Perhatian", delta_color="inverse") [cite: 194]
+        with c6: st.metric(label="Akurasi Rujukan", value=teks_akurasi_ruj) [cite: 194]
+        st.markdown('</div>', unsafe_allow_html=True) [cite: 195]
+        
+        # Style Kustom Ukuran Huruf Tab [cite: 195]
+        st.markdown("""
+            <style>
+            .stTabs [data-baseweb="tab"] p { font-size: 1.2rem !important; font-weight: 600 !important; color: #ffffff !important; } [cite: 195, 196]
+            .stTabs [data-baseweb="tab-list"] { gap: 8px; margin-bottom: 10px; } [cite: 196]
+            </style>
+        """, unsafe_allow_html=True) [cite: 197]
+        
+        # =========================================================================
+        # 🟢 DEKLARASI 3 TAB UTAMA SESUAI STRUKTUR LAYOUT BARU
+        # =========================================================================
+        tab1, tab2, tab3 = st.tabs(["📊 Tab 1: Validasi SR", "📋 Tab 2: Validasi SSR", "🕸️ Tab 3: Histori & Grafik"]) [cite: 197]
+
+        # -------------------------------------------------------------------------
+        # TAB 1: VALIDASI TINGKAT SR / ONE-TABLE INTEGRATED EDITOR
+        # -------------------------------------------------------------------------
+        with tab1:
+            st.subheader("📊 Hasil Review Validasi Data Utama (Tingkat SR)") [cite: 210]
+            
+            if peran == "SSR":
+                st.info("💡 **Mode Terproteksi SSR**: Anda hanya diizinkan memberikan centang `Pilih` dan mengedit kolom `Justifikasi` pada baris konfirmasi.") [cite: 210, 217]
+            else:
+                st.success("🔓 **Mode Akses Penuh SR**: Anda berwenang mengelola seluruh instrumen instansi.")
+                
+            df_master_source = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame())) [cite: 211]
+            
+            if df_master_source is not None and not df_master_source.empty: [cite: 211]
+                df_master = df_master_source.copy() [cite: 212]
+                df_master["_indeks_asli_master"] = df_master.index [cite: 213]
+                df_master.columns = [str(c).strip() for c in df_master.columns] [cite: 213]
+                
+                # Normalisasi Nama Kolom [cite: 213]
+                rename_dict = {} [cite: 213]
+                for col in df_master.columns: [cite: 213]
+                    c_clean = str(col).strip().lower() [cite: 213]
+                    if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean: [cite: 213]
+                        rename_dict[col] = "Indikator Kesalahan Data" [cite: 213]
+                    elif "validasi" in c_clean or "review" in c_clean: [cite: 213]
+                        rename_dict[col] = "Validasi Hasil Review" [cite: 213]
+                    elif "justifikasi" in c_clean: [cite: 213]
+                        rename_dict[col] = "Justifikasi" [cite: 213]
+                    elif "lembaga" in c_clean or "ssr" in c_clean: [cite: 213]
+                        rename_dict[col] = "Lembaga SSR" [cite: 213]
+                    elif "layanan" in c_clean: [cite: 213]
+                        rename_dict[col] = "Nama Layanan" [cite: 213]
+                    elif "petugas" in c_clean: [cite: 213]
+                        rename_dict[col] = "Kode Petugas" [cite: 213]
+                    elif "kota" in c_clean or "kabupaten" in c_clean: [cite: 213]
+                        rename_dict[col] = "Nama Kota" [cite: 213, 214]
+                    elif "tanggal" in c_clean: [cite: 214]
+                        rename_dict[col] = "Tanggal" [cite: 214]
+                    elif "id klien" in c_clean or "id_klien" in c_clean: [cite: 214]
+                        rename_dict[col] = "ID Klien" [cite: 214]
+                    elif "nik" == c_clean: [cite: 214]
+                        rename_dict[col] = "NIK" [cite: 214]
+                    elif "sasaran" in c_clean: [cite: 214]
+                        rename_dict[col] = "Tipe Sasaran" [cite: 214]
+                        
+                if rename_dict: [cite: 214]
+                    df_master = df_master.rename(columns=rename_dict) [cite: 214]
+            
+                if "Kategori Data" not in df_master.columns: [cite: 214]
+                    if "Indikator Kesalahan Data" in df_master.columns: [cite: 214]
+                        try: ind_rujukan_caps = [str(r['nama']).strip().upper() for r in ATURAN_VALIDASI_RUJUKAN] [cite: 214]
+                        except: ind_rujukan_caps = [] [cite: 214]
+                        df_master["Kategori Data"] = df_master["Indikator Kesalahan Data"].apply( [cite: 214]
+                            lambda x: "Rujukan" if str(x).strip().upper() in ind_rujukan_caps else "Penjangkauan" [cite: 214]
+                        ) [cite: 214]
+                    else: [cite: 214]
+                        df_master["Kategori Data"] = "Penjangkauan" [cite: 214]
+            
+                kolom_susunan_gabungan = [ [cite: 214]
+                    "Pilih", "Kategori Data", "Lembaga SSR", "Kode Petugas", "Nama Kota", "Nama Layanan",  [cite: 215]
+                    "Tanggal", "ID Klien", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", "Validasi Hasil Review", "Justifikasi" [cite: 215]
+                ] [cite: 215]
+            
+                for col in kolom_susunan_gabungan: [cite: 215]
+                    if col not in df_master.columns: [cite: 215]
+                        if col == "Pilih": df_master["Pilih"] = False [cite: 215]
+                        else: df_master[col] = "-" [cite: 215]
+            
+                # Fitur Filter Dropdown Berdampingan [cite: 215]
+                list_ssr_unik = sorted(df_master["Lembaga SSR"].dropna().unique().tolist()) [cite: 215]
+                col_ssr, col_kat, col_spacer = st.columns([1.2, 1.2, 2.6]) [cite: 215, 216]
+                
+                with col_ssr: pilihan_ssr = st.selectbox("🎯 Lembaga SSR:", options=["Semua"] + list_ssr_unik, index=0) [cite: 216]
+                with col_kat: pilihan_kategori = st.selectbox("📂 Kategori Data:", options=["Semua", "Penjangkauan", "Rujukan"], index=0) [cite: 216]
+                
+                if pilihan_ssr != "Semua": df_master = df_master[df_master["Lembaga SSR"] == pilihan_ssr] [cite: 216]
+                if pilihan_kategori != "Semua": df_master = df_master[df_master["Kategori Data"] == pilihan_kategori] [cite: 216]
+                    
+                df_view_gabungan = df_master[kolom_susunan_gabungan + ["_indeks_asli_master"]].copy() [cite: 216]
+            
+                # Intersepsi Proteksi Visual: Kunci Kolom Justifikasi untuk Baris Non-Konfirmasi [cite: 216]
+                for idx, row in df_view_gabungan.iterrows(): [cite: 216]
+                    if "konfirmasi" not in str(row['Indikator Kesalahan Data']).lower(): [cite: 216, 217]
+                        df_view_gabungan.at[idx, 'Justifikasi'] = "🔒 Terkunci (Bukan Konfirmasi)" [cite: 217, 219]
+            
+                if df_view_gabungan.empty: [cite: 217]
+                    st.info(f"✨ Tidak ada data kesalahan untuk filter: **{pilihan_ssr}** | **{pilihan_kategori}**") [cite: 217]
+                else:
+                    # Tentukan daftar kolom yang dinonaktifkan (Kunci semua kecuali Pilih dan Justifikasi jika SSR) [cite: 217, 218]
+                    if peran == "SSR":
+                        kolom_banned = [c for c in kolom_susunan_gabungan if c not in ["Pilih", "Justifikasi"]] [cite: 218]
+                    else:
+                        kolom_banned = [c for c in kolom_susunan_gabungan if c not in ["Pilih", "Justifikasi", "Validasi Hasil Review"]]
+                        
+                    df_hasil_edit = st.data_editor( [cite: 217]
+                        df_view_gabungan[kolom_susunan_gabungan], [cite: 217]
+                        use_container_width=True, [cite: 217]
+                        hide_index=True,  [cite: 217]
+                        key="editor_validasi_tunggal_tab1", [cite: 217]
+                        column_config={ [cite: 217]
+                            "Pilih": st.column_config.CheckboxColumn("Pilih", default=False), [cite: 217]
+                            "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=300), [cite: 217]
+                            "Justifikasi": st.column_config.TextColumn("Justifikasi", width=260), [cite: 217, 218]
+                        }, [cite: 218]
+                        disabled=kolom_banned [cite: 218]
+                    )
+                    
+                    # Manajemen Tombol Simpan 
+                    st.markdown("<br>", unsafe_allow_html=True) [cite: 218]
+                    col_save, _ = st.columns([1, 2]) [cite: 218]
+                    with col_save: [cite: 218]
+                        if st.button("💾 Simpan Perubahan Validasi (Tab 1)", type="primary"): [cite: 218]
+                            with st.spinner("Menyimpan progres validasi..."): [cite: 218]
+                                list_log_db = [] [cite: 218]
+                                indeks_master_terpilih = [] [cite: 218]
+                                for idx, row_edit in df_hasil_edit.iterrows(): [cite: 218]
+                                    ind_text = str(row_edit.get('Indikator Kesalahan Data', '')) [cite: 218]
+                                    text_justifikasi = str(row_edit.get('Justifikasi', '')).strip() [cite: 218]
+                                    is_konfirmasi = "konfirmasi" in ind_text.lower() [cite: 218]
+                                    status_revisi = bool(row_edit.get('Pilih', False)) [cite: 218]
+                                    
+                                    if not is_konfirmasi or "🔒 Terkunci" in text_justifikasi: [cite: 218, 219]
+                                        text_justifikasi = "" [cite: 219]
+                                        
+                                    if status_revisi or (is_konfirmasi and text_justifikasi != ""): [cite: 219]
+                                        list_log_db.append(( [cite: 219]
+                                            str(row_edit.get('Kategori Data', '-')), str(row_edit.get('Lembaga SSR', '-')), [cite: 219]
+                                            str(row_edit.get('Tanggal', '-')), str(row_edit.get('ID Klien', '-')),  [cite: 219]
+                                            ind_text, status_revisi, text_justifikasi [cite: 219]
+                                        )) [cite: 219]
+                                        if idx in df_view_gabungan.index: [cite: 219, 220]
+                                            indeks_master_terpilih.append(df_view_gabungan.at[idx, "_indeks_asli_master"]) [cite: 220]
+                                
+                                if len(list_log_db) > 0: [cite: 220]
+                                    if simpan_log_ke_neon(list_log_db): [cite: 220]
+                                        if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None: [cite: 220]
+                                            st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(index=indeks_master_terpilih, errors='ignore').reset_index(drop=True) [cite: 220]
+                                        st.success(f"🎉 Sukses menyinkronkan {len(list_log_db)} data ke log database!") [cite: 221]
+                                        import time [cite: 221]
+                                        time.sleep(1.0) [cite: 221]
+                                        st.rerun() [cite: 221]
+                                    else: st.error("❌ Gagal menyimpan perubahan ke server database.") [cite: 221, 222]
+                                else: st.info("ℹ️ Tidak ada baris perubahan data yang dipilih untuk disimpan.") [cite: 222]
+            else:
+                st.info("✨ Belum ada data review gabungan yang tersedia.") [cite: 222]
+
+        # -------------------------------------------------------------------------
+        # TAB 2: AGREGASI TEMUAN TINGKAT DATA MENTAH SSR
+        # -------------------------------------------------------------------------
+        with tab2:
+            st.subheader("📋 Ringkasan Akumulasi Temuan Kesalahan - Tingkat SSR") [cite: 197]
+            
+            # Memasukkan visualisasi tabel ringkasan lama ke dalam kontainer Tab 2 [cite: 197]
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                st.markdown("##### 🔹 Ringkasan Indikator Kesalahan Penjangkauan") [cite: 197]
+                if df_historis is not None and not df_historis.empty: [cite: 197]
+                    st.dataframe(df_historis, use_container_width=True) [cite: 202]
+                else: st.info("Tidak ada riwayat kesalahan Penjangkauan.") [cite: 202]
+                
+            with col_t2:
+                st.markdown("##### 🔹 Ringkasan Indikator Kesalahan Rujukan") [cite: 204]
+                df_sumber_ruj = st.session_state.get('df_rujukan', pd.DataFrame()) [cite: 207]
+                if not df_sumber_ruj.empty: [cite: 207]
+                    st.dataframe(df_sumber_ruj, use_container_width=True) [cite: 210]
+                else: st.info("Tidak ada riwayat kesalahan Rujukan.") [cite: 210]
+
+        # -------------------------------------------------------------------------
+        # TAB 3: HISTORI TINDAKAN ABSENSI & GRAFIK SARANG LABA-LABA BERDAMPINGAN
+        # -------------------------------------------------------------------------
+        with tab3:
+            st.subheader("📜 Histori Riwayat Tindakan Absensi Review") [cite: 222]
+            
+            # Inisialisasi mock data histori absensi tabel dinamis sesuai kebutuhan
+            if 'log_histori_absensi_review' not in st.session_state:
+                st.session_state['log_histori_absensi_review'] = [
+                    {"Lembaga SSR": "BINA MUDA GEMILANG", "Tanggal Sesi": datetime.now().strftime("%d-%m-%Y"), "Akurasi Akhir": f"{akurasi_penj:.2f}%"},
+                    {"Lembaga SSR": "PKBI JAWA BARAT", "Tanggal Sesi": datetime.now().strftime("%d-%m-%Y"), "Akurasi Akhir": f"{akurasi_ruj:.2f}%"}
+                ]
+            st.table(pd.DataFrame(st.session_state['log_histori_absensi_review'])) [cite: 212]
+            
+            st.markdown("---")
+            st.subheader("🕸️ Analisis Profil Klaster Temuan (Grafik Sarang Laba-Laba)") [cite: 222, 223]
+            
+            # Penambahan Widget Fleksibel st.number_input & selectbox di Atas Grafik [cite: 215, 216]
+            c_filter1, c_filter2 = st.columns(2)
+            with c_filter1:
+                lembaga_pilihan_grafik = st.selectbox("Saring Grafik Berdasarkan:", ["Semua Lembaga SSR"] + list_ssr_unik, key="sb_grafik_ssr") [cite: 215, 216]
+            with c_filter2:
+                top_n = st.number_input("Jumlah Temuan Teratas (Peringkat N):", min_value=3, max_value=15, value=5, step=1)
+                
+            # Render Struktur Grafik Berdampingan Menggunakan go.Scatterpolar (Plotly) [cite: 223, 224]
+            import plotly.graph_objects as go
+            
+            col_g1, col_g2 = st.columns(2)
+            
+            # Data Dummy Komponen Kasus Indikator [cite: 224]
+            ind_pjj_labels = ['Format NIK Invalid', 'ID Klien Duplikat', 'Kode Petugas Typo', 'Nama Kota Kosong', 'Tipe Sasaran Salah'][:top_n] [cite: 224]
+            ind_rjk_labels = ['Hasil Tes HIV Invalid', 'Nama Layanan Kosong', 'Metode CBS Salah', 'Tanggal Review Terbalik', 'Justifikasi Kosong'][:top_n] [cite: 224]
+            
+            with col_g1:
+                st.markdown("<p style='text-align: center; font-weight: bold; color:#38bdf8;'>⬅️ Penjangkauan (Kiri)</p>", unsafe_allow_html=True)
+                fig_pjj = go.Figure(data=go.Scatterpolar(
+                    r=[5, 3, 4, 2, 1][:top_n],
+                    theta=ind_pjj_labels,
+                    fill='toself',
+                    name='Penjangkauan',
+                    fillcolor='rgba(56, 189, 248, 0.2)',
+                    line=dict(color='#38bdf8')
+                ))
+                fig_pjj.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=False, height=330, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0') [cite: 225]
+                st.plotly_chart(fig_pjj, use_container_width=True)
+                
+            with col_g2:
+                st.markdown("<p style='text-align: center; font-weight: bold; color:#10B981;'>➡️ Rujukan (Kanan)</p>", unsafe_allow_html=True)
+                fig_rjk = go.Figure(data=go.Scatterpolar(
+                    r=[2, 4, 1, 5, 3][:top_n],
+                    theta=ind_rjk_labels,
+                    fill='toself',
+                    name='Rujukan',
+                    fillcolor='rgba(16, 185, 129, 0.2)',
+                    line=dict(color='#10B981')
+                ))
+                fig_rjk.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=False, height=330, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0') [cite: 225]
+                st.plotly_chart(fig_rjk, use_container_width=True)
+                
+            # Tombol Manajemen Akhir Periode Bawaan [cite: 222]
+            st.markdown("---")
+            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai.") [cite: 222]
+            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True): [cite: 222]
+                with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."): [cite: 222]
+                    if jalankan_agregasi_tren(): st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!") [cite: 222]
+                    else: st.error("Gagal memproses arsip ke database.") [cite: 222]
+    else:
+        st.info("✨ Belum ada berkas data yang diproses. Silakan unggah berkas melalui sidebar terlebih dahulu.") [cite: 202]
+
+# ----------------------------------------------------------
+# MENU 2: PENGATURAN MEDSOS 
+# ----------------------------------------------------------
+elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
+    st.title("⚙️ Pengaturan Keyword Media Sosial")
+    st.markdown("Gunakan menu ini untuk menambahkan atau melihat daftar nama media sosial yang digunakan sebagai filter pada pencarian **Lokasi Outreach / Penjangkauan Online**.")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col_kiri, col_kanan = st.columns([1, 1.5])
+    
+    with col_kiri:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.subheader("➕ Tambah Medsos Baru")
+        with st.form("form_tambah_medsos", clear_on_submit=True):
+            medsos_baru = st.text_input("Masukkan Nama Medsos:", placeholder="Contoh: grindr, michat, wechat")
+            tombol_simpan = st.form_submit_button("Simpan Keyword", use_container_width=True)
+            
+            if tombol_simpan:
+                keyword_clean = medsos_baru.strip().lower()
+                if keyword_clean:
+                    # 1. Simpan ke database
+                    sukses = tambah_keyword_medsos_db(keyword_clean)
+                    
+                    if sukses:
+                        # 2. Update session_state agar tampil langsung tanpa refresh database
+                        st.session_state['medsoc_keywords'].append(keyword_clean)
+                        st.session_state['medsoc_keywords'].sort()
+                        st.success(f"Berhasil menambahkan '{keyword_clean}' ke database!")
+                        
+                        import time
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.warning(f"Keyword '{keyword_clean}' sudah ada di dalam database.")
+                else:
+                    st.warning("Kolom tidak boleh kosong!")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_kanan:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        
+        # Ambil langsung dari session state yang sudah tersinkron database
+        list_medsos = st.session_state.get('medsoc_keywords', [])
+        st.subheader(f"📋 Daftar Keyword Aktif ({len(list_medsos)})")
+        
+        if list_medsos:
+            html_badges = ""
+            for m in list_medsos:
+                html_badges += f"""
+                <span style="
+                    background-color: rgba(56, 189, 248, 0.15); 
+                    color: #38bdf8; 
+                    border: 1px solid rgba(56, 189, 248, 0.3);
+                    padding: 6px 12px; 
+                    border-radius: 20px; 
+                    font-family: inherit; 
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                    white-space: nowrap;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                ">
+                    🔹 {m}
+                </span>
+                """
+            
+            st.markdown(f"""
+                <div style="
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    padding: 15px; 
+                    border: 1px solid rgba(255,255,255,0.1); 
+                    border-radius: 8px; 
+                    background-color: rgba(0,0,0,0.2);
+                ">
+                    {html_badges}
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Belum ada data medsos di database.")
+            
+        st.markdown('</div>', unsafe_allow_html=True)
