@@ -169,7 +169,7 @@ if 'aturan_kustom' not in st.session_state: st.session_state['aturan_kustom'] = 
 pemicu_baca_ulang = st.session_state.get('proses_selesai', False)
 
 # 🎯 --- BAGIAN PERBAIKAN BARU: TARIK METRIK KARTU SKOR DARI DATABASE SAAT REFRESH ---
-if ('total_entri_penjangkauan' not in st.session_state or pemicu_baca_ulang):
+if ('total_entri_penjangkauan' not in st.session_state):
     st.session_state['total_entri_penjangkauan'] = 0
     st.session_state['total_entri_rujukan'] = 0
     st.session_state['temuan_penjangkauan'] = 0
@@ -177,20 +177,18 @@ if ('total_entri_penjangkauan' not in st.session_state or pemicu_baca_ulang):
     st.session_state['akurasi_penjangkauan'] = 100.0
     st.session_state['akurasi_rujukan'] = 100.0
     
+    # KODE AMBIL DARI NEON DATABASE (Hanya berjalan di awal aplikasi dibuka)
     try:
         from database import dapatkan_koneksi_neon
         conn = dapatkan_koneksi_neon()
         if conn:
             with conn.cursor() as cur:
-                # Mengambil seluruh riwayat metrik akurasi dari yang paling baru
                 cur.execute("""
                     SELECT kategori, total_data_diproses, total_baris_temuan, tingkat_akurasi 
                     FROM akurasi_review_data 
                     ORDER BY id DESC;
                 """)
                 rows = cur.fetchall()
-                
-                # Ambil 1 baris terbaru unik untuk masing-masing kategori
                 kategori_terisi = set()
                 for r in rows:
                     kat = str(r[0]).strip().lower()
@@ -205,8 +203,7 @@ if ('total_entri_penjangkauan' not in st.session_state or pemicu_baca_ulang):
                             st.session_state['temuan_rujukan'] = int(r[2])
                             st.session_state['akurasi_rujukan'] = float(r[3])
                             kategori_terisi.add(kat)
-                    if len(kategori_terisi) == 2:
-                        break
+                    if len(kategori_terisi) == 2: break
             conn.close()
     except Exception as e:
         pass
