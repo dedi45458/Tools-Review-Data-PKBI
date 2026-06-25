@@ -652,7 +652,7 @@ def ambil_hasil_review_utama_terakhir():
 # ==============================================================================
 
 def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3):
-    """Menyimpan data hasil review ke 3 tabel secara bersamaan dengan strategi Delete-before-Insert."""
+    """Menyimpan data hasil review ke 3 tabel secara bersamaan (Database Transaction) dengan Anti-Duplikasi."""
     conn = dapatkan_koneksi_neon()
     if not conn: return False
     
@@ -662,35 +662,29 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
 
             # 1. TABEL PENJANGKAUAN (Agregasi)
             if list_tabel_1:
-                # Bersihkan data agregasi hari ini terlebih dahulu agar tidak duplikat jika di-insert ulang
-                cur.execute("DELETE FROM agregasi_hasil_review_penjangkauan WHERE tanggal_review = %s", (tanggal_hari_ini,))
-                
                 list_1_lengkap = [(tanggal_hari_ini, row[0], row[1], row[2]) for row in list_tabel_1]
                 cur.executemany("""
                     INSERT INTO agregasi_hasil_review_penjangkauan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                    VALUES (%s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan) DO NOTHING;
                 """, list_1_lengkap)
 
             # 2. TABEL RUJUKAN (Agregasi)
             if list_tabel_2:
-                # Karena list_tabel_2 sudah membawa tanggal di element pertamanya (sesuai query input Anda)
-                # Kita bisa ambil tanggal dari baris pertama untuk dibersihkan
-                if len(list_tabel_2) > 0:
-                    tgl_rjk = list_tabel_2[0][0]
-                    cur.execute("DELETE FROM agregasi_hasil_review_rujukan WHERE tanggal_review = %s", (tgl_rjk,))
-
                 cur.executemany("""
                     INSERT INTO agregasi_hasil_review_rujukan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                    VALUES (%s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan) DO NOTHING;
                 """, list_tabel_2)
 
-            # 3. TABEL UTAMA DETIL KLIEN (Master Data)
+            # 3. TABEL UTAMA DETIL KLIEN (Master Data - Menggunakan ON CONSTRAINT)
             if list_tabel_3:
-                # Opsi A: Jika ingin mempertahankan data lama dan membiarkan data baru masuk (Hapus klausa ON CONFLICT)
                 cur.executemany("""
                     INSERT INTO hasil_review_data
                     (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT ON CONSTRAINT unique_review_kategori_ssr_tgl_id_indikator 
+                    DO NOTHING;
                 """, list_tabel_3)
 
         conn.commit()
