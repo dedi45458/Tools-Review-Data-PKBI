@@ -143,36 +143,6 @@ def hitung_dan_ambil_log_db():
             conn.close()
     return dict_revisi, dict_justifikasi
 
-def jalankan_agregasi_tren():
-    """Memanggil fungsi PL/pgSQL untuk memindahkan log harian ke rekap tren bulanan."""
-    conn = dapatkan_koneksi_neon()
-    if conn is None:
-        return False
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT proses_sari_data_bulanan();")
-            conn.commit()
-            return True
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Gagal menjalankan agregasi data: {e}")
-        return False
-    finally:
-        conn.close()
-
-def ambil_rekap_tren():
-    """Mengambil data tren bulanan untuk ditampilkan dalam grafik/tabel di Streamlit."""
-    conn = dapatkan_koneksi_neon()
-    if conn is None:
-        return pd.DataFrame()
-    try:
-        query = "SELECT periode, nama_ssr, indikator_kesalahan, jumlah_kesalahan FROM rekap_tren_bulanan ORDER BY periode DESC;"
-        return pd.read_sql(query, conn)
-    except Exception as e:
-        st.error(f"Gagal mengambil data rekap tren: {e}")
-        return pd.DataFrame()
-    finally:
-        conn.close()
 
 # ==============================================================================
 # KATEGORI 4: IMPORT DATA REFERENSI MASTER (EXCEL DATA TO DB)
@@ -433,7 +403,7 @@ import streamlit as st
 
 # --- Bagian A: Tabel 1 (agregasi_hasil_review_penjangkauan) ---
 
-def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
+def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None, role_reviewer='SR'):
     """Menyimpan otomatis hasil rekap data per SSR ke database Neon."""
     if df_tabel_atas is None or df_tabel_atas.empty: return False
     df_lokal = df_tabel_atas.copy()
@@ -449,7 +419,11 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
     if not conn: return False
     try:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM agregasi_hasil_review_penjangkauan WHERE tanggal_review = %s", (tanggal_review,))
+            cur.execute("""
+                DELETE FROM agregasi_hasil_review_penjangkauan 
+                WHERE tanggal_review = %s AND role_reviewer = %s
+            """, (tanggal_review, role_reviewer))
+            
             kolom_indikator = 'INDIKATOR KESALAHAN DATA'
             kolom_ssr = [c for c in df_lokal.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
             for _, row in df_lokal.iterrows():
@@ -457,12 +431,13 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
                 for ssr in kolom_ssr:
                     try: jumlah = int(float(row[ssr]))
                     except: jumlah = 0
+                    
                     if jumlah > 0:
                         cur.execute("""
                             INSERT INTO agregasi_hasil_review_penjangkauan 
-                            (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                            VALUES (%s, %s, %s, %s)
-                        """, (tanggal_review, str(ssr).strip(), indikator, jumlah))
+                            (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan, role_reviewer)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (tanggal_review, str(ssr).strip(), indikator, jumlah, role_reviewer))
             conn.commit()
             return True
     except Exception as e:
@@ -471,23 +446,23 @@ def simpan_agregasi_ke_neon(df_tabel_atas, tanggal_review=None):
     finally:
         conn.close()
 
-def ambil_agregasi_penjangkauan_terakhir():
+def ambil_agregasi_penjangkauan_terakhir(role_reviewer='SR'):
     """Mengambil data review penjangkauan terakhir berdasarkan MAX(tanggal_dibuat) ke format wide UI."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review_penjangkauan")
+            cur.execute("SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review_penjangkauan WHERE role_reviewer = %s", (role_reviewer,))
             max_timestamp = cur.fetchone()[0]
             if not max_timestamp: return pd.DataFrame(), None
             
-            cur.execute("SELECT tanggal_review FROM agregasi_hasil_review_penjangkauan WHERE tanggal_dibuat = %s LIMIT 1", (max_timestamp,))
+            cur.execute("SELECT tanggal_review FROM agregasi_hasil_review_penjangkauan WHERE tanggal_dibuat = %s AND role_reviewer = %s LIMIT 1", (max_timestamp, role_reviewer))
             target_date = cur.fetchone()[0]
             
             cur.execute("""
                 SELECT nama_ssr, indikator_kesalahan, jumlah_kesalahan 
-                FROM agregasi_hasil_review_penjangkauan WHERE tanggal_review = %s
-            """, (target_date,))
+                FROM agregasi_hasil_review_penjangkauan WHERE tanggal_review = %s AND role_reviewer = %s
+            """, (target_date, role_reviewer))
             rows = cur.fetchall()
             if not rows: return pd.DataFrame(), max_timestamp
             
@@ -512,17 +487,17 @@ def ambil_agregasi_penjangkauan_terakhir():
 
 # --- Bagian B: Tabel 2 (agregasi_hasil_review_rujukan) ---
 
-def simpan_agregasi_rujukan_db(data_input):
+def simpan_agregasi_rujukan_db(data_input, role_reviewer='SR'):
     """Menyimpan data agregasi hasil review rujukan ke database (Mendukung DataFrame/List)"""
     if data_input is None: return False
     
     if isinstance(data_input, pd.DataFrame):
         if data_input.empty: return False
         df_bersih = data_input.astype(object).where(pd.notnull(data_input), None)
-        list_data = [tuple(x) for x in df_bersih.to_numpy()]
+        list_data = [tuple(list(x) + [role_reviewer]) for x in df_bersih.to_numpy()]
     else:
         if not data_input: return False
-        list_data = data_input
+        list_data = [tuple(list(x) + [role_reviewer]) for x in data_input]
 
     conn = dapatkan_koneksi_neon()
     if not conn: return False
@@ -530,8 +505,8 @@ def simpan_agregasi_rujukan_db(data_input):
         with conn.cursor() as cur:
             query = """
                 INSERT INTO agregasi_hasil_review_rujukan 
-                (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                VALUES (%s, %s, %s, %s);
+                (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan, role_reviewer)
+                VALUES (%s, %s, %s, %s, %s);
             """
             cur.executemany(query, list_data)
             conn.commit()
@@ -543,7 +518,7 @@ def simpan_agregasi_rujukan_db(data_input):
     finally:
         if conn: conn.close()
 
-def ambil_agregasi_rujukan_terakhir():
+def ambil_agregasi_rujukan_terakhir(role_reviewer='SR'):
     """Mengambil seluruh baris data rujukan dari batch agregasi terakhir menggunakan buffer interval 5 detik."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
@@ -556,9 +531,10 @@ def ambil_agregasi_rujukan_terakhir():
                 jumlah_kesalahan AS "JUMLAH KESALAHAN",
                 tanggal_dibuat
             FROM agregasi_hasil_review_rujukan
-            WHERE tanggal_dibuat >= (SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review_rujukan) - INTERVAL '5 second'
+            WHERE role_reviewer = %s 
+              AND tanggal_dibuat >= (SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review_rujukan WHERE role_reviewer = %s) - INTERVAL '5 second'
         """
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn, params=(role_reviewer, role_reviewer))
         
         max_timestamp = None
         if not df.empty:
@@ -566,7 +542,7 @@ def ambil_agregasi_rujukan_terakhir():
             df = df.drop(columns=['tanggal_dibuat'])
         else:
             with conn.cursor() as cur:
-                cur.execute("SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review_rujukan")
+                cur.execute("SELECT MAX(tanggal_dibuat) FROM agregasi_hasil_review_rujukan WHERE role_reviewer = %s", (role_reviewer,))
                 res = cur.fetchone()
                 if res: max_timestamp = res[0]
             
@@ -580,17 +556,17 @@ def ambil_agregasi_rujukan_terakhir():
 
 # --- Bagian C: Tabel 3 (hasil_review_data) ---
 
-def simpan_hasil_review_utama_db(data_input):
+def simpan_hasil_review_utama_db(data_input, role_reviewer='SR'):
     """Menyimpan data mandiri khusus untuk tabel utama gabungan UI (Mendukung DataFrame/List)"""
     if data_input is None: return False
     
     if isinstance(data_input, pd.DataFrame):
         if data_input.empty: return False
         df_bersih = data_input.astype(object).where(pd.notnull(data_input), None)
-        list_data = [tuple(x) for x in df_bersih.to_numpy()]
+        list_data = [tuple(list(x) + [role_reviewer]) for x in df_bersih.to_numpy()]
     else:
         if not data_input: return False
-        list_data = data_input
+        list_data = [tuple(list(x) + [role_reviewer]) for x in data_input]
 
     conn = dapatkan_koneksi_neon()
     if not conn: return False
@@ -598,8 +574,8 @@ def simpan_hasil_review_utama_db(data_input):
         with conn.cursor() as cur:
             query = """
                 INSERT INTO hasil_review_data 
-                (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi, role_reviewer)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """
             cur.executemany(query, list_data)
             conn.commit()
@@ -611,7 +587,7 @@ def simpan_hasil_review_utama_db(data_input):
     finally:
         if conn: conn.close()
 
-def ambil_hasil_review_utama_terakhir():
+def ambil_hasil_review_utama_terakhir(role_reviewer='SR'):
     """Mengambil detail data review gabungan utama dari batch terakhir."""
     conn = dapatkan_koneksi_neon()
     if not conn: return pd.DataFrame(), None
@@ -631,12 +607,13 @@ def ambil_hasil_review_utama_terakhir():
                 validasi_hasil_review AS "Validasi Hasil Review", 
                 justifikasi AS "Justifikasi"
             FROM hasil_review_data
-            WHERE created_at >= (SELECT MAX(created_at) FROM hasil_review_data) - INTERVAL '5 second'
+            WHERE role_reviewer = %s 
+              AND created_at >= (SELECT MAX(created_at) FROM hasil_review_data WHERE role_reviewer = %s) - INTERVAL '5 second'
         """
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn, params=(role_reviewer, role_reviewer))
         
         with conn.cursor() as cur:
-            cur.execute("SELECT MAX(created_at) FROM hasil_review_data")
+            cur.execute("SELECT MAX(created_at) FROM hasil_review_data WHERE role_reviewer = %s", (role_reviewer,))
             max_timestamp = cur.fetchone()[0]
             
         return df, max_timestamp
@@ -651,7 +628,7 @@ def ambil_hasil_review_utama_terakhir():
 # KATEGORI 6: FUNGSI SINKRONISASI 3 TABEL & METRIK AKURASI BARU
 # ==============================================================================
 
-def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3):
+def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3, role_reviewer='SR'):
     """Menyimpan data hasil review ke 3 tabel secara bersamaan (Database Transaction) dengan Anti-Duplikasi."""
     conn = dapatkan_koneksi_neon()
     if not conn: return False
@@ -660,32 +637,31 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
         with conn.cursor() as cur:
             tanggal_hari_ini = dt.datetime.now().date()
 
-            # 1. TABEL PENJANGKAUAN (Agregasi)
             if list_tabel_1:
-                list_1_lengkap = [(tanggal_hari_ini, row[0], row[1], row[2]) for row in list_tabel_1]
+                list_1_lengkap = [(tanggal_hari_ini, row[0], row[1], row[2], role_reviewer) for row in list_tabel_1]
                 cur.executemany("""
-                    INSERT INTO agregasi_hasil_review_penjangkauan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan) DO NOTHING;
+                    INSERT INTO agregasi_hasil_review_penjangkauan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan, role_reviewer)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan, role_reviewer) DO NOTHING;
                 """, list_1_lengkap)
 
-            # 2. TABEL RUJUKAN (Agregasi)
             if list_tabel_2:
+                list_2_lengkap = [tuple(list(row) + [role_reviewer]) for row in list_tabel_2]
                 cur.executemany("""
-                    INSERT INTO agregasi_hasil_review_rujukan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan) DO NOTHING;
-                """, list_tabel_2)
+                    INSERT INTO agregasi_hasil_review_rujukan (tanggal_review, nama_ssr, indikator_kesalahan, jumlah_kesalahan, role_reviewer)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (tanggal_review, nama_ssr, indikator_kesalahan, role_reviewer) DO NOTHING;
+                """, list_2_lengkap)
 
-            # 3. TABEL UTAMA DETIL KLIEN (Master Data - Menggunakan ON CONSTRAINT)
             if list_tabel_3:
+                list_3_lengkap = [tuple(list(row) + [role_reviewer]) for row in list_tabel_3]
                 cur.executemany("""
                     INSERT INTO hasil_review_data
-                    (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (kategori_data, lembaga_ssr, kode_petugas, nama_kota, nama_layanan, tanggal, id_klien, nik, tipe_sasaran, indikator_kesalahan, validasi_hasil_review, justifikasi, role_reviewer)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT ON CONSTRAINT unique_review_kategori_ssr_tgl_id_indikator 
                     DO NOTHING;
-                """, list_tabel_3)
+                """, list_3_lengkap)
 
         conn.commit()
         return True
@@ -700,10 +676,10 @@ def simpan_paket_validasi_ke_tiga_tabel(list_tabel_1, list_tabel_2, list_tabel_3
 
 # --- DIBAWAH INI ADALAH VERSI SINKRON UNTUK AKURASI (Menggunakan tabel akurasi_review_data) ---
 
-def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
+def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi, role_reviewer='SR', lembaga_ssr=None):
     """Menyimpan atau memperbarui metrik ke Neon secara otomatis (UPSERT)."""
     conn = dapatkan_koneksi_neon()
-    if not conn: 
+    if not conn:
         return False
     try:
         with conn.cursor() as cur:
@@ -715,20 +691,22 @@ def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
                     total_baris_temuan INT, 
                     tingkat_akurasi FLOAT, 
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT unique_kategori_metrik UNIQUE (kategori)
+                    role_reviewer VARCHAR(10) NOT NULL DEFAULT 'SR',
+                    lembaga_ssr VARCHAR(100) NULL,
+                    CONSTRAINT unique_kategori_role_ssr UNIQUE (kategori, role_reviewer, lembaga_ssr)
                 );
             """)
             
             cur.execute("""
-                INSERT INTO akurasi_review_data (kategori, total_data_diproses, total_baris_temuan, tingkat_akurasi) 
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT ON CONSTRAINT unique_kategori_metrik 
+                INSERT INTO akurasi_review_data (kategori, total_data_diproses, total_baris_temuan, tingkat_akurasi, role_reviewer, lembaga_ssr) 
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (kategori, role_reviewer, lembaga_ssr) 
                 DO UPDATE SET 
                     total_data_diproses = EXCLUDED.total_data_diproses,
                     total_baris_temuan = EXCLUDED.total_baris_temuan,
                     tingkat_akurasi = EXCLUDED.tingkat_akurasi,
                     created_at = CURRENT_TIMESTAMP;
-            """, (kategori.lower().strip(), total_proses, total_temuan, akurasi))
+            """, (kategori.lower().strip(), total_proses, total_temuan, akurasi, role_reviewer, lembaga_ssr))
             
         conn.commit()
         return True
@@ -739,7 +717,7 @@ def simpan_metrik_akurasi_db(kategori, total_proses, total_temuan, akurasi):
     finally:
         if conn: conn.close()
 
-def ambil_metrik_akurasi_terakhir():
+def ambil_metrik_akurasi_terakhir(role_reviewer='SR', lembaga_ssr=None):
     """Mengambil data metrik terakhir untuk UI Kartu Skor dari Neon."""
     conn = dapatkan_koneksi_neon()
     metrik_default = {
@@ -748,7 +726,7 @@ def ambil_metrik_akurasi_terakhir():
     }
     ts_metrik = dt.datetime.now()
     
-    if not conn: 
+    if not conn:
         return metrik_default, ts_metrik
     try:
         with conn.cursor() as cur:
@@ -757,9 +735,10 @@ def ambil_metrik_akurasi_terakhir():
                 cur.execute("""
                     SELECT kategori, total_data_diproses, total_baris_temuan, tingkat_akurasi, created_at 
                     FROM akurasi_review_data 
+                    WHERE role_reviewer = %s AND (lembaga_ssr = %s OR (lembaga_ssr IS NULL AND %s IS NULL))
                     ORDER BY created_at DESC 
                     LIMIT 2
-                """)
+                """, (role_reviewer, lembaga_ssr, lembaga_ssr))
                 rows = cur.fetchall()
                 if rows:
                     ts_metrik = rows[0][4]
