@@ -593,6 +593,20 @@ with st.sidebar:
         st.markdown("""<div style="margin-top: 35px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>""", unsafe_allow_html=True)
         tombol_proses = st.button("🚀 Jalankan Validasi", type="primary", use_container_width=True)
 
+        st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("---")
+            
+            st.markdown("### ⚙️ Manajemen Akhir Periode")
+            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai dan semua data sudah diverifikasi.")
+            
+            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
+                with st.spinner("Sedang memproses pengarsipan data ke Neon Postgres..."):
+                    if jalankan_agregasi_tren():
+                        st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
+                        st.balloons()
+                    else:
+                        st.error("Gagal memproses arsip ke database.")
+
     # =================================================================
     # 2. MENU PENGATURAN KEYWORD MEDSOS SELECTOR CONTROL
     # =================================================================
@@ -1872,13 +1886,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 ))
                 fig_rjk.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=False, height=330, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
                 st.plotly_chart(fig_rjk, use_container_width=True)
-                
-            st.markdown("---")
-            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai.")
-            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
-                with st.spinner("Sedang memproses pengarsipan..."):
-                    if 'jalankan_agregasi_tren' in globals() and jalankan_agregasi_tren(): st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
-                    else: st.error("Gagal memproses arsip ke database.")
     else:
         st.info("✨ Belum ada berkas data yang diproses. Silakan unggah berkas melalui sidebar terlebih dahulu.")
 
