@@ -1839,7 +1839,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 st.info("✨ Belum ada data review gabungan yang tersedia.")
 
         # -------------------------------------------------------------------------
-        # TAB 2: GRAFIK SPIDER WEB DAN HISTORI ABSENSI (DATA DATABASE DINAMIS VIA NEON)
+        # TAB 2: GRAFIK SPIDER WEB DAN HISTORI ABSENSI (4 GRAFIK DENGAN TRUNCATE LABEL)
         # -------------------------------------------------------------------------
         with tab2:
             st.subheader("📜 Histori Riwayat Tindakan Absensi Review")
@@ -1854,7 +1854,16 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             st.subheader("🕸️ Analisis Profil Klaster Temuan (Grafik Sarang Laba-Laba)")
             
             # ---------------------------------------------------------------------
-            # QUERY 1: AMBIL DAFTAR BULAN UNIK (FORMAT YYYY-MM) DARI DATABASE
+            # FUNGSI LOKAL: MEMOTONG TEKS LABEL AGAR TIDAK MEMANJANG
+            # ---------------------------------------------------------------------
+            def potong_label(teks, max_char=25):
+                teks_str = str(teks).strip()
+                if len(teks_str) > max_char:
+                    return teks_str[:max_char] + "..."
+                return teks_str
+
+            # ---------------------------------------------------------------------
+            # QUERY 1: AMBIL DAFTAR BULAN UNIK FROM DATABASE
             # ---------------------------------------------------------------------
             list_bulan = []
             conn_bulan = dapatkan_koneksi_neon()
@@ -1872,31 +1881,25 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     """
                     df_bulan_db = pd.read_sql_query(query_bulan, conn_bulan)
                     if not df_bulan_db.empty:
-                        # Membersihkan nilai None atau kosong jika ada
                         list_bulan = [str(b).strip() for b in df_bulan_db['bulan'].tolist() if b]
                 except Exception as e:
                     st.warning(f"Gagal mengambil daftar rentang bulan dari database: {e}")
                 finally:
                     conn_bulan.close()
                     
-            # VALIDASI STRIP & AMANKAN FALLBACK (Mencegah RangeError di Streamlit)
-            # Pastikan list_bulan memiliki minimal 2 opsi unik agar slider tidak crash
+            # Validasi & Fallback Range Slider
             list_bulan = sorted(list(set(list_bulan)))
             if len(list_bulan) < 2:
                 sekarang = datetime.now()
                 bulan_lalu = (sekarang - timedelta(days=30)).strftime('%Y-%m')
                 bulan_ini = sekarang.strftime('%Y-%m')
-                # Jika ada 1 elemen, masukkan bersama bulan ini/lalu
                 if len(list_bulan) == 1:
-                    if list_bulan[0] != bulan_ini:
-                        list_bulan.append(bulan_ini)
-                    else:
-                        list_bulan.insert(0, bulan_lalu)
-                else:
-                    list_bulan = [bulan_lalu, bulan_ini]
+                    if list_bulan[0] != bulan_ini: list_bulan.append(bulan_ini)
+                    else: list_bulan.insert(0, bulan_lalu)
+                else: list_bulan = [bulan_lalu, bulan_ini]
             
             # ---------------------------------------------------------------------
-            # KOMPONEN FILTER KOTAK PROPORSIONAL (TIDAK MEMANJANG KE UJUNG)
+            # KOMPONEN FILTER KOTAK PROPORSIONAL
             # ---------------------------------------------------------------------
             c_filter1, c_filter2, c_filter3, c_spacer = st.columns([1.5, 1.0, 1.5, 0.8])
             
@@ -1908,121 +1911,107 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 top_n = st.number_input("🔝 Rangking Teratas (N):", min_value=3, max_value=20, value=5, step=1, key="num_top_n")
                 
             with c_filter3:
-                # Sekarang dijamin aman dari RangeError karena len(list_bulan) >= 2
                 filter_bulan = st.select_slider(
                     "📅 Pilih Rentang Bulan:",
                     options=list_bulan,
-                    value=list_bulan[-1],  # Default berada di bulan terbaru (paling kanan)
+                    value=list_bulan[-1],
                     key="slider_bulan_grafik"
                 )
             
             # ---------------------------------------------------------------------
-            # SINKRONISASI QUERY DATA GRAFIK BERDASARKAN FILTER USER
+            # PREPARASI CLAUSE QUERY & PENGAMBILAN DATA (REGULER vs KONFIRMASI)
             # ---------------------------------------------------------------------
-            df_g_pjj = pd.DataFrame()
-            df_g_rjk = pd.DataFrame()
+            base_where_pjj = f"WHERE TO_CHAR(tanggal_dibuat, 'YYYY-MM') = '{filter_bulan}'"
+            base_where_rjk = f"WHERE TO_CHAR(tanggal_dibuat, 'YYYY-MM') = '{filter_bulan}'"
+            
+            if filter_ssr != "Semua Lembaga SSR":
+                base_where_pjj += f" AND nama_ssr = '{filter_ssr}'"
+                base_where_rjk += f" AND nama_ssr = '{filter_ssr}'"
+            
+            # Query Pembagian Data Berdasarkan Kata '(konfirmasi)'
+            query_pjj_reguler = f"SELECT indikator_kesalahan, SUM(jumlah_kesalahan) as total FROM agregasi_hasil_review_penjangkauan {base_where_pjj} AND LOWER(indikator_kesalahan) NOT LIKE '%(konfirmasi)%' GROUP BY indikator_kesalahan ORDER BY total DESC LIMIT {top_n}"
+            query_pjj_konfirmasi = f"SELECT indikator_kesalahan, SUM(jumlah_kesalahan) as total FROM agregasi_hasil_review_penjangkauan {base_where_pjj} AND LOWER(indikator_kesalahan) LIKE '%(konfirmasi)%' GROUP BY indikator_kesalahan ORDER BY total DESC LIMIT {top_n}"
+            
+            query_rjk_reguler = f"SELECT indikator_kesalahan, SUM(jumlah_kesalahan) as total FROM agregasi_hasil_review_rujukan {base_where_rjk} AND LOWER(indikator_kesalahan) NOT LIKE '%(konfirmasi)%' GROUP BY indikator_kesalahan ORDER BY total DESC LIMIT {top_n}"
+            query_rjk_konfirmasi = f"SELECT indikator_kesalahan, SUM(jumlah_kesalahan) as total FROM agregasi_hasil_review_rujukan {base_where_rjk} AND LOWER(indikator_kesalahan) LIKE '%(konfirmasi)%' GROUP BY indikator_kesalahan ORDER BY total DESC LIMIT {top_n}"
+            
+            df_pjj_reg = df_pjj_kon = df_rjk_reg = df_rjk_kon = pd.DataFrame()
             
             conn_grafik = dapatkan_koneksi_neon()
             if conn_grafik:
                 try:
-                    # Siapkan parameter kondisi WHERE SQL secara dinamis
-                    where_clause_pjj = f"WHERE TO_CHAR(tanggal_dibuat, 'YYYY-MM') = '{filter_bulan}'"
-                    where_clause_rjk = f"WHERE TO_CHAR(tanggal_dibuat, 'YYYY-MM') = '{filter_bulan}'"
-                    
-                    if filter_ssr != "Semua Lembaga SSR":
-                        # Tambahkan filter nama_ssr ke query
-                        where_clause_pjj += f" AND nama_ssr = '{filter_ssr}'"
-                        where_clause_rjk += f" AND nama_ssr = '{filter_ssr}'"
-                        
-                    # Query 1: Data Penjangkauan
-                    query_pjj = f"""
-                        SELECT indikator_kesalahan, SUM(jumlah_kesalahan) as total
-                        FROM agregasi_hasil_review_penjangkauan
-                        {where_clause_pjj}
-                        GROUP BY indikator_kesalahan
-                        ORDER BY total DESC
-                        LIMIT {top_n}
-                    """
-                    
-                    # Query 2: Data Rujukan
-                    query_rjk = f"""
-                        SELECT indikator_kesalahan, SUM(jumlah_kesalahan) as total
-                        FROM agregasi_hasil_review_rujukan
-                        {where_clause_rjk}
-                        GROUP BY indikator_kesalahan
-                        ORDER BY total DESC
-                        LIMIT {top_n}
-                    """
-                    
-                    # Jalankan pembacaan data ke Dataframe pandas
-                    df_g_pjj = pd.read_sql_query(query_pjj, conn_grafik)
-                    df_g_rjk = pd.read_sql_query(query_rjk, conn_grafik)
-                    
+                    df_pjj_reg = pd.read_sql_query(query_pjj_reguler, conn_grafik)
+                    df_pjj_kon = pd.read_sql_query(query_pjj_konfirmasi, conn_grafik)
+                    df_rjk_reg = pd.read_sql_query(query_rjk_reguler, conn_grafik)
+                    df_rjk_kon = pd.read_sql_query(query_rjk_konfirmasi, conn_grafik)
                 except Exception as e:
-                    st.error(f"Gagal memproses visualisasi grafik dari database: {e}")
+                    st.error(f"Gagal memproses query grafik: {e}")
                 finally:
                     conn_grafik.close()
-            
-            # ---------------------------------------------------------------------
-            # MAPPING DATA KE FORMAT GRAFIK POLAR (SARANG LABA-LABA)
-            # ---------------------------------------------------------------------
-            # Pengaturan data grafik penjangkauan
-            if not df_g_pjj.empty and df_g_pjj['total'].sum() > 0:
-                ind_pjj_labels = df_g_pjj['indikator_kesalahan'].tolist()
-                r_pjj = df_g_pjj['total'].tolist()
-                # Agar chart menutup sempurna (melingkar), hubungkan kembali titik akhir ke awal
-                ind_pjj_labels.append(ind_pjj_labels[0])
-                r_pjj.append(r_pjj[0])
-            else:
-                ind_pjj_labels = ['Tidak Ada Data Temuan'] * 3
-                r_pjj = [0, 0, 0]
-                
-            # Pengaturan data grafik rujukan
-            if not df_g_rjk.empty and df_g_rjk['total'].sum() > 0:
-                ind_rjk_labels = df_g_rjk['indikator_kesalahan'].tolist()
-                r_rjk = df_g_rjk['total'].tolist()
-                # Agar chart menutup sempurna (melingkar), hubungkan kembali titik akhir ke awal
-                ind_rjk_labels.append(ind_rjk_labels[0])
-                r_rjk.append(r_rjk[0])
-            else:
-                ind_rjk_labels = ['Tidak Ada Data Temuan'] * 3
-                r_rjk = [0, 0, 0]
 
             # ---------------------------------------------------------------------
-            # RENDER VISUALISASI PLOTLY SIDE-BY-SIDE (BERDAMPINGAN)
+            # INTERNAL HELPER UNTUK MAPPING KOTAK GRAFIK (Menerapkan Potong Label)
             # ---------------------------------------------------------------------
+            def dapatkan_format_grafik(df):
+                if not df.empty and df['total'].sum() > 0:
+                    labels = [potong_label(x) for x in df['indikator_kesalahan'].tolist()]
+                    r_values = df['total'].tolist()
+                    labels.append(labels[0])
+                    r_values.append(r_values[0])
+                    return labels, r_values
+                return ['Tidak Ada Temuan'] * 3, [0, 0, 0]
+
+            lbl_pjj_reg, r_pjj_reg = dapatkan_format_grafik(df_pjj_reg)
+            lbl_pjj_kon, r_pjj_kon = dapatkan_format_grafik(df_pjj_kon)
+            lbl_rjk_reg, r_rjk_reg = dapatkan_format_grafik(df_rjk_reg)
+            lbl_rjk_kon, r_rjk_kon = dapatkan_format_grafik(df_rjk_kon)
+
             import plotly.graph_objects as go
+            
+            # =====================================================================
+            # BAGIAN A: RENDER GRAFIK KLASTER REGULER (TIDAK ADA KAT_KONFIRMASI)
+            # =====================================================================
+            st.markdown("#### 📊 1. Klaster Temuan Kesalahan Murni Data (Reguler)")
             col_g1, col_g2 = st.columns(2)
             
             with col_g1:
-                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#38bdf8;'>⬅️ Klaster Penjangkauan ({filter_bulan})</p>", unsafe_allow_html=True)
-                fig_pjj = go.Figure(data=go.Scatterpolar(
-                    r=r_pjj, theta=ind_pjj_labels, fill='toself',
-                    name='Penjangkauan', fillcolor='rgba(56, 189, 248, 0.18)', line=dict(color='#38bdf8', width=2)
-                ))
-                fig_pjj.update_layout(
-                    polar=dict(
-                        radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.1)'), 
-                        angularaxis=dict(gridcolor='rgba(255,255,255,0.1)')
-                    ),
-                    showlegend=False, height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0'
-                )
+                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#38bdf8;'> Penjangkauan Reguler ({filter_bulan})</p>", unsafe_allow_html=True)
+                fig_pjj = go.Figure(data=go.Scatterpolar(r=r_pjj_reg, theta=lbl_pjj_reg, fill='toself', name='Penjangkauan', fillcolor='rgba(56, 189, 248, 0.15)', line=dict(color='#38bdf8', width=2)))
+                fig_pjj.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
                 st.plotly_chart(fig_pjj, use_container_width=True)
                 
             with col_g2:
-                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#10B981;'>➡️ Klaster Rujukan ({filter_bulan})</p>", unsafe_allow_html=True)
-                fig_rjk = go.Figure(data=go.Scatterpolar(
-                    r=r_rjk, theta=ind_rjk_labels, fill='toself',
-                    name='Rujukan', fillcolor='rgba(16, 185, 129, 0.18)', line=dict(color='#10B981', width=2)
-                ))
-                fig_rjk.update_layout(
-                    polar=dict(
-                        radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.1)'), 
-                        angularaxis=dict(gridcolor='rgba(255,255,255,0.1)')
-                    ),
-                    showlegend=False, height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0'
-                )
+                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#10B981;'> Rujukan Reguler ({filter_bulan})</p>", unsafe_allow_html=True)
+                fig_rjk = go.Figure(data=go.Scatterpolar(r=r_rjk_reg, theta=lbl_rjk_reg, fill='toself', name='Rujukan', fillcolor='rgba(16, 185, 129, 0.15)', line=dict(color='#10B981', width=2)))
+                fig_rjk.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
                 st.plotly_chart(fig_rjk, use_container_width=True)
+                
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # =====================================================================
+            # BAGIAN B: RENDER GRAFIK KLASTER DATA KONFIRMASI (ADA KAT_KONFIRMASI)
+            # =====================================================================
+            st.markdown("#### 🔍 2. Klaster Validasi Khusus Data Perlu Konfirmasi")
+            col_k1, col_k2 = st.columns(2)
+            
+            with col_k1:
+                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#f59e0b;'> Penjangkauan (Konfirmasi) ({filter_bulan})</p>", unsafe_allow_html=True)
+                fig_pjj_k = go.Figure(data=go.Scatterpolar(r=r_pjj_kon, theta=lbl_pjj_kon, fill='toself', name='PJJ Konfirmasi', fillcolor='rgba(245, 158, 11, 0.15)', line=dict(color='#f59e0b', width=2)))
+                fig_pjj_k.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
+                st.plotly_chart(fig_pjj_k, use_container_width=True)
+                
+            with col_k2:
+                st.markdown(f"<p style='text-align: center; font-weight: bold; color:#ec4899;'> Rujukan (Konfirmasi) ({filter_bulan})</p>", unsafe_allow_html=True)
+                fig_rjk_k = go.Figure(data=go.Scatterpolar(r=r_rjk_kon, theta=lbl_rjk_kon, fill='toself', name='Ruj Konfirmasi', fillcolor='rgba(236, 72, 153, 0.15)', line=dict(color='#ec4899', width=2)))
+                fig_rjk_k.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
+                st.plotly_chart(fig_rjk_k, use_container_width=True)
+                
+            st.markdown("---")
+            st.warning("⚠️ Gunakan tombol di bawah ini HANYA JIKA periode bulanan sudah selesai.")
+            if st.button("🚀 Tutup Periode & Arsipkan Tren Bulanan", type="primary", use_container_width=True):
+                with st.spinner("Sedang memproses pengarsipan..."):
+                    if 'jalankan_agregasi_tren' in globals() and jalankan_agregasi_tren(): st.success("🎉 Data berhasil diarsipkan ke tabel rekap bulanan!")
+                    else: st.error("Gagal memproses arsip ke database.")
 
 # ----------------------------------------------------------
 # MENU 2: PENGATURAN MEDSOS 
