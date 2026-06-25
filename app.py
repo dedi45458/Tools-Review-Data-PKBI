@@ -1287,7 +1287,7 @@ if tombol_proses:
                     from database import simpan_paket_validasi_ke_tiga_tabel
                     
                     if not df_full.empty:
-                        # AGREGASI MENGGUNAKAN DF_FULL (Sekarang sudah di-fillna, jadi 50 baris harusnya masuk semua)
+                        # AGREGASI MENGGUNAKAN DF_FULL
                         df_pjj_only = df_full[df_full['KATEGORI DATA'].str.title() == 'Penjangkauan']
                         
                         list_insert_tabel_1 = []
@@ -1304,7 +1304,6 @@ if tombol_proses:
                         df_rjk_only = df_full[df_full['KATEGORI DATA'].str.title() == 'Rujukan'].copy()
                         list_insert_tabel_2 = []
                         if not df_rjk_only.empty:
-                            # Groupby sekarang aman karena NaN sudah diganti '-'
                             df_agregasi = df_rjk_only.groupby(['LEMBAGA SSR', 'INDIKATOR KESALAHAN DATA']).size().reset_index(name='JUMLAH KESALAHAN')
                             tanggal_skr = dt.date.today() if 'dt' in globals() else datetime.now().date()
                             for _, row_aggr in df_agregasi.iterrows():
@@ -1319,14 +1318,11 @@ if tombol_proses:
                         list_insert_tabel_3 = []
 
                         for _, row_all in df_bawah.iterrows():
-                            # 1. Ambil status pesan validasi hasil review
                             pesan_validasi = str(row_all.get('VALIDASI HASIL REVIEW', '-')).strip()
                             
-                            # 2. JIKA KOLOM INI BERISI PERINGATAN KESALAHAN BERULANG, ABARKAN! (TIDAK MASUK LIST INSERT)
-                            if "Kesalahan Berulang" in pesan_validasi or "belum direvisi" in pesan_validasi:
-                                continue # Skip baris ini, langsung lanjut ke baris berikutnya
-                                
-                            # Jika lolos (tidak ada peringatan), baru masukkan ke list insert database
+                            # 🚨 PERBAIKAN: Logika filter 'continue' di sini dihapus total 
+                            # agar seluruh baris bermasalah (termasuk yang berulang) tetap dimasukkan ke list_insert_tabel_3.
+                            
                             list_insert_tabel_3.append((
                                 str(row_all.get('KATEGORI DATA', '-')), 
                                 str(row_all.get('LEMBAGA SSR', '-')),
@@ -1358,7 +1354,7 @@ if tombol_proses:
                     ambil_agregasi_penjangkauan_terakhir, 
                     ambil_agregasi_rujukan_terakhir, 
                     ambil_hasil_review_utama_terakhir,
-                    ambil_set_error_belum_direvisi  # Pastikan fungsi ini di-import
+                    ambil_set_error_belum_direvisi  
                 )
                 
                 # 1. Tarik data live dari database utama
@@ -1377,22 +1373,19 @@ if tombol_proses:
                 # 💡 LOGIKA DETEKSI KEPATUHAN REVISI (REPEAT ERROR DETECTION)
                 if df_utama_db is not None and not df_utama_db.empty and set_error_historis is not None and not set_error_historis.empty:
                     
-                    # Fungsi pembantu untuk menyeragamkan format tanggal (2026-04-29 atau 29/04/2026) menjadi YYYY-MM-DD
+                    # Fungsi pembantu untuk menyeragamkan format tanggal menjadi YYYY-MM-DD
                     def normalisasi_tanggal(tgl_str):
-                        tgl_str = str(tgl_str).strip().split(' ')[0] # Buang komponen jam jika ada
+                        tgl_str = str(tgl_str).strip().split(' ')[0] 
                         if not tgl_str or tgl_str.lower() == 'none' or tgl_str == 'nan':
                             return ""
                         try:
-                            # Jika formatnya DD/MM/YYYY
                             if '/' in tgl_str:
                                 parts = tgl_str.split('/')
                                 if len(parts) == 3:
-                                    # Antisipasi jika tahun di depan atau di belakang
-                                    if len(parts[2]) == 4: # DD/MM/YYYY
+                                    if len(parts[2]) == 4: 
                                         return f"{parts[2]}-{parts[1]}-{parts[0]}"
-                                    elif len(parts[0]) == 4: # YYYY/MM/DD
+                                    elif len(parts[0]) == 4: 
                                         return f"{parts[0]}-{parts[1]}-{parts[2]}"
-                            # Jika formatnya YYYY-MM-DD
                             elif '-' in tgl_str:
                                 parts = tgl_str.split('-')
                                 if len(parts) == 3 and len(parts[0]) == 4:
@@ -1401,12 +1394,11 @@ if tombol_proses:
                             pass
                         return tgl_str.upper()
             
-                    # 🎯 PERBAIKAN: Gunakan Dictionary untuk menghindari error duplikasi dan memastikan status TRUE menang
+                    # 🎯 Dictionary untuk riwayat revisi
                     kamus_riwayat_revisi = {}
                     
                     # 2. RAKIT DAFTAR KUNCI DARI LOG DATABASE HISTORIS
                     for _, row_h in set_error_historis.iterrows():
-                        # Tangani ketidaksesuaian nama kolom database (antisipasi besar kecil)
                         def get_val(row, alternatives):
                             for alt in alternatives:
                                 if alt in row: return str(row[alt]).strip().upper()
@@ -1420,18 +1412,15 @@ if tombol_proses:
                         ssr_h = get_val(row_h, ["LEMBAGA SSR", "lembaga_ssr"])
                         id_h  = get_val(row_h, ["ID KLIEN", "id_klien"])
                         
-                        # Normalisasi Tanggal DB Historis
                         tgl_raw = row_h.get("TANGGAL") if row_h.get("TANGGAL") is not None else row_h.get("tanggal", "")
                         tgl_h = normalisasi_tanggal(tgl_raw)
                         
-                        # Deteksi boolean is_revisi
                         status_rev = row_h.get("is_revisi")
                         is_rev_bool = True if (status_rev is True or str(status_rev).strip().lower() == 'true') else False
                         
                         kunci_gabung = f"{kat_h}_{ssr_h}_{tgl_h}_{id_h}_{ind_h}"
                         
                         if id_h and ind_h:
-                            # Jika kunci sudah ada, dan data baru bernilai True (Fraud), timpa nilai lamanya!
                             if kunci_gabung in kamus_riwayat_revisi:
                                 if is_rev_bool:
                                     kamus_riwayat_revisi[kunci_gabung] = True
@@ -1439,7 +1428,6 @@ if tombol_proses:
                                 kamus_riwayat_revisi[kunci_gabung] = is_rev_bool
                     
                     # 3. MATCHING & SUNTIK STEMPEL KE LIVE DATA UI
-                    # Pastikan nama kolom df_utama_db seragam uppercase agar aman dibaca script bawah
                     df_utama_db.columns = df_utama_db.columns.str.upper()
                     
                     for idx_db, row_db in df_utama_db.iterrows():
@@ -1450,13 +1438,10 @@ if tombol_proses:
                         v_kat = str(row_db.get('KATEGORI DATA', '')).strip().upper()
                         v_ssr = str(row_db.get('LEMBAGA SSR', '')).strip().upper()
                         v_id  = str(row_db.get('ID KLIEN', '')).strip().upper()
-                        
-                        # Normalisasi Tanggal Live UI
                         v_tgl = normalisasi_tanggal(row_db.get('TANGGAL', ''))
                         
                         kunci_cek_db = f"{v_kat}_{v_ssr}_{v_tgl}_{v_id}_{v_ind}"
                         
-                        # Proses Stamping ke DataFrame Utama UI (Diisi ke kolom besar & kecil agar aman)
                         if kunci_cek_db in kamus_riwayat_revisi:
                             was_revisied = kamus_riwayat_revisi[kunci_cek_db]
                             
@@ -1469,12 +1454,9 @@ if tombol_proses:
                             df_utama_db.at[idx_db, 'Validasi Hasil Review'] = pesan
             
                 # 🔥 PERBAIKAN 2: FILTER & HILANGKAN BARIS YANG SUDAH DICEKLIS DARI TAMPILAN UI
-                # Jika di session_state tersimpan indeks data yang baru saja berhasil dipindahkan/disimpan,
-                # kita potong langsung baris tersebut agar tidak ikut ter-render ulang ke layar.
                 if 'indeks_master_terpilih' in st.session_state and st.session_state['indeks_master_terpilih']:
                     idx_diapus = st.session_state['indeks_master_terpilih']
                     df_utama_db = df_utama_db.drop(index=idx_diapus, errors='ignore').reset_index(drop=True)
-                    # Bersihkan state setelah digunakan agar tidak memotong data baru di proses berikutnya
                     st.session_state['indeks_master_terpilih'] = []
             
                 # Masukkan data bersih ke session state utama tampilan grid UI
