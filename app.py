@@ -1648,15 +1648,15 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             """, unsafe_allow_html=True)
             
             c1, c2, c3 = st.columns(3)
-            with c1: st.metric(label="Total Data Penjangkauan", value=f"{tot_data_penj:,}")
-            with c2: st.metric(label="Temuan Penjangkauan", value=f"{tot_err_penj:,}", delta="Perlu Perhatian", delta_color="inverse")
+            with c1: st.metric(label="Total Baris Data Penjangkauan", value=f"{tot_data_penj:,}")
+            with c2: st.metric(label="Total Baris Temuan Penjangkauan", value=f"{tot_err_penj:,}", delta="Perlu Perhatian", delta_color="inverse")
             with c3: st.metric(label="Akurasi Penjangkauan", value=teks_akurasi_penj)
             
             st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
             
             c4, c5, c6 = st.columns(3)
-            with c4: st.metric(label="Total Data Rujukan", value=f"{tot_data_ruj:,}")
-            with c5: st.metric(label="Temuan Rujukan", value=f"{tot_err_ruj:,}", delta="Perlu Perhatian", delta_color="inverse")
+            with c4: st.metric(label="Total Baris Data Rujukan", value=f"{tot_data_ruj:,}")
+            with c5: st.metric(label="Ttoal Baris Temuan Rujukan", value=f"{tot_err_ruj:,}", delta="Perlu Perhatian", delta_color="inverse")
             with c6: st.metric(label="Akurasi Rujukan", value=teks_akurasi_ruj)
             st.markdown('</div>', unsafe_allow_html=True)
             
@@ -2029,15 +2029,15 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # Render Kartu Skor Lokal
             st.markdown('<div class="glass-card" style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">', unsafe_allow_html=True)
             cc1, cc2, cc3 = st.columns(3)
-            with cc1: st.metric(label="Data Penjangkauan Terproses", value=f"{tot_data_penj_tab2:,}")
-            with cc2: st.metric(label="Temuan Penjangkauan (Lembaga)", value=f"{tot_err_penj_tab2:,}", delta="Perlu Tindakan" if tot_err_penj_tab2 > 0 else None, delta_color="inverse")
-            with cc3: st.metric(label="Akurasi Penjangkauan Lokal", value=teks_akurasi_penj_tab2)
+            with cc1: st.metric(label="Total Baris Data Penjangkauan", value=f"{tot_data_penj_tab2:,}")
+            with cc2: st.metric(label="Total Baris Temuan Penjangkauan", value=f"{tot_err_penj_tab2:,}", delta="Perlu Tindakan" if tot_err_penj_tab2 > 0 else None, delta_color="inverse")
+            with cc3: st.metric(label="Akurasi Penjangkauan", value=teks_akurasi_penj_tab2)
             
             st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
             
             cc4, cc5, cc6 = st.columns(3)
-            with cc4: st.metric(label="Data Rujukan Terproses", value=f"{tot_data_ruj_tab2:,}")
-            with cc5: st.metric(label="Temuan Rujukan (Lembaga)", value=f"{tot_err_ruj_tab2:,}", delta="Perlu Tindakan" if tot_err_ruj_tab2 > 0 else None, delta_color="inverse")
+            with cc4: st.metric(label="Total Baris Data Rujukan", value=f"{tot_data_ruj_tab2:,}")
+            with cc5: st.metric(label="Total Baris Temuan Rujukan", value=f"{tot_err_ruj_tab2:,}", delta="Perlu Tindakan" if tot_err_ruj_tab2 > 0 else None, delta_color="inverse")
             with cc6: st.metric(label="Akurasi Rujukan Lokal", value=teks_akurasi_ruj_tab2)
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
