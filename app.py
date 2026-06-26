@@ -1894,10 +1894,57 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         # TAB 2: KHUSUS VALIDASI DATA SSR (MURNI FILTER LEMBAGA LOGIN)
         # -------------------------------------------------------------------------
         with tab2:
-            # 1. Judul Dinamis Berdasarkan Lembaga yang Login
-            # Asumsi: `peran` berisi nama lembaga (misal: "PKBI Kota Bandung") atau jika "SR" dianggap bisa melihat default / semua.
-            nama_lembaga_tampil = peran if peran != "SR" else "Pusat / Semua Lembaga"
-            st.markdown(f"### 🛠️ Tools Review PKBI Jawa Barat - {nama_lembaga_tampil}")
+            # =========================================================================
+            # 1. JUDUL DINAMIS & FILTER BERDASARKAN LEVEL USER BERDASARKAN POPUP LOGIN
+            # =========================================================================
+            
+            # Mengambil status role dan nama lembaga dari session state hasil popup login
+            role_aktif = st.session_state.get('current_role', 'SSR')
+            lembaga_aktif = st.session_state.get('current_lembaga', '')
+            
+            if role_aktif == "SR":
+                # ---------------------------------------------------------------------
+                # TAMPILKAN LEVEL SR (Judul Tetap + Filter Dropdown Seluruh SSR)
+                # ---------------------------------------------------------------------
+                st.markdown(f"### 🏛️ {lembaga_aktif}") # Output: SR PKBI JAWA BARAT
+                
+                # Ambil daftar seluruh nama lembaga yang berstatus 'SSR' dari master_lembaga secara dinamis
+                daftar_seluruh_ssr = [
+                    l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"
+                ]
+                daftar_seluruh_ssr = sorted(daftar_seluruh_ssr) # Urutkan alfabetis A-Z
+                
+                # Buat susunan kolom (Layout) berdampingan agar filter berada di samping kanan judul
+                col_judul, col_filter = st.columns([1.2, 1])
+                
+                with col_judul:
+                    st.write("") # Memberi ruang kosong agar sejajar vertikal dengan selectbox
+                    st.caption("🌐 **Mode Pemantauan Provinsi:** Anda dapat menyaring data per lembaga di bawah ini.")
+                    
+                with col_filter:
+                    # Pilihan default di paling atas
+                    pilihan_ssr = ["✨ Semua SSR (Gabungan)"] + daftar_seluruh_ssr
+                    
+                    # Inilah variabel 'ssr_terpilih' yang Anda butuhkan
+                    ssr_terpilih = st.selectbox(
+                        "Saring Tampilan Data Berdasarkan Lembaga SSR:",
+                        options=pilihan_ssr,
+                        index=0,
+                        key="filter_ssr_level_sr",
+                        label_visibility="collapsed" # Menyembunyikan label bawaan agar rapi berdampingan
+                    )
+            
+            else:
+                # ---------------------------------------------------------------------
+                # TAMPILKAN LEVEL SSR (Judul otomatis fleksibel mengunci nama yang login)
+                # ---------------------------------------------------------------------
+                # Memastikan format teks rapi (Misal: "SSR BINA MUDA GEMILANG")
+                nama_ssr_caps = f"SSR {lembaga_aktif}" if not str(lembaga_aktif).startswith("SSR") else lembaga_aktif
+                
+                st.markdown(f"### 🏢 {nama_ssr_caps}")
+                
+                # Jika yang login adalah SSR, maka 'ssr_terpilih' otomatis terkunci ke lembaga mereka sendiri
+                ssr_terpilih = lembaga_aktif
             
             # Ambil data master untuk Tab 2
             df_master_source_tab2 = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
