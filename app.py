@@ -2128,8 +2128,12 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # Urutan 3: TABEL GABUNGAN UTAMA SSR (ONE-TABLE INTEGRATED EDITOR)
             # ---------------------------------------------------------------------
             st.markdown("#### 3️⃣ Tabel Gabungan Hasil Review Validasi Data (Penjangkauan & Rujukan)")
+            
+            # 🌟 PERBAIKAN: Definisikan dulu variabelnya sebelum dipanggil st.info
+            nama_lembaga_tampil = st.session_state.get('current_lembaga', 'Lembaga')
+            
             st.info(f"💡 **Mode Terproteksi Lembaga**: Menampilkan data review murni yang hanya menjadi hak jawab **{nama_lembaga_tampil}**.")
-        
+            
             if not df_master_tab2.empty:
                 df_master_t2_gab = df_master_tab2.copy()
                 df_master_t2_gab["_indeks_asli_master"] = df_master_t2_gab.index
