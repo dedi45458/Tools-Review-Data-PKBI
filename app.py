@@ -1923,7 +1923,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     
                 with col_filter:
                     # Pilihan default di paling atas
-                    pilihan_ssr = ["✨ Semua SSR (Gabungan)"] + daftar_seluruh_ssr
+                    pilihan_ssr = ["✨ Semua SSR"] + daftar_seluruh_ssr
                     
                     # Inilah variabel 'ssr_terpilih' yang Anda butuhkan
                     ssr_terpilih = st.selectbox(
