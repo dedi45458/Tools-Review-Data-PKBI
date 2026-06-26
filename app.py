@@ -2025,7 +2025,14 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             
             teks_akurasi_penj_tab2 = f"{akurasi_penj_tab2:.2f}%" if tot_data_penj_tab2 > 0 else "100.00%"
             teks_akurasi_ruj_tab2 = f"{akurasi_ruj_tab2:.2f}%" if tot_data_ruj_tab2 > 0 else "100.00%"
-        
+
+            tanggal_hari_ini = datetime.now(ZoneInfo('Asia/Jakarta')).strftime('%d %B %Y')
+            st.markdown(f"""
+                <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
+                    📅 <b>Executive Review Dashboard</b> | Tanggal Sesi: {tanggal_hari_ini} | Akses: <span style='color:#38bdf8; font-weight:700;'>{peran}</span>
+                </p>
+            """, unsafe_allow_html=True)
+            
             # Render Kartu Skor Lokal
             st.markdown('<div class="glass-card" style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">', unsafe_allow_html=True)
             cc1, cc2, cc3 = st.columns(3)
