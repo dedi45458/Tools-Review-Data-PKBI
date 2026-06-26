@@ -1628,36 +1628,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         
         teks_akurasi_penj = f"{akurasi_penj:.2f}%" if tot_data_penj > 0 else "100.00%"
         teks_akurasi_ruj = f"{akurasi_ruj:.2f}%" if tot_data_ruj > 0 else "100.00%"
-
-        # --- RENDER UI KARTU SKOR MENGGUNAKAN GLASSMORPHISM ---
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        tanggal_hari_ini = datetime.now(ZoneInfo('Asia/Jakarta')).strftime('%d %B %Y')
-        st.markdown(f"""
-            <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
-                📅 <b>Executive Review Dashboard</b> | Tanggal Sesi: {tanggal_hari_ini} | Akses: <span style='color:#38bdf8; font-weight:700;'>{peran}</span>
-            </p>
-        """, unsafe_allow_html=True)
-        
-        c1, c2, c3 = st.columns(3)
-        with c1: st.metric(label="Total Data Penjangkauan", value=f"{tot_data_penj:,}")
-        with c2: st.metric(label="Temuan Penjangkauan", value=f"{tot_err_penj:,}", delta="Perlu Perhatian", delta_color="inverse")
-        with c3: st.metric(label="Akurasi Penjangkauan", value=teks_akurasi_penj)
-        
-        st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
-        
-        c4, c5, c6 = st.columns(3)
-        with c4: st.metric(label="Total Data Rujukan", value=f"{tot_data_ruj:,}")
-        with c5: st.metric(label="Temuan Rujukan", value=f"{tot_err_ruj:,}", delta="Perlu Perhatian", delta_color="inverse")
-        with c6: st.metric(label="Akurasi Rujukan", value=teks_akurasi_ruj)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Style Kustom Ukuran Huruf Tab
-        st.markdown("""
-            <style>
-            .stTabs [data-baseweb="tab"] p { font-size: 1.2rem !important; font-weight: 600 !important; color: #ffffff !important; }
-            .stTabs [data-baseweb="tab-list"] { gap: 8px; margin-bottom: 10px; }
-            </style>
-        """, unsafe_allow_html=True)
         
         # =========================================================================
         # DEKLARASI TAB LAYOUT UTAMA
@@ -1668,6 +1638,35 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         # TAB 1: AREA LAYOUT URUTAN TABEL SESUAI PERMINTAAN USER
         # -------------------------------------------------------------------------
         with tab1:
+            # --- RENDER UI KARTU SKOR MENGGUNAKAN GLASSMORPHISM ---
+            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+            tanggal_hari_ini = datetime.now(ZoneInfo('Asia/Jakarta')).strftime('%d %B %Y')
+            st.markdown(f"""
+                <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
+                    📅 <b>Executive Review Dashboard</b> | Tanggal Sesi: {tanggal_hari_ini} | Akses: <span style='color:#38bdf8; font-weight:700;'>{peran}</span>
+                </p>
+            """, unsafe_allow_html=True)
+            
+            c1, c2, c3 = st.columns(3)
+            with c1: st.metric(label="Total Data Penjangkauan", value=f"{tot_data_penj:,}")
+            with c2: st.metric(label="Temuan Penjangkauan", value=f"{tot_err_penj:,}", delta="Perlu Perhatian", delta_color="inverse")
+            with c3: st.metric(label="Akurasi Penjangkauan", value=teks_akurasi_penj)
+            
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
+            
+            c4, c5, c6 = st.columns(3)
+            with c4: st.metric(label="Total Data Rujukan", value=f"{tot_data_ruj:,}")
+            with c5: st.metric(label="Temuan Rujukan", value=f"{tot_err_ruj:,}", delta="Perlu Perhatian", delta_color="inverse")
+            with c6: st.metric(label="Akurasi Rujukan", value=teks_akurasi_ruj)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Style Kustom Ukuran Huruf Tab
+            st.markdown("""
+                <style>
+                .stTabs [data-baseweb="tab"] p { font-size: 1.2rem !important; font-weight: 600 !important; color: #ffffff !important; }
+                .stTabs [data-baseweb="tab-list"] { gap: 8px; margin-bottom: 10px; }
+                </style>
+            """, unsafe_allow_html=True)
             
             # ---------------------------------------------------------------------
             # Urutan 1: TABEL AGREGASI PENJANGKAUAN
