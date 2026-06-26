@@ -1944,15 +1944,46 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 # Jika yang login adalah SSR, maka 'ssr_terpilih' otomatis terkunci ke lembaga mereka sendiri
                 ssr_terpilih = lembaga_aktif
             
-            # Ambil data master untuk Tab 2
-            df_master_source_tab2 = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
-            df_atas_view_tab2 = st.session_state.get('df_tabel_atas', pd.DataFrame())
-            
             # Ambil aturan rujukan untuk pengelompokan indikator
             try: 
                 ind_rujukan_tab2 = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
             except NameError: 
                 ind_rujukan_tab2 = []
+        
+            # =========================================================================
+            # KUNCI UTAMA: Ambil data metrik akurasi dari DB khusus role_reviewer="SSR"
+            # =========================================================================
+            try:
+                metrik_db, _ = ambil_metrik_akurasi_terakhir(
+                    role_reviewer="SSR", 
+                    lembaga_ssr=None if (role_aktif == "SR" and ssr_terpilih == "✨ Semua SSR") else ssr_terpilih
+                )
+                if not isinstance(metrik_db, dict): metrik_db = {}
+            except Exception:
+                metrik_db = {}
+        
+            # Indikator pengecekan: Apakah data SSR benar-benar ada di database?
+            ada_data_ssr_di_db = len(metrik_db) > 0
+        
+            # =========================================================================
+            # KONDISIONAL PEMBACAAN DATAFRAME (FORCED TO EMPTY IF NO SSR DATA IN DB)
+            # =========================================================================
+            if ada_data_ssr_di_db:
+                df_master_source_tab2 = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
+                df_atas_view_tab2 = st.session_state.get('df_tabel_atas', pd.DataFrame())
+                df_sumber_tab2 = st.session_state.get('df_rujukan', pd.DataFrame())
+                
+                # Metrik diisi dari database jika ada
+                tot_data_penj_tab2 = metrik_db.get('total_penjangkauan', 0)
+                tot_data_ruj_tab2 = metrik_db.get('total_rujukan', 0)
+            else:
+                # JIKA BELUM ADA DATA SSR DI DB, PAKSA SEMUA MENJADI KOSONG / 0
+                df_master_source_tab2 = pd.DataFrame()
+                df_atas_view_tab2 = pd.DataFrame()
+                df_sumber_tab2 = pd.DataFrame()
+                
+                tot_data_penj_tab2 = 0
+                tot_data_ruj_tab2 = 0
         
             # --- 🛠️ PROSES FILTER DATA BERDASARKAN USER LOGIN ATAU FILTER DROP DOWN SR ---
             if df_master_source_tab2 is not None and not df_master_source_tab2.empty:
@@ -1985,19 +2016,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             else:
                 tot_err_penj_tab2 = 0
                 tot_err_ruj_tab2 = 0
-        
-            # Ambil data metrik akurasi terakhir dari DB (MUTLAK MENGGUNAKAN STATUS SSR)
-            try:
-                metrik_db, _ = ambil_metrik_akurasi_terakhir(
-                    role_reviewer="SSR", 
-                    lembaga_ssr=None if (role_aktif == "SR" and ssr_terpilih == "✨ Semua SSR") else ssr_terpilih
-                )
-                if not isinstance(metrik_db, dict): metrik_db = {}
-            except Exception:
-                metrik_db = {}
-        
-            tot_data_penj_tab2 = st.session_state.get('total_entri_penjangkauan', metrik_db.get('total_penjangkauan', 0 if role_aktif == "SR" else 100))
-            tot_data_ruj_tab2 = st.session_state.get('total_entri_rujukan', metrik_db.get('total_rujukan', 0 if role_aktif == "SR" else 100))
             
             akurasi_penj_tab2 = (100.0 if tot_data_penj_tab2 == 0 else max(0.0, (tot_data_penj_tab2 - tot_err_penj_tab2) / tot_data_penj_tab2 * 100))
             akurasi_ruj_tab2 = (100.0 if tot_data_ruj_tab2 == 0 else max(0.0, (tot_data_ruj_tab2 - tot_err_ruj_tab2) / tot_data_ruj_tab2 * 100))
@@ -2009,20 +2027,20 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             st.markdown('<div class="glass-card" style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">', unsafe_allow_html=True)
             cc1, cc2, cc3 = st.columns(3)
             with cc1: st.metric(label="Data Penjangkauan Terproses", value=f"{tot_data_penj_tab2:,}")
-            with cc2: st.metric(label="Temuan Penjangkauan (Lembaga)", value=f"{tot_err_penj_tab2:,}", delta="Perlu Tindakan", delta_color="inverse")
+            with cc2: st.metric(label="Temuan Penjangkauan (Lembaga)", value=f"{tot_err_penj_tab2:,}", delta="Perlu Tindakan" if tot_err_penj_tab2 > 0 else None, delta_color="inverse")
             with cc3: st.metric(label="Akurasi Penjangkauan Lokal", value=teks_akurasi_penj_tab2)
             
             st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
             
             cc4, cc5, cc6 = st.columns(3)
             with cc4: st.metric(label="Data Rujukan Terproses", value=f"{tot_data_ruj_tab2:,}")
-            with cc5: st.metric(label="Temuan Rujukan (Lembaga)", value=f"{tot_err_ruj_tab2:,}", delta="Perlu Tindakan", delta_color="inverse")
+            with cc5: st.metric(label="Temuan Rujukan (Lembaga)", value=f"{tot_err_ruj_tab2:,}", delta="Perlu Tindakan" if tot_err_ruj_tab2 > 0 else None, delta_color="inverse")
             with cc6: st.metric(label="Akurasi Rujukan Lokal", value=teks_akurasi_ruj_tab2)
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
         
             # ---------------------------------------------------------------------
-            # Urutan 1: TABEL AGREGASI PENJANGKAUAN (KONSISTEN PARAMETER/KOLOM SSR)
+            # Urutan 1: TABEL AGREGASI PENJANGKAUAN
             # ---------------------------------------------------------------------
             st.markdown("#### 1️⃣ Tabel Agregasi Ringkasan Kesalahan - Data Penjangkauan")
             if df_atas_view_tab2 is not None and not df_atas_view_tab2.empty:
@@ -2034,8 +2052,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 
                 if not df_render_tab2.empty:
                     kolom_indikator = 'INDIKATOR KESALAHAN DATA'
-                    
-                    # Deteksi apakah menyaring satu lembaga tunggal atau semua SSR
                     is_lembaga_tunggal = (ssr_terpilih != "✨ Semua SSR")
                     
                     if is_lembaga_tunggal and ssr_terpilih in df_render_tab2.columns:
@@ -2056,7 +2072,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         }
                         st.dataframe(df_display_tab2, use_container_width=True, column_config=config_t2_penj, hide_index=True)
                     else:
-                        # JIKA PILIH "✨ SEMUA SSR" -> Tarik seluruh kolom berstatus lembaga SSR dari master data
                         list_nama_ssr_master = [l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"]
                         kolom_ssr_ada = [c for c in df_render_tab2.columns if c in list_nama_ssr_master]
                         
@@ -2079,16 +2094,15 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 else:
                     st.info("✅ Tidak ada temuan kesalahan untuk Data Penjangkauan.")
             else:
-                st.info("✨ Belum ada data review penjangkauan.")
+                st.info("✨ Belum ada data review penjangkauan khusus level SSR di database.")
                 
             st.markdown("<br>", unsafe_allow_html=True)
         
             # ---------------------------------------------------------------------
-            # Urutan 2: TABEL AGREGASI RUJUKAN (KONSISTEN PARAMETER/KOLOM SSR)
+            # Urutan 2: TABEL AGREGASI RUJUKAN
             # ---------------------------------------------------------------------
             st.markdown("#### 2️⃣ Tabel Agregasi Ringkasan Kesalahan - Data Rujukan")
-            df_sumber_tab2 = st.session_state.get('df_rujukan', pd.DataFrame())
-            if df_sumber_tab2.empty and df_atas_view_tab2 is not None: 
+            if df_sumber_tab2.empty and df_atas_view_tab2 is not None and not df_atas_view_tab2.empty: 
                 df_sumber_tab2 = df_atas_view_tab2.copy()
             
             if df_sumber_tab2 is not None and not df_sumber_tab2.empty:
@@ -2114,7 +2128,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             df_render_ruj_t2 = df_render_ruj_t2.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
                         df_render_ruj_t2 = df_render_ruj_t2.reset_index()
         
-                    # Selalu arahkan filter aktif murni ke nama SSR resmi dari master data
                     list_nama_ssr_master = [l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"]
                     
                     if ssr_terpilih != "✨ Semua SSR":
@@ -2146,7 +2159,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 else:
                     st.info("✅ Tidak ada temuan kesalahan untuk Data Rujukan.")
             else:
-                st.info("✨ Belum ada data review rujukan.")
+                st.info("✨ Belum ada data review rujukan khusus level SSR di database.")
                 
             st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.15); margin: 35px 0;'>", unsafe_allow_html=True)
                 
@@ -2228,7 +2241,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 st.markdown("<br>", unsafe_allow_html=True)
                 col_save_t2, _ = st.columns([1, 2])
                 with col_save_t2:
-                    # Mengubah teks tombol simpan secara dinamis mengikuti context user
                     label_tombol_simpan = "💾 Simpan Perubahan Validasi SR" if role_aktif == "SR" else "💾 Simpan Perubahan Validasi SSR"
                     if st.button(label_tombol_simpan, type="primary", key="btn_save_tab2"):
                         with st.spinner("Menyimpan log verifikasi lembaga..."):
@@ -2265,7 +2277,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             
                             if len(list_log_db_t2) > 0:
                                 if simpan_log_ke_neon(list_log_db_t2):
-                                    # Hapus baris yang berhasil disimpan dari session state utama agar sinkron
                                     if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None:
                                         st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(index=indeks_master_terpilih_t2, errors='ignore').reset_index(drop=True)
                                     if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
@@ -2280,7 +2291,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             else:
                                 st.info("ℹ️ Tidak ada data verifikasi yang Anda centang atau lengkapi.")
             else:
-                st.info(f"✨ Tidak ada data review gabungan yang tersedia untuk lembaga {nama_lembaga_tampil}.")
+                st.info(f"✨ Tidak ada data review gabungan yang tersedia untuk lembaga {nama_lembaga_tampil} karena belum ada riwayat submit dari SSR.")
             
         
         # -------------------------------------------------------------------------
