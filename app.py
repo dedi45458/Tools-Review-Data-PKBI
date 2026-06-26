@@ -1891,391 +1891,397 @@ if menu_pilihan == "🎯 Dashboard Review Data":
 
         
         # -------------------------------------------------------------------------
-        # TAB 2: KHUSUS VALIDASI DATA SSR (MURNI FILTER LEMBAGA LOGIN / FILTER SR)
-        # -------------------------------------------------------------------------
-        with tab2:
-            # =========================================================================
-            # 1. JUDUL DINAMIS & FILTER BERDASARKAN LEVEL USER BERDASARKAN POPUP LOGIN
-            # =========================================================================
-            
-            # Mengambil status role dan nama lembaga dari session state hasil popup login
-            role_aktif = st.session_state.get('current_role', 'SSR')
-            lembaga_aktif = st.session_state.get('current_lembaga', '')
-            
-            if role_aktif == "SR":
-                # ---------------------------------------------------------------------
-                # TAMPILKAN LEVEL SR (Judul Tetap + Filter Dropdown Seluruh SSR)
-                # ---------------------------------------------------------------------
-                st.markdown(f"### 🏛️ {lembaga_aktif}") # Output: SR PKBI JAWA BARAT
-                
-                # Ambil daftar seluruh nama lembaga yang berstatus 'SSR' dari master_lembaga secara dinamis
-                daftar_seluruh_ssr = [
-                    l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"
-                ]
-                daftar_seluruh_ssr = sorted(daftar_seluruh_ssr) # Urutkan alfabetis A-Z
-                
-                # Buat susunan kolom (Layout) berdampingan agar filter berada di samping kanan judul
-                col_judul, col_filter = st.columns([1.2, 1])
-                
-                with col_judul:
-                    st.write("") # Memberi ruang kosong agar sejajar vertikal dengan selectbox
-                    st.caption("🌐 **Mode Pemantauan Provinsi:** Anda dapat menyaring data per lembaga di bawah ini.")
-                    
-                with col_filter:
-                    # Pilihan default di paling atas
-                    pilihan_ssr = ["✨ Semua SSR"] + daftar_seluruh_ssr
-                    
-                    # Inilah variabel 'ssr_terpilih' yang Anda butuhkan
-                    ssr_terpilih = st.selectbox(
-                        "Saring Tampilan Data Berdasarkan Lembaga SSR:",
-                        options=pilihan_ssr,
-                        index=0,
-                        key="filter_ssr_level_sr",
-                        label_visibility="collapsed" # Menyembunyikan label bawaan agar rapi berdampingan
-                    )
-                    
-            else:
-                # ---------------------------------------------------------------------
-                # TAMPILKAN LEVEL SSR (Judul otomatis fleksibel mengunci nama yang login)
-                # ---------------------------------------------------------------------
-                nama_ssr_caps = f"SSR {lembaga_aktif}" if not str(lembaga_aktif).startswith("SSR") else lembaga_aktif
-                st.markdown(f"### 🏢 {nama_ssr_caps}")
-                
-                # Jika yang login adalah SSR, maka 'ssr_terpilih' otomatis terkunci ke lembaga mereka sendiri
-                ssr_terpilih = lembaga_aktif
-            
-            # Ambil data master untuk Tab 2
-            df_master_source_tab2 = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
-            df_atas_view_tab2 = st.session_state.get('df_tabel_atas', pd.DataFrame())
-            
-            # Ambil aturan rujukan untuk pengelompokan indikator
-            try: 
-                ind_rujukan_tab2 = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
-            except NameError: 
-                ind_rujukan_tab2 = []
+# TAB 2: KHUSUS VALIDASI DATA SSR (MURNI FILTER LEMBAGA LOGIN / FILTER SR)
+# -------------------------------------------------------------------------
+with tab2:
+    # =========================================================================
+    # 1. JUDUL DINAMIS & FILTER BERDASARKAN LEVEL USER BERDASARKAN POPUP LOGIN
+    # =========================================================================
+    
+    # Mengambil status role dan nama lembaga dari session state hasil popup login
+    role_aktif = st.session_state.get('current_role', 'SSR')
+    lembaga_aktif = st.session_state.get('current_lembaga', '')
+    
+    if role_aktif == "SR":
+        # ---------------------------------------------------------------------
+        # TAMPILKAN LEVEL SR (Judul Tetap + Filter Dropdown Seluruh SSR)
+        # ---------------------------------------------------------------------
+        st.markdown(f"### 🏛️ {lembaga_aktif}") # Output: SR PKBI JAWA BARAT
         
-            # --- 🛠️ PROSES FILTER DATA BERDASARKAN USER LOGIN ATAU FILTER DROP DOWN SR ---
-            if df_master_source_tab2 is not None and not df_master_source_tab2.empty:
-                df_master_tab2 = df_master_source_tab2.copy()
-                kolom_ssr_bawah = [c for c in df_master_tab2.columns if "lembaga" in str(c).lower() or "ssr" in str(c).lower()]
-                
-                if kolom_ssr_bawah:
-                    # Jika user adalah SSR, kunci data murni miliknya
-                    if role_aktif != "SR":
-                        df_master_tab2 = df_master_tab2[df_master_tab2[kolom_ssr_bawah[0]].astype(str).str.upper() == str(ssr_terpilih).upper()].copy()
-                    # Jika user adalah SR dan memilih SSR tertentu (bukan "✨ Semua SSR")
-                    elif role_aktif == "SR" and ssr_terpilih != "✨ Semua SSR":
-                        df_master_tab2 = df_master_tab2[df_master_tab2[kolom_ssr_bawah[0]].astype(str).str.upper() == str(ssr_terpilih).upper()].copy()
-            else:
-                df_master_tab2 = pd.DataFrame()
+        # Ambil daftar seluruh nama lembaga yang berstatus 'SSR' dari master_lembaga secara dinamis
+        daftar_seluruh_ssr = [
+            l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"
+        ]
+        daftar_seluruh_ssr = sorted(daftar_seluruh_ssr) # Urutkan alfabetis A-Z
         
-            # --- KUALIFIKASI STATISTIK KARTU SKOR KHUSUS LEMBAGA SSR TERKAIT ---
-            if not df_master_tab2.empty:
-                col_ind_clean = [c for c in df_master_tab2.columns if "indikator" in str(c).lower() or "kesalahan" in str(c).lower() or "error" in str(c).lower()]
-                if col_ind_clean:
-                    try: ind_ruj_caps = [str(r).strip().upper() for r in ind_rujukan_tab2]
-                    except: ind_ruj_caps = []
-                    mask_ruj_tab2 = df_master_tab2[col_ind_clean[0]].astype(str).str.strip().str.upper().isin(ind_ruj_caps)
+        # Buat susunan kolom (Layout) berdampingan agar filter berada di samping kanan judul
+        col_judul, col_filter = st.columns([1.2, 1])
+        
+        with col_judul:
+            st.write("") # Memberi ruang kosong agar sejajar vertikal dengan selectbox
+            st.caption("🌐 **Mode Pemantauan Provinsi:** Anda dapat menyaring data per lembaga di bawah ini.")
+            
+        with col_filter:
+            # Pilihan default di paling atas
+            pilihan_ssr = ["✨ Semua SSR"] + daftar_seluruh_ssr
+            
+            # Inilah variabel 'ssr_terpilih' yang Anda butuhkan
+            ssr_terpilih = st.selectbox(
+                "Saring Tampilan Data Berdasarkan Lembaga SSR:",
+                options=pilihan_ssr,
+                index=0,
+                key="filter_ssr_level_sr",
+                label_visibility="collapsed" # Menyembunyikan label bawaan agar rapi berdampingan
+            )
+            
+    else:
+        # ---------------------------------------------------------------------
+        # TAMPILKAN LEVEL SSR (Judul otomatis fleksibel mengunci nama yang login)
+        # ---------------------------------------------------------------------
+        nama_ssr_caps = f"SSR {lembaga_aktif}" if not str(lembaga_aktif).startswith("SSR") else lembaga_aktif
+        st.markdown(f"### 🏢 {nama_ssr_caps}")
+        
+        # Jika yang login adalah SSR, maka 'ssr_terpilih' otomatis terkunci ke lembaga mereka sendiri
+        ssr_terpilih = lembaga_aktif
+    
+    # Ambil data master untuk Tab 2
+    df_master_source_tab2 = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
+    df_atas_view_tab2 = st.session_state.get('df_tabel_atas', pd.DataFrame())
+    
+    # Ambil aturan rujukan untuk pengelompokan indikator
+    try: 
+        ind_rujukan_tab2 = [r['nama'] for r in ATURAN_VALIDASI_RUJUKAN]
+    except NameError: 
+        ind_rujukan_tab2 = []
+
+    # --- 🛠️ PROSES FILTER DATA BERDASARKAN USER LOGIN ATAU FILTER DROP DOWN SR ---
+    if df_master_source_tab2 is not None and not df_master_source_tab2.empty:
+        df_master_tab2 = df_master_source_tab2.copy()
+        kolom_ssr_bawah = [c for c in df_master_tab2.columns if "lembaga" in str(c).lower() or "ssr" in str(c).lower()]
+        
+        if kolom_ssr_bawah:
+            # Jika user adalah SSR, kunci data murni miliknya
+            if role_aktif != "SR":
+                df_master_tab2 = df_master_tab2[df_master_tab2[kolom_ssr_bawah[0]].astype(str).str.upper() == str(ssr_terpilih).upper()].copy()
+            # Jika user adalah SR dan memilih SSR tertentu (bukan "✨ Semua SSR")
+            elif role_aktif == "SR" and ssr_terpilih != "✨ Semua SSR":
+                df_master_tab2 = df_master_tab2[df_master_tab2[kolom_ssr_bawah[0]].astype(str).str.upper() == str(ssr_terpilih).upper()].copy()
+    else:
+        df_master_tab2 = pd.DataFrame()
+
+    # --- KUALIFIKASI STATISTIK KARTU SKOR KHUSUS LEMBAGA SSR TERKAIT ---
+    if not df_master_tab2.empty:
+        col_ind_clean = [c for c in df_master_tab2.columns if "indikator" in str(c).lower() or "kesalahan" in str(c).lower() or "error" in str(c).lower()]
+        if col_ind_clean:
+            try: ind_ruj_caps = [str(r).strip().upper() for r in ind_rujukan_tab2]
+            except: ind_ruj_caps = []
+            mask_ruj_tab2 = df_master_tab2[col_ind_clean[0]].astype(str).str.strip().str.upper().isin(ind_ruj_caps)
+            
+            tot_err_penj_tab2 = len(df_master_tab2[~mask_ruj_tab2])
+            tot_err_ruj_tab2 = len(df_master_tab2[mask_ruj_tab2])
+        else:
+            tot_err_penj_tab2 = 0
+            tot_err_ruj_tab2 = 0
+    else:
+        tot_err_penj_tab2 = 0
+        tot_err_ruj_tab2 = 0
+
+    # Ambil data metrik akurasi terakhir dari DB (MUTLAK MENGGUNAKAN STATUS SSR)
+    try:
+        metrik_db, _ = ambil_metrik_akurasi_terakhir(
+            role_reviewer="SSR", 
+            lembaga_ssr=None if (role_aktif == "SR" and ssr_terpilih == "✨ Semua SSR") else ssr_terpilih
+        )
+        if not isinstance(metrik_db, dict): metrik_db = {}
+    except Exception:
+        metrik_db = {}
+
+    tot_data_penj_tab2 = st.session_state.get('total_entri_penjangkauan', metrik_db.get('total_penjangkauan', 0 if role_aktif == "SR" else 100))
+    tot_data_ruj_tab2 = st.session_state.get('total_entri_rujukan', metrik_db.get('total_rujukan', 0 if role_aktif == "SR" else 100))
+    
+    akurasi_penj_tab2 = (100.0 if tot_data_penj_tab2 == 0 else max(0.0, (tot_data_penj_tab2 - tot_err_penj_tab2) / tot_data_penj_tab2 * 100))
+    akurasi_ruj_tab2 = (100.0 if tot_data_ruj_tab2 == 0 else max(0.0, (tot_data_ruj_tab2 - tot_err_ruj_tab2) / tot_data_ruj_tab2 * 100))
+    
+    teks_akurasi_penj_tab2 = f"{akurasi_penj_tab2:.2f}%" if tot_data_penj_tab2 > 0 else "100.00%"
+    teks_akurasi_ruj_tab2 = f"{akurasi_ruj_tab2:.2f}%" if tot_data_ruj_tab2 > 0 else "100.00%"
+
+    # Render Kartu Skor Lokal SSR (Glassmorphism)
+    st.markdown('<div class="glass-card" style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">', unsafe_allow_html=True)
+    cc1, cc2, cc3 = st.columns(3)
+    with cc1: st.metric(label="Data Penjangkauan Terproses", value=f"{tot_data_penj_tab2:,}")
+    with cc2: st.metric(label="Temuan Penjangkauan (Lembaga)", value=f"{tot_err_penj_tab2:,}", delta="Perlu Tindakan", delta_color="inverse")
+    with cc3: st.metric(label="Akurasi Penjangkauan Lokal", value=teks_akurasi_penj_tab2)
+    
+    st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
+    
+    cc4, cc5, cc6 = st.columns(3)
+    with cc4: st.metric(label="Data Rujukan Terproses", value=f"{tot_data_ruj_tab2:,}")
+    with cc5: st.metric(label="Temuan Rujukan (Lembaga)", value=f"{tot_err_ruj_tab2:,}", delta="Perlu Tindakan", delta_color="inverse")
+    with cc6: st.metric(label="Akurasi Rujukan Lokal", value=teks_akurasi_ruj_tab2)
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ---------------------------------------------------------------------
+    # Urutan 1: TABEL AGREGASI PENJANGKAUAN (KONSISTEN PARAMETER/KOLOM SSR)
+    # ---------------------------------------------------------------------
+    st.markdown("#### 1️⃣ Tabel Agregasi Ringkasan Kesalahan - Data Penjangkauan")
+    if df_atas_view_tab2 is not None and not df_atas_view_tab2.empty:
+        df_render_tab2 = df_atas_view_tab2.copy()
+        if df_render_tab2.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render_tab2.columns:
+            df_render_tab2 = df_render_tab2.reset_index()
+        
+        df_render_tab2 = df_render_tab2[~df_render_tab2['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan_tab2)].copy()
+        
+        if not df_render_tab2.empty:
+            kolom_indikator = 'INDIKATOR KESALAHAN DATA'
+            
+            # Deteksi apakah menyaring satu lembaga tunggal atau semua SSR
+            is_lembaga_tunggal = (ssr_terpilih != "✨ Semua SSR")
+            
+            if is_lembaga_tunggal and ssr_terpilih in df_render_tab2.columns:
+                df_render_tab2[ssr_terpilih] = pd.to_numeric(df_render_tab2[ssr_terpilih], errors='coerce').fillna(0).astype(int)
+                df_render_tab2['Jumlah per indikator'] = df_render_tab2[ssr_terpilih]
+                total_error_lokal = df_render_tab2['Jumlah per indikator'].sum()
+                df_render_tab2['%'] = (df_render_tab2['Jumlah per indikator'] / total_error_lokal * 100) if total_error_lokal > 0 else 0.0
+                
+                kolom_final_tab2 = [kolom_indikator, ssr_terpilih, 'Jumlah per indikator', '%']
+                df_display_tab2 = df_render_tab2[[c for c in kolom_final_tab2 if c in df_render_tab2.columns]].copy()
+                df_display_tab2[ssr_terpilih] = df_display_tab2[ssr_terpilih].astype(str).replace({'0': '-', '0.0': '-'})
+                
+                config_t2_penj = {
+                    kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
+                    ssr_terpilih: st.column_config.TextColumn(f"Jumlah ({ssr_terpilih})", width="small"),
+                    "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
+                    "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
+                }
+                st.dataframe(df_display_tab2, use_container_width=True, column_config=config_t2_penj, hide_index=True)
+            else:
+                # JIKA PILIH "✨ SEMUA SSR" -> Tarik seluruh kolom berstatus lembaga SSR dari master data
+                list_nama_ssr_master = [l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"]
+                kolom_ssr_ada = [c for c in df_render_tab2.columns if c in list_nama_ssr_master]
+                
+                if kolom_ssr_ada:
+                    for c in kolom_ssr_ada:
+                        df_render_tab2[c] = pd.to_numeric(df_render_tab2[c], errors='coerce').fillna(0).astype(int)
                     
-                    tot_err_penj_tab2 = len(df_master_tab2[~mask_ruj_tab2])
-                    tot_err_ruj_tab2 = len(df_master_tab2[mask_ruj_tab2])
+                    df_render_tab2['Jumlah per indikator'] = df_render_tab2[kolom_ssr_ada].sum(axis=1)
+                    total_error_all = df_render_tab2['Jumlah per indikator'].sum()
+                    df_render_tab2['%'] = (df_render_tab2['Jumlah per indikator'] / total_error_all * 100) if total_error_all > 0 else 0.0
+                    
+                    config_t2_penj = {
+                        kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
+                        "Jumlah per indikator": st.column_config.NumberColumn("Total Gabungan SSR", width="small", format="%d"),
+                        "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
+                    }
+                    st.dataframe(df_render_tab2[[kolom_indikator] + kolom_ssr_ada + ['Jumlah per indikator', '%']], use_container_width=True, column_config=config_t2_penj, hide_index=True)
                 else:
-                    tot_err_penj_tab2 = 0
-                    tot_err_ruj_tab2 = 0
-            else:
-                tot_err_penj_tab2 = 0
-                tot_err_ruj_tab2 = 0
+                    st.info(f"✅ Tidak ada temuan kesalahan data Penjangkauan tercatat untuk lembaga {ssr_terpilih}.")
+        else:
+            st.info("✅ Tidak ada temuan kesalahan untuk Data Penjangkauan.")
+    else:
+        st.info("✨ Belum ada data review penjangkauan.")
         
-            # Ambil data metrik akurasi terakhir dari DB
-            try:
-                metrik_db, _ = ambil_metrik_akurasi_terakhir(
-                    role_reviewer="SR" if role_aktif == "SR" else "SSR", 
-                    lembaga_ssr=None if (role_aktif == "SR" and ssr_terpilih == "✨ Semua SSR") else ssr_terpilih
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ---------------------------------------------------------------------
+    # Urutan 2: TABEL AGREGASI RUJUKAN (KONSISTEN PARAMETER/KOLOM SSR)
+    # ---------------------------------------------------------------------
+    st.markdown("#### 2️⃣ Tabel Agregasi Ringkasan Kesalahan - Data Rujukan")
+    df_sumber_tab2 = st.session_state.get('df_rujukan', pd.DataFrame())
+    if df_sumber_tab2.empty and df_atas_view_tab2 is not None: 
+        df_sumber_tab2 = df_atas_view_tab2.copy()
+    
+    if df_sumber_tab2 is not None and not df_sumber_tab2.empty:
+        df_render_ruj_t2 = df_sumber_tab2.copy()
+        if df_render_ruj_t2.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render_ruj_t2.columns: 
+            df_render_ruj_t2 = df_render_ruj_t2.reset_index()
+        if 'indikator_kesalahan_data' in df_render_ruj_t2.columns: 
+            df_render_ruj_t2 = df_render_ruj_t2.rename(columns={'indikator_kesalahan_data': 'INDIKATOR KESALAHAN DATA'})
+        
+        df_render_ruj_t2 = df_render_ruj_t2[df_render_ruj_t2['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan_tab2)].copy()
+        
+        if not df_render_ruj_t2.empty:
+            kolom_indikator = 'INDIKATOR KESALAHAN DATA'
+            
+            if 'Jumlah per indikator' not in df_render_ruj_t2.columns and 'LEMBAGA SSR' in df_render_ruj_t2.columns:
+                kolom_target_jumlah = 'JUMLAH KESALAHAN'
+                if kolom_target_jumlah not in df_render_ruj_t2.columns:
+                    opsi_kolom = [c for c in df_render_ruj_t2.columns if 'JUMLAH' in str(c).upper() or 'KESALAHAN' in str(c).upper()]
+                    if opsi_kolom: kolom_target_jumlah = opsi_kolom[0]
+                if kolom_target_jumlah in df_render_ruj_t2.columns: 
+                    df_render_ruj_t2 = df_render_ruj_t2.groupby([kolom_indikator, 'LEMBAGA SSR'])[kolom_target_jumlah].sum().unstack(fill_value=0)
+                else: 
+                    df_render_ruj_t2 = df_render_ruj_t2.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
+                df_render_ruj_t2 = df_render_ruj_t2.reset_index()
+
+            # Selalu arahkan filter aktif murni ke nama SSR resmi dari master data
+            list_nama_ssr_master = [l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"]
+            
+            if ssr_terpilih != "✨ Semua SSR":
+                kolom_aktif_t2 = [ssr_terpilih] if ssr_terpilih in df_render_ruj_t2.columns else []
+            else:
+                kolom_aktif_t2 = [c for c in df_render_ruj_t2.columns if c in list_nama_ssr_master]
+                
+            if kolom_aktif_t2:
+                for col in kolom_aktif_t2: 
+                    df_render_ruj_t2[col] = pd.to_numeric(df_render_ruj_t2[col], errors='coerce').fillna(0).astype(int)
+                
+                df_render_ruj_t2['Jumlah per indikator'] = df_render_ruj_t2[kolom_aktif_t2].sum(axis=1)
+                total_error_ruj_lokal = df_render_ruj_t2['Jumlah per indikator'].sum()
+                df_render_ruj_t2['%'] = (df_render_ruj_t2['Jumlah per indikator'] / total_error_ruj_lokal * 100) if total_error_ruj_lokal > 0 else 0.0
+                
+                kolom_final_ruj_t2 = [kolom_indikator] + kolom_aktif_t2 + ['Jumlah per indikator', '%']
+                df_display_ruj_t2 = df_render_ruj_t2[[c for c in kolom_final_ruj_t2 if c in df_render_ruj_t2.columns]].copy()
+                
+                config_t2_ruj = {
+                    kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
+                    "Jumlah per indikator": st.column_config.NumberColumn("Total SSR", width="small", format="%d"),
+                    "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
+                }
+                for col in kolom_aktif_t2: 
+                    config_t2_ruj[col] = st.column_config.NumberColumn(str(col).upper(), width="small", format="%d")
+                st.dataframe(df_display_ruj_t2, use_container_width=True, column_config=config_t2_ruj, hide_index=True)
+            else:
+                st.info(f"✅ Tidak ada temuan kesalahan data Rujukan tercatat untuk lembaga {ssr_terpilih}.")
+        else:
+            st.info("✅ Tidak ada temuan kesalahan untuk Data Rujukan.")
+    else:
+        st.info("✨ Belum ada data review rujukan.")
+        
+    st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.15); margin: 35px 0;'>", unsafe_allow_html=True)
+        
+    # ---------------------------------------------------------------------
+    # Urutan 3: TABEL GABUNGAN UTAMA SSR (ONE-TABLE INTEGRATED EDITOR)
+    # ---------------------------------------------------------------------
+    st.markdown("#### 3️⃣ Tabel Gabungan Hasil Review Validasi Data (Penjangkauan & Rujukan)")
+    
+    # Label nama dinamis sesuai filter yang sedang aktif
+    nama_lembaga_tampil = ssr_terpilih if (role_aktif != "SR" or ssr_terpilih != "✨ Semua SSR") else "Semua Lembaga SSR"
+    st.info(f"💡 **Mode Terproteksi Lembaga**: Menampilkan data review murni yang menjadi hak jawab **{nama_lembaga_tampil}**.")
+    
+    if not df_master_tab2.empty:
+        df_master_t2_gab = df_master_tab2.copy()
+        df_master_t2_gab["_indeks_asli_master"] = df_master_t2_gab.index
+        df_master_t2_gab.columns = [str(c).strip() for c in df_master_t2_gab.columns]
+        
+        # Normalisasi Nama Kolom Gabungan
+        rename_dict_t2 = {}
+        for col in df_master_t2_gab.columns:
+            c_clean = str(col).strip().lower()
+            if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean: rename_dict_t2[col] = "Indikator Kesalahan Data"
+            elif "validasi" in c_clean or "review" in c_clean: rename_dict_t2[col] = "Validasi Hasil Review"
+            elif "justifikasi" in c_clean: rename_dict_t2[col] = "Justifikasi"
+            elif "lembaga" in c_clean or "ssr" in c_clean: rename_dict_t2[col] = "Lembaga SSR"
+            elif "layanan" in c_clean: rename_dict_t2[col] = "Nama Layanan"
+            elif "petugas" in c_clean: rename_dict_t2[col] = "Kode Petugas"
+            elif "kota" in c_clean or "kabupaten" in c_clean: rename_dict_t2[col] = "Nama Kota"
+            elif "tanggal" in c_clean: rename_dict_t2[col] = "Tanggal"
+            elif "id klien" in c_clean or "id_klien" in c_clean: rename_dict_t2[col] = "ID Klien"
+            elif "nik" == c_clean: rename_dict_t2[col] = "NIK"
+            elif "sasaran" in c_clean: rename_dict_t2[col] = "Tipe Sasaran"
+        
+        if rename_dict_t2:
+            df_master_t2_gab = df_master_t2_gab.rename(columns=rename_dict_t2)
+        
+        if "Kategori Data" not in df_master_t2_gab.columns:
+            if "Indikator Kesalahan Data" in df_master_t2_gab.columns:
+                df_master_t2_gab["Kategori Data"] = df_master_t2_gab["Indikator Kesalahan Data"].apply(
+                    lambda x: "Rujukan" if str(x).strip().upper() in [str(r).strip().upper() for r in ind_rujukan_tab2] else "Penjangkauan"
                 )
-                if not isinstance(metrik_db, dict): metrik_db = {}
-            except Exception:
-                metrik_db = {}
-        
-            tot_data_penj_tab2 = st.session_state.get('total_entri_penjangkauan', metrik_db.get('total_penjangkauan', 0 if role_aktif == "SR" else 100))
-            tot_data_ruj_tab2 = st.session_state.get('total_entri_rujukan', metrik_db.get('total_rujukan', 0 if role_aktif == "SR" else 100))
-            
-            akurasi_penj_tab2 = (100.0 if tot_data_penj_tab2 == 0 else max(0.0, (tot_data_penj_tab2 - tot_err_penj_tab2) / tot_data_penj_tab2 * 100))
-            akurasi_ruj_tab2 = (100.0 if tot_data_ruj_tab2 == 0 else max(0.0, (tot_data_ruj_tab2 - tot_err_ruj_tab2) / tot_data_ruj_tab2 * 100))
-            
-            teks_akurasi_penj_tab2 = f"{akurasi_penj_tab2:.2f}%" if tot_data_penj_tab2 > 0 else "100.00%"
-            teks_akurasi_ruj_tab2 = f"{akurasi_ruj_tab2:.2f}%" if tot_data_ruj_tab2 > 0 else "100.00%"
-        
-            # Render Kartu Skor Lokal SSR (Glassmorphism)
-            st.markdown('<div class="glass-card" style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">', unsafe_allow_html=True)
-            cc1, cc2, cc3 = st.columns(3)
-            with cc1: st.metric(label="Data Penjangkauan Terproses", value=f"{tot_data_penj_tab2:,}")
-            with cc2: st.metric(label="Temuan Penjangkauan (Lembaga)", value=f"{tot_err_penj_tab2:,}", delta="Perlu Tindakan", delta_color="inverse")
-            with cc3: st.metric(label="Akurasi Penjangkauan Lokal", value=teks_akurasi_penj_tab2)
-            
-            st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
-            
-            cc4, cc5, cc6 = st.columns(3)
-            with cc4: st.metric(label="Data Rujukan Terproses", value=f"{tot_data_ruj_tab2:,}")
-            with cc5: st.metric(label="Temuan Rujukan (Lembaga)", value=f"{tot_err_ruj_tab2:,}", delta="Perlu Tindakan", delta_color="inverse")
-            with cc6: st.metric(label="Akurasi Rujukan Lokal", value=teks_akurasi_ruj_tab2)
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-        
-            # ---------------------------------------------------------------------
-            # Urutan 1: TABEL AGREGASI PENJANGKAUAN (FILTER DINAMIS)
-            # ---------------------------------------------------------------------
-            st.markdown("#### 1️⃣ Tabel Agregasi Ringkasan Kesalahan - Data Penjangkauan")
-            if df_atas_view_tab2 is not None and not df_atas_view_tab2.empty:
-                df_render_tab2 = df_atas_view_tab2.copy()
-                if df_render_tab2.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render_tab2.columns:
-                    df_render_tab2 = df_render_tab2.reset_index()
-                
-                df_render_tab2 = df_render_tab2[~df_render_tab2['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan_tab2)].copy()
-                
-                if not df_render_tab2.empty:
-                    kolom_indikator = 'INDIKATOR KESALAHAN DATA'
-                    
-                    # Mengatur kolom mana yang akan ditarik angkanya sesuai filter/login
-                    target_kolom_tampil = ssr_terpilih if (role_aktif != "SR" or ssr_terpilih != "✨ Semua SSR") else None
-                    
-                    if target_kolom_tampil and target_kolom_tampil in df_render_tab2.columns:
-                        df_render_tab2[target_kolom_tampil] = pd.to_numeric(df_render_tab2[target_kolom_tampil], errors='coerce').fillna(0).astype(int)
-                        df_render_tab2['Jumlah per indikator'] = df_render_tab2[target_kolom_tampil]
-                        total_error_lokal = df_render_tab2['Jumlah per indikator'].sum()
-                        df_render_tab2['%'] = (df_render_tab2['Jumlah per indikator'] / total_error_lokal * 100) if total_error_lokal > 0 else 0.0
-                        
-                        kolom_final_tab2 = [kolom_indikator, target_kolom_tampil, 'Jumlah per indikator', '%']
-                        df_display_tab2 = df_render_tab2[[c for c in kolom_final_tab2 if c in df_render_tab2.columns]].copy()
-                        df_display_tab2[target_kolom_tampil] = df_display_tab2[target_kolom_tampil].astype(str).replace({'0': '-', '0.0': '-'})
-                        
-                        config_t2_penj = {
-                            kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
-                            target_kolom_tampil: st.column_config.TextColumn(f"Jumlah ({target_kolom_tampil})", width="small"),
-                            "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
-                            "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
-                        }
-                        st.dataframe(df_display_tab2, use_container_width=True, column_config=config_t2_penj, hide_index=True)
-                    elif role_aktif == "SR" and ssr_terpilih == "✨ Semua SSR":
-                        # Tampilkan seluruh kolom lembaga jika SR memilih Semua SSR
-                        kolom_ssr_all = [c for c in df_render_tab2.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
-                        for c in kolom_ssr_all:
-                            df_render_tab2[c] = pd.to_numeric(df_render_tab2[c], errors='coerce').fillna(0).astype(int)
-                        df_render_tab2['Jumlah per indikator'] = df_render_tab2[kolom_ssr_all].sum(axis=1)
-                        total_error_all = df_render_tab2['Jumlah per indikator'].sum()
-                        df_render_tab2['%'] = (df_render_tab2['Jumlah per indikator'] / total_error_all * 100) if total_error_all > 0 else 0.0
-                        
-                        config_t2_penj = {
-                            kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
-                            "Jumlah per indikator": st.column_config.NumberColumn("Total Gabungan", width="small", format="%d"),
-                            "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
-                        }
-                        st.dataframe(df_render_tab2[[kolom_indikator] + kolom_ssr_all + ['Jumlah per indikator', '%']], use_container_width=True, column_config=config_t2_penj, hide_index=True)
-                    else:
-                        st.info(f"✅ Tidak ada temuan kesalahan data Penjangkauan tercatat untuk lembaga {ssr_terpilih}.")
-                else:
-                    st.info("✅ Tidak ada temuan kesalahan untuk Data Penjangkauan.")
             else:
-                st.info("✨ Belum ada data review penjangkauan.")
-                
-            st.markdown("<br>", unsafe_allow_html=True)
+                df_master_t2_gab["Kategori Data"] = "Penjangkauan"
         
-            # ---------------------------------------------------------------------
-            # Urutan 2: TABEL AGREGASI RUJUKAN (FILTER DINAMIS)
-            # ---------------------------------------------------------------------
-            st.markdown("#### 2️⃣ Tabel Agregasi Ringkasan Kesalahan - Data Rujukan")
-            df_sumber_tab2 = st.session_state.get('df_rujukan', pd.DataFrame())
-            if df_sumber_tab2.empty and df_atas_view_tab2 is not None: 
-                df_sumber_tab2 = df_atas_view_tab2.copy()
-            
-            if df_sumber_tab2 is not None and not df_sumber_tab2.empty:
-                df_render_ruj_t2 = df_sumber_tab2.copy()
-                if df_render_ruj_t2.index.name == 'INDIKATOR KESALAHAN DATA' or 'INDIKATOR KESALAHAN DATA' not in df_render_ruj_t2.columns: 
-                    df_render_ruj_t2 = df_render_ruj_t2.reset_index()
-                if 'indikator_kesalahan_data' in df_render_ruj_t2.columns: 
-                    df_render_ruj_t2 = df_render_ruj_t2.rename(columns={'indikator_kesalahan_data': 'INDIKATOR KESALAHAN DATA'})
+        # Susunan Baku Kolom Tabel Gabungan
+        kolom_susunan_gabungan_t2 = [
+            "Pilih", "Kategori Data", "Lembaga SSR", "Kode Petugas", "Nama Kota", "Nama Layanan", 
+            "Tanggal", "ID Klien", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", "Validasi Hasil Review", "Justifikasi"
+        ]
+        
+        for col in kolom_susunan_gabungan_t2:
+            if col not in df_master_t2_gab.columns:
+                df_master_t2_gab[col] = False if col == "Pilih" else "-"
                 
-                df_render_ruj_t2 = df_render_ruj_t2[df_render_ruj_t2['INDIKATOR KESALAHAN DATA'].isin(ind_rujukan_tab2)].copy()
+        # Terapkan gembok proteksi Justifikasi non-konfirmasi untuk keamanan internal SSR
+        for idx, row in df_master_t2_gab.iterrows():
+            if "konfirmasi" not in str(row['Indikator Kesalahan Data']).lower():
+                df_master_t2_gab.at[idx, 'Justifikasi'] = "🔒 Terkunci (Bukan Konfirmasi)"
                 
-                if not df_render_ruj_t2.empty:
-                    kolom_indikator = 'INDIKATOR KESALAHAN DATA'
+        df_view_gabungan_t2 = df_master_t2_gab[kolom_susunan_gabungan_t2 + ["_indeks_asli_master"]].copy()
+        
+        # Render Data Editor khusus Tab 2
+        kolom_dikunci_t2 = [c for c in kolom_susunan_gabungan_t2 if c not in ["Pilih", "Justifikasi"]]
+        
+        df_hasil_edit_t2 = st.data_editor(
+            df_view_gabungan_t2[kolom_susunan_gabungan_t2],
+            use_container_width=True,
+            hide_index=True, 
+            key="editor_validasi_tunggal_tab2",
+            column_config={
+                "Pilih": st.column_config.CheckboxColumn("Pilih", default=False),
+                "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=300),
+                "Justifikasi": st.column_config.TextColumn("Justifikasi", width=260),
+            },
+            disabled=kolom_dikunci_t2
+        )
+        
+        # Tombol Simpan Perubahan khusus Tab 2
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_save_t2, _ = st.columns([1, 2])
+        with col_save_t2:
+            # Mengubah teks tombol simpan secara dinamis mengikuti context user
+            label_tombol_simpan = "💾 Simpan Perubahan Validasi SR" if role_aktif == "SR" else "💾 Simpan Perubahan Validasi SSR"
+            if st.button(label_tombol_simpan, type="primary", key="btn_save_tab2"):
+                with st.spinner("Menyimpan log verifikasi lembaga..."):
+                    list_log_db_t2 = []
+                    indeks_master_terpilih_t2 = []
                     
-                    if 'Jumlah per indikator' not in df_render_ruj_t2.columns and 'LEMBAGA SSR' in df_render_ruj_t2.columns:
-                        kolom_target_jumlah = 'JUMLAH KESALAHAN'
-                        if kolom_target_jumlah not in df_render_ruj_t2.columns:
-                            opsi_kolom = [c for c in df_render_ruj_t2.columns if 'JUMLAH' in str(c).upper() or 'KESALAHAN' in str(c).upper()]
-                            if opsi_kolom: kolom_target_jumlah = opsi_kolom[0]
-                        if kolom_target_jumlah in df_render_ruj_t2.columns: 
-                            df_render_ruj_t2 = df_render_ruj_t2.groupby([kolom_indikator, 'LEMBAGA SSR'])[kolom_target_jumlah].sum().unstack(fill_value=0)
-                        else: 
-                            df_render_ruj_t2 = df_render_ruj_t2.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
-                        df_render_ruj_t2 = df_render_ruj_t2.reset_index()
-        
-                    # Filter kolom yang tampil di tabel rujukan
-                    if role_aktif != "SR" or ssr_terpilih != "✨ Semua SSR":
-                        kolom_aktif_t2 = [ssr_terpilih] if ssr_terpilih in df_render_ruj_t2.columns else []
-                    else:
-                        kolom_aktif_t2 = [c for c in df_render_ruj_t2.columns if c not in [kolom_indikator, 'Jumlah per indikator', '%']]
+                    for idx, row_edit in df_hasil_edit_t2.iterrows():
+                        ind_text = str(row_edit.get('Indikator Kesalahan Data', ''))
+                        text_justifikasi = str(row_edit.get('Justifikasi', '')).strip()
+                        is_konfirmasi = "konfirmasi" in ind_text.lower()
+                        status_revisi = bool(row_edit.get('Pilih', False))
                         
-                    if kolom_aktif_t2:
-                        for col in kolom_aktif_t2: 
-                            df_render_ruj_t2[col] = pd.to_numeric(df_render_ruj_t2[col], errors='coerce').fillna(0).astype(int)
-                        
-                        df_render_ruj_t2['Jumlah per indikator'] = df_render_ruj_t2[kolom_aktif_t2].sum(axis=1)
-                        total_error_ruj_lokal = df_render_ruj_t2['Jumlah per indikator'].sum()
-                        df_render_ruj_t2['%'] = (df_render_ruj_t2['Jumlah per indikator'] / total_error_ruj_lokal * 100) if total_error_ruj_lokal > 0 else 0.0
-                        
-                        kolom_final_ruj_t2 = [kolom_indikator] + kolom_aktif_t2 + ['Jumlah per indikator', '%']
-                        df_display_ruj_t2 = df_render_ruj_t2[[c for c in kolom_final_ruj_t2 if c in df_render_ruj_t2.columns]].copy()
-                        
-                        config_t2_ruj = {
-                            kolom_indikator: st.column_config.TextColumn("Indikator Kesalahan", width=340),
-                            "Jumlah per indikator": st.column_config.NumberColumn("Total", width="small", format="%d"),
-                            "%": st.column_config.ProgressColumn("%", format="%.1f%%", min_value=0, max_value=100, width="small")
-                        }
-                        for col in kolom_aktif_t2: config_t2_ruj[col] = st.column_config.NumberColumn(str(col).upper(), width="small", format="%d")
-                        st.dataframe(df_display_ruj_t2, use_container_width=True, column_config=config_t2_ruj, hide_index=True)
-                    else:
-                        st.info(f"✅ Tidak ada temuan kesalahan data Rujukan tercatat untuk lembaga {ssr_terpilih}.")
-                else:
-                    st.info("✅ Tidak ada temuan kesalahan untuk Data Rujukan.")
-            else:
-                st.info("✨ Belum ada data review rujukan.")
-                
-            st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.15); margin: 35px 0;'>", unsafe_allow_html=True)
-                
-            # ---------------------------------------------------------------------
-            # Urutan 3: TABEL GABUNGAN UTAMA SSR (ONE-TABLE INTEGRATED EDITOR)
-            # ---------------------------------------------------------------------
-            st.markdown("#### 3️⃣ Tabel Gabungan Hasil Review Validasi Data (Penjangkauan & Rujukan)")
-            
-            # Label nama dinamis sesuai filter yang sedang aktif
-            nama_lembaga_tampil = ssr_terpilih if (role_aktif != "SR" or ssr_terpilih != "✨ Semua SSR") else "Semua Lembaga SSR"
-            st.info(f"💡 **Mode Terproteksi Lembaga**: Menampilkan data review murni yang menjadi hak jawab **{nama_lembaga_tampil}**.")
-            
-            if not df_master_tab2.empty:
-                df_master_t2_gab = df_master_tab2.copy()
-                df_master_t2_gab["_indeks_asli_master"] = df_master_t2_gab.index
-                df_master_t2_gab.columns = [str(c).strip() for c in df_master_t2_gab.columns]
-                
-                # Normalisasi Nama Kolom Gabungan
-                rename_dict_t2 = {}
-                for col in df_master_t2_gab.columns:
-                    c_clean = str(col).strip().lower()
-                    if "indikator" in c_clean or "kesalahan" in c_clean or "error" in c_clean: rename_dict_t2[col] = "Indikator Kesalahan Data"
-                    elif "validasi" in c_clean or "review" in c_clean: rename_dict_t2[col] = "Validasi Hasil Review"
-                    elif "justifikasi" in c_clean: rename_dict_t2[col] = "Justifikasi"
-                    elif "lembaga" in c_clean or "ssr" in c_clean: rename_dict_t2[col] = "Lembaga SSR"
-                    elif "layanan" in c_clean: rename_dict_t2[col] = "Nama Layanan"
-                    elif "petugas" in c_clean: rename_dict_t2[col] = "Kode Petugas"
-                    elif "kota" in c_clean or "kabupaten" in c_clean: rename_dict_t2[col] = "Nama Kota"
-                    elif "tanggal" in c_clean: rename_dict_t2[col] = "Tanggal"
-                    elif "id klien" in c_clean or "id_klien" in c_clean: rename_dict_t2[col] = "ID Klien"
-                    elif "nik" == c_clean: rename_dict_t2[col] = "NIK"
-                    elif "sasaran" in c_clean: rename_dict_t2[col] = "Tipe Sasaran"
-                
-                if rename_dict_t2:
-                    df_master_t2_gab = df_master_t2_gab.rename(columns=rename_dict_t2)
-                
-                if "Kategori Data" not in df_master_t2_gab.columns:
-                    if "Indikator Kesalahan Data" in df_master_t2_gab.columns:
-                        df_master_t2_gab["Kategori Data"] = df_master_t2_gab["Indikator Kesalahan Data"].apply(
-                            lambda x: "Rujukan" if str(x).strip().upper() in [str(r).strip().upper() for r in ind_rujukan_tab2] else "Penjangkauan"
-                        )
-                    else:
-                        df_master_t2_gab["Kategori Data"] = "Penjangkauan"
-                
-                # Susunan Baku Kolom Tabel Gabungan
-                kolom_susunan_gabungan_t2 = [
-                    "Pilih", "Kategori Data", "Lembaga SSR", "Kode Petugas", "Nama Kota", "Nama Layanan", 
-                    "Tanggal", "ID Klien", "NIK", "Tipe Sasaran", "Indikator Kesalahan Data", "Validasi Hasil Review", "Justifikasi"
-                ]
-                
-                for col in kolom_susunan_gabungan_t2:
-                    if col not in df_master_t2_gab.columns:
-                        df_master_t2_gab[col] = False if col == "Pilih" else "-"
-                        
-                # Terapkan gembok proteksi Justifikasi non-konfirmasi untuk keamanan internal SSR
-                for idx, row in df_master_t2_gab.iterrows():
-                    if "konfirmasi" not in str(row['Indikator Kesalahan Data']).lower():
-                        df_master_t2_gab.at[idx, 'Justifikasi'] = "🔒 Terkunci (Bukan Konfirmasi)"
-                        
-                df_view_gabungan_t2 = df_master_t2_gab[kolom_susunan_gabungan_t2 + ["_indeks_asli_master"]].copy()
-                
-                # Render Data Editor khusus Tab 2
-                kolom_dikunci_t2 = [c for c in kolom_susunan_gabungan_t2 if c not in ["Pilih", "Justifikasi"]]
-                
-                df_hasil_edit_t2 = st.data_editor(
-                    df_view_gabungan_t2[kolom_susunan_gabungan_t2],
-                    use_container_width=True,
-                    hide_index=True, 
-                    key="editor_validasi_tunggal_tab2",
-                    column_config={
-                        "Pilih": st.column_config.CheckboxColumn("Pilih", default=False),
-                        "Indikator Kesalahan Data": st.column_config.TextColumn("Indikator Kesalahan Data", width=300),
-                        "Justifikasi": st.column_config.TextColumn("Justifikasi", width=260),
-                    },
-                    disabled=kolom_dikunci_t2
-                )
-                
-                # Tombol Simpan Perubahan khusus Tab 2
-                st.markdown("<br>", unsafe_allow_html=True)
-                col_save_t2, _ = st.columns([1, 2])
-                with col_save_t2:
-                    # Mengubah teks tombol simpan secara dinamis mengikuti context user
-                    label_tombol_simpan = "💾 Simpan Perubahan Validasi SR" if role_aktif == "SR" else "💾 Simpan Perubahan Validasi SSR"
-                    if st.button(label_tombol_simpan, type="primary", key="btn_save_tab2"):
-                        with st.spinner("Menyimpan log verifikasi lembaga..."):
-                            list_log_db_t2 = []
-                            indeks_master_terpilih_t2 = []
+                        if not is_konfirmasi or "🔒 Terkunci" in text_justifikasi:
+                            text_justifikasi = ""
                             
-                            for idx, row_edit in df_hasil_edit_t2.iterrows():
-                                ind_text = str(row_edit.get('Indikator Kesalahan Data', ''))
-                                text_justifikasi = str(row_edit.get('Justifikasi', '')).strip()
-                                is_konfirmasi = "konfirmasi" in ind_text.lower()
-                                status_revisi = bool(row_edit.get('Pilih', False))
-                                
-                                if not is_konfirmasi or "🔒 Terkunci" in text_justifikasi:
-                                    text_justifikasi = ""
-                                    
-                                if status_revisi or (is_konfirmasi and text_justifikasi != ""):
-                                    list_log_db_t2.append((
-                                        str(row_edit.get('Kategori Data', '-')),
-                                        str(row_edit.get('Lembaga SSR', '-')),
-                                        str(row_edit.get('Kode Petugas', '-')),
-                                        str(row_edit.get('Nama Kota', '-')),
-                                        str(row_edit.get('Nama Layanan', '-')),
-                                        str(row_edit.get('Tanggal', '-')),
-                                        str(row_edit.get('ID Klien', '-')),
-                                        str(row_edit.get('NIK', '-')),
-                                        str(row_edit.get('Tipe Sasaran', '-')),
-                                        ind_text,
-                                        str(row_edit.get('Validasi Hasil Review', '-')),
-                                        text_justifikasi,
-                                        bool(status_revisi)
-                                    ))
-                                    if idx in df_view_gabungan_t2.index:
-                                        indeks_master_terpilih_t2.append(df_view_gabungan_t2.at[idx, "_indeks_asli_master"])
+                        if status_revisi or (is_konfirmasi and text_justifikasi != ""):
+                            list_log_db_t2.append((
+                                str(row_edit.get('Kategori Data', '-')),
+                                str(row_edit.get('Lembaga SSR', '-')),
+                                str(row_edit.get('Kode Petugas', '-')),
+                                str(row_edit.get('Nama Kota', '-')),
+                                str(row_edit.get('Nama Layanan', '-')),
+                                str(row_edit.get('Tanggal', '-')),
+                                str(row_edit.get('ID Klien', '-')),
+                                str(row_edit.get('NIK', '-')),
+                                str(row_edit.get('Tipe Sasaran', '-')),
+                                ind_text,
+                                str(row_edit.get('Validasi Hasil Review', '-')),
+                                text_justifikasi,
+                                bool(status_revisi)
+                            ))
+                            if idx in df_view_gabungan_t2.index:
+                                indeks_master_terpilih_t2.append(df_view_gabungan_t2.at[idx, "_indeks_asli_master"])
+                    
+                    if len(list_log_db_t2) > 0:
+                        if simpan_log_ke_neon(list_log_db_t2):
+                            # Hapus baris yang berhasil disimpan dari session state utama agar sinkron
+                            if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None:
+                                st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(index=indeks_master_terpilih_t2, errors='ignore').reset_index(drop=True)
+                            if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
+                                st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(index=indeks_master_terpilih_t2, errors='ignore').reset_index(drop=True)
                             
-                            if len(list_log_db_t2) > 0:
-                                if simpan_log_ke_neon(list_log_db_t2):
-                                    # Hapus baris yang berhasil disimpan dari session state utama agar sinkron
-                                    if 'df_tabel_bawah' in st.session_state and st.session_state['df_tabel_bawah'] is not None:
-                                        st.session_state['df_tabel_bawah'] = st.session_state['df_tabel_bawah'].drop(index=indeks_master_terpilih_t2, errors='ignore').reset_index(drop=True)
-                                    if 'df_review_utama' in st.session_state and st.session_state['df_review_utama'] is not None:
-                                        st.session_state['df_review_utama'] = st.session_state['df_review_utama'].drop(index=indeks_master_terpilih_t2, errors='ignore').reset_index(drop=True)
-                                    
-                                    st.success(f"🎉 Sukses menyinkronkan {len(list_log_db_t2)} data koreksi ke database Neon!")
-                                    import time
-                                    time.sleep(1.0)
-                                    st.rerun()
-                                else:
-                                    st.error("❌ Gagal menyimpan data ke server database.")
-                            else:
-                                st.info("ℹ️ Tidak ada data verifikasi yang Anda centang atau lengkapi.")
-            else:
-                st.info(f"✨ Tidak ada data review gabungan yang tersedia untuk lembaga {nama_lembaga_tampil}.")
+                            st.success(f"🎉 Sukses menyinkronkan {len(list_log_db_t2)} data koreksi ke database Neon!")
+                            import time
+                            time.sleep(1.0)
+                            st.rerun()
+                        else:
+                            st.error("❌ Gagal menyimpan data ke server database.")
+                    else:
+                        st.info("ℹ️ Tidak ada data verifikasi yang Anda centang atau lengkapi.")
+    else:
+        st.info(f"✨ Tidak ada data review gabungan yang tersedia untuk lembaga {nama_lembaga_tampil}.")
             
-        
         
         # -------------------------------------------------------------------------
         # TAB 3: GRAFIK SPIDER WEB DAN HISTORI ABSENSI (4 GRAFIK DENGAN TRUNCATE LABEL)
