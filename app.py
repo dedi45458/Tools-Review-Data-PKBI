@@ -96,6 +96,52 @@ def set_modern_theme():
     div[data-testid="stPlotlyChart"] .hoverlayer text tspan {
         fill: #f8fafc !important;       /* Kunci warna untuk sub-teks di dalam elemen grafik */
     }
+
+
+    /* Mengubah kotak centang di dalam data editor menjadi bentuk kapsul toggle */
+    div[data-testid="stDataEditor"] input[type="checkbox"] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 40px !important;
+        height: 20px !important;
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        border-radius: 20px !important;
+        position: relative;
+        cursor: pointer;
+        outline: none;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        transition: background-color 0.3s, border-color 0.3s;
+    }
+
+    /* Efek saat tombol toggle berstatus AKTIF (Checked) */
+    div[data-testid="stDataEditor"] input[type="checkbox"]:checked {
+        background-color: #ef4444 !important; /* Warna merah utama Anda */
+        border-color: #ef4444 !important;
+    }
+
+    /* Membuat bulatan saklar di dalam tombol */
+    div[data-testid="stDataEditor"] input[type="checkbox"]::before {
+        content: "";
+        position: absolute;
+        width: 14px !important;
+        height: 14px !important;
+        border-radius: 50% !important;
+        top: 2px !important;
+        left: 3px !important;
+        background-color: #ffffff !important;
+        transition: transform 0.3s;
+    }
+
+    /* Menggeser bulatan ke kanan saat tombol AKTIF */
+    div[data-testid="stDataEditor"] input[type="checkbox"]:checked::before {
+        transform: translateX(18px) !important;
+    }
+    
+    /* Gaya pelindung jika kolom dimatikan / disabled (untuk SSR) */
+    div[data-testid="stDataEditor"] input[type="checkbox"]:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
 </style>
     """, unsafe_allow_html=True)
 
@@ -2727,13 +2773,13 @@ elif menu_pilihan == "🏢 Data Lembaga":
             
             df_tampilan_editor = pd.DataFrame(data_proses)
             
-            # 3. Tampilkan tabel dengan Checkbox otomatis
+            # 3. Tampilkan tabel dengan Checkbox otomatis (Menggunakan script pilihan Anda)
             df_hasil_edit = st.data_editor(
                 df_tampilan_editor,
                 column_config={
                     "Nama Lembaga": st.column_config.TextColumn("Nama Lembaga Mitra", disabled=True),
-                    "SR": st.column_config.CheckboxColumn("Status SR", help="Centang untuk mengaktifkan peran SR", disabled=not apakah_sr),
-                    "SSR": st.column_config.CheckboxColumn("Status SSR", help="Centang untuk mengaktifkan peran SSR", disabled=not apakah_sr)
+                    "SR": st.column_config.CheckboxColumn("Status SR", disabled=not apakah_sr),
+                    "SSR": st.column_config.CheckboxColumn("Status SSR", disabled=not apakah_sr)
                 },
                 hide_index=True,
                 use_container_width=True,
