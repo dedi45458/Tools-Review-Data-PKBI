@@ -2407,7 +2407,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # ---------------------------------------------------------------------
             def format_ke_tabel_ranking(df):
                 if df.empty or df['total'].sum() == 0:
-                    return pd.DataFrame(columns=["no.", "Indikator Kesalahan data", "Jml. Temuan", "%"])
+                    return pd.DataFrame(columns=["No.", "Indikator Kesalahan data", "Jml. Temuan", "%"])
                 
                 # Copy dataframe asli agar aman
                 df_res = df.copy()
