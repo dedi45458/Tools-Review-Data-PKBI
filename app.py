@@ -2301,7 +2301,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             
         
         # -------------------------------------------------------------------------
-        # TAB 3: GRAFIK SPIDER WEB DAN HISTORI ABSENSI (4 GRAFIK DENGAN TRUNCATE LABEL)
+        # TAB 3: ANALISIS PROFIL KLASTER TEMUAN (FORMAT TABEL DUAL SCREEN)
         # -------------------------------------------------------------------------
         with tab3:
             st.subheader("📜 Histori Riwayat Tindakan Absensi Review")
@@ -2313,17 +2313,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             st.table(pd.DataFrame(st.session_state['log_histori_absensi_review']))
             
             st.markdown("---")
-            st.subheader("🕸️ Analisis Profil Klaster Temuan (Grafik Sarang Laba-Laba)")
+            st.subheader("📋 Analisis Profil Klaster Temuan (Tabel Ranking Kesalahan)")
             
-            # ---------------------------------------------------------------------
-            # FUNGSI LOKAL: MEMOTONG TEKS LABEL AGAR TIDAK MEMANJANG
-            # ---------------------------------------------------------------------
-            def potong_label(teks, max_char=25):
-                teks_str = str(teks).strip()
-                if len(teks_str) > max_char:
-                    return teks_str[:max_char] + "..."
-                return teks_str
-
             # ---------------------------------------------------------------------
             # QUERY 1: AMBIL DAFTAR BULAN UNIK FROM DATABASE
             # ---------------------------------------------------------------------
@@ -2407,66 +2398,78 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     df_rjk_reg = pd.read_sql_query(query_rjk_reguler, conn_grafik)
                     df_rjk_kon = pd.read_sql_query(query_rjk_konfirmasi, conn_grafik)
                 except Exception as e:
-                    st.error(f"Gagal memproses query grafik: {e}")
+                    st.error(f"Gagal memproses query data tabel: {e}")
                 finally:
                     conn_grafik.close()
 
             # ---------------------------------------------------------------------
-            # INTERNAL HELPER UNTUK MAPPING KOTAK GRAFIK (Menerapkan Potong Label)
+            # FUNGSI LOKAL: FORMATTING DATAFRAME MENJADI TABEL RANKING STANDAR
             # ---------------------------------------------------------------------
-            def dapatkan_format_grafik(df):
-                if not df.empty and df['total'].sum() > 0:
-                    labels = [potong_label(x) for x in df['indikator_kesalahan'].tolist()]
-                    r_values = df['total'].tolist()
-                    labels.append(labels[0])
-                    r_values.append(r_values[0])
-                    return labels, r_values
-                return ['Tidak Ada Temuan'] * 3, [0, 0, 0]
+            def format_ke_tabel_ranking(df):
+                if df.empty or df['total'].sum() == 0:
+                    return pd.DataFrame(columns=["no.", "Indikator Kesalahan data", "Jml. Temuan", "%"])
+                
+                # Copy dataframe asli agar aman
+                df_res = df.copy()
+                total_temuan = df_res['total'].sum()
+                
+                # Transformasi & kalkulasi kolom sesuai request
+                df_res['Jml. Temuan'] = df_res['total'].astype(int)
+                df_res['%'] = ((df_res['total'] / total_temuan) * 100).round(1).astype(str) + " %"
+                df_res = df_res.rename(columns={'indikator_kesalahan': 'Indikator Kesalahan data'})
+                
+                # Buat nomor urut
+                df_res = df_res.reset_index(drop=True)
+                df_res['no.'] = df_res.index + 1
+                
+                # Susun ulang kolom akhir
+                return df_res[["no.", "Indikator Kesalahan data", "Jml. Temuan", "%"]]
 
-            lbl_pjj_reg, r_pjj_reg = dapatkan_format_grafik(df_pjj_reg)
-            lbl_pjj_kon, r_pjj_kon = dapatkan_format_grafik(df_pjj_kon)
-            lbl_rjk_reg, r_rjk_reg = dapatkan_format_grafik(df_rjk_reg)
-            lbl_rjk_kon, r_rjk_kon = dapatkan_format_grafik(df_rjk_kon)
-
-            import plotly.graph_objects as go
-            
-            # =====================================================================
-            # BAGIAN A: RENDER GRAFIK KLASTER REGULER (TIDAK ADA KAT_KONFIRMASI)
-            # =====================================================================
+            # ---------------------------------------------------------------------
+            # BAGIAN A: RENDER TABEL KLASTER REGULER (TIDAK ADA KAT_KONFIRMASI)
+            # ---------------------------------------------------------------------
             st.markdown("#### 📊 1. Ranking Temuan Kesalahan Data Murni")
-            col_g1, col_g2 = st.columns(2)
+            col_t1, col_t2 = st.columns(2)
             
-            with col_g1:
+            with col_t1:
                 st.markdown(f"<p style='text-align: center; font-weight: bold; color:#38bdf8;'> Penjangkauan ({filter_bulan})</p>", unsafe_allow_html=True)
-                fig_pjj = go.Figure(data=go.Scatterpolar(r=r_pjj_reg, theta=lbl_pjj_reg, fill='toself', name='Penjangkauan', fillcolor='rgba(56, 189, 248, 0.15)', line=dict(color='#38bdf8', width=2)))
-                fig_pjj.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
-                st.plotly_chart(fig_pjj, use_container_width=True)
-                
-            with col_g2:
+                df_pjj_reg_fmt = format_ke_tabel_ranking(df_pjj_reg)
+                if not df_pjj_reg_fmt.empty:
+                    st.dataframe(df_pjj_reg_fmt, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Tidak ada temuan data murni pada penjangkauan bulan ini.")
+                    
+            with col_t2:
                 st.markdown(f"<p style='text-align: center; font-weight: bold; color:#10B981;'> Rujukan ({filter_bulan})</p>", unsafe_allow_html=True)
-                fig_rjk = go.Figure(data=go.Scatterpolar(r=r_rjk_reg, theta=lbl_rjk_reg, fill='toself', name='Rujukan', fillcolor='rgba(16, 185, 129, 0.15)', line=dict(color='#10B981', width=2)))
-                fig_rjk.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
-                st.plotly_chart(fig_rjk, use_container_width=True)
-                
+                df_rjk_reg_fmt = format_ke_tabel_ranking(df_rjk_reg)
+                if not df_rjk_reg_fmt.empty:
+                    st.dataframe(df_rjk_reg_fmt, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Tidak ada temuan data murni pada rujukan bulan ini.")
+                    
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # =====================================================================
-            # BAGIAN B: RENDER GRAFIK KLASTER DATA KONFIRMASI (ADA KAT_KONFIRMASI)
-            # =====================================================================
+            # ---------------------------------------------------------------------
+            # BAGIAN B: RENDER TABEL KLASTER DATA KONFIRMASI (ADA KAT_KONFIRMASI)
+            # ---------------------------------------------------------------------
             st.markdown("#### 🔍 2. Ranking Validasi Khusus Data Perlu Konfirmasi")
-            col_k1, col_k2 = st.columns(2)
+            col_tk1, col_tk2 = st.columns(2)
             
-            with col_k1:
+            with col_tk1:
                 st.markdown(f"<p style='text-align: center; font-weight: bold; color:#f59e0b;'> Penjangkauan (Konfirmasi) ({filter_bulan})</p>", unsafe_allow_html=True)
-                fig_pjj_k = go.Figure(data=go.Scatterpolar(r=r_pjj_kon, theta=lbl_pjj_kon, fill='toself', name='PJJ Konfirmasi', fillcolor='rgba(245, 158, 11, 0.15)', line=dict(color='#f59e0b', width=2)))
-                fig_pjj_k.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
-                st.plotly_chart(fig_pjj_k, use_container_width=True)
-                
-            with col_k2:
+                df_pjj_kon_fmt = format_ke_tabel_ranking(df_pjj_kon)
+                if not df_pjj_kon_fmt.empty:
+                    st.dataframe(df_pjj_kon_fmt, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Tidak ada temuan khusus konfirmasi pada penjangkauan bulan ini.")
+                    
+            with col_tk2:
                 st.markdown(f"<p style='text-align: center; font-weight: bold; color:#ec4899;'> Rujukan (Konfirmasi) ({filter_bulan})</p>", unsafe_allow_html=True)
-                fig_rjk_k = go.Figure(data=go.Scatterpolar(r=r_rjk_kon, theta=lbl_rjk_kon, fill='toself', name='Ruj Konfirmasi', fillcolor='rgba(236, 72, 153, 0.15)', line=dict(color='#ec4899', width=2)))
-                fig_rjk_k.update_layout(polar=dict(radialaxis=dict(visible=True, gridcolor='rgba(255,255,255,0.08)'), angularaxis=dict(gridcolor='rgba(255,255,255,0.08)')), showlegend=False, height=290, margin=dict(t=20, b=20, l=40, r=40), paper_bgcolor='rgba(0,0,0,0)', font_color='#E0E0E0')
-                st.plotly_chart(fig_rjk_k, use_container_width=True)
+                df_rjk_kon_fmt = format_ke_tabel_ranking(df_rjk_kon)
+                if not df_rjk_kon_fmt.empty:
+                    st.dataframe(df_rjk_kon_fmt, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Tidak ada temuan khusus konfirmasi pada rujukan bulan ini.")
                 
 
 # ----------------------------------------------------------
