@@ -2714,26 +2714,29 @@ elif menu_pilihan == "🏢 Data Lembaga":
         st.subheader(f"📋 Pengaturan Status Aktif ({len(list_lembaga_memori)})")
         
         if list_lembaga_memori:
-            # 2. KONVERSI DATA: Buat DataFrame baru khusus untuk UI Editor
-            # Kita pecah kolom teks "Status" menjadi kolom Boolean (True/False) agar muncul Checkbox
+            # 2. PROSES DATA: Mengambil nilai Boolean sesuai nama kolom asli DB Anda
             data_proses = []
             for l in list_lembaga_memori:
-                status_raw = str(l.get("Status", "")).strip().upper()
+                # Menggunakan "is_sr" dan "is_ssr" (bukan "SR"/"SSR") sesuai struktur CREATE TABLE Anda
+                # Serta antisipasi huruf kecil/besar pada key dictionary jika ada
+                val_sr = bool(l.get("is_sr") if "is_sr" in l else l.get("is_sr", False))
+                val_ssr = bool(l.get("is_ssr") if "is_ssr" in l else l.get("is_ssr", False))
+                
                 data_proses.append({
-                    "Nama Lembaga": l.get("Nama Lembaga"),
-                    "SR": True if status_raw == "SR" else False,
-                    "SSR": True if status_raw == "SSR" else False
+                    "Nama Lembaga": l.get("nama_lembaga") if "nama_lembaga" in l else l.get("Nama Lembaga"),
+                    "SR": val_sr,
+                    "SSR": val_ssr
                 })
             
             df_tampilan_editor = pd.DataFrame(data_proses)
             
-            # 3. Tampilkan tabel dengan Checkbox otomatis
+            # 3. Tampilkan tabel dengan Checkbox bawaan Streamlit
             df_hasil_edit = st.data_editor(
                 df_tampilan_editor,
                 column_config={
                     "Nama Lembaga": st.column_config.TextColumn("Nama Lembaga Mitra", disabled=True),
-                    "SR": st.column_config.CheckboxColumn("Status SR", help="Centang untuk mengaktifkan peran SR", disabled=not apakah_sr),
-                    "SSR": st.column_config.CheckboxColumn("Status SSR", help="Centang untuk mengaktifkan peran SSR", disabled=not apakah_sr)
+                    "SR": st.column_config.CheckboxColumn("Status SR", disabled=not apakah_sr),
+                    "SSR": st.column_config.CheckboxColumn("Status SSR", disabled=not apakah_sr)
                 },
                 hide_index=True,
                 use_container_width=True,
@@ -2751,24 +2754,22 @@ elif menu_pilihan == "🏢 Data Lembaga":
                         try:
                             with conn.cursor() as cur:
                                 for _, row in df_hasil_edit.iterrows():
-                                    # Tentukan status tekstual berdasarkan checkbox yang dipilih oleh SR
-                                    if row["SR"]:
-                                        status_baru = "SR"
-                                    elif row["SSR"]:
-                                        status_baru = "SSR"
-                                    else:
-                                        status_baru = "NON_AKTIF" # Jika kedua checkbox dikosongkan
+                                    # Ambil nilai boolean terbaru dari UI tabel hasil klik user
+                                    status_sr_baru = bool(row["SR"])
+                                    status_ssr_baru = bool(row["SSR"])
                                     
-                                    # Kembalikan dan simpan ke struktur kolom database Anda (nama_lembaga & status)
+                                    # Update langsung kolom is_sr dan is_ssr berdasarkan nama_lembaga
                                     cur.execute("""
                                         UPDATE master_lembaga 
-                                        SET status = %s 
+                                        SET is_sr = %s, is_ssr = %s 
                                         WHERE nama_lembaga = %s;
-                                    """, (status_baru, row["Nama Lembaga"]))
+                                    """, (status_sr_baru, status_ssr_baru, row["Nama Lembaga"]))
                                 conn.commit()
                             
                             st.success("Perubahan status instansi berhasil disinkronkan ke server Neon PostgreSQL!")
-                            sinkronisasi_master_lembaga() # Tarik data baru ke session state
+                            
+                            # Memperbarui memori aplikasi agar data True/False yang baru langsung terbaca
+                            sinkronisasi_master_lembaga() 
                             
                             import time
                             time.sleep(1)
