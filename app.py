@@ -2708,12 +2708,28 @@ elif menu_pilihan == "🏢 Data Lembaga":
     # ==========================================
     with col_kanan:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.subheader(f"📋 Pengaturan Status Aktif ({len(df_edit)})")
         
-        if not df_edit.empty:
-            # Tampilkan tabel switch interaktif
+        # 1. Ambil data asli dari session state
+        list_lembaga_memori = st.session_state.get('master_lembaga', [])
+        st.subheader(f"📋 Pengaturan Status Aktif ({len(list_lembaga_memori)})")
+        
+        if list_lembaga_memori:
+            # 2. KONVERSI DATA: Buat DataFrame baru khusus untuk UI Editor
+            # Kita pecah kolom teks "Status" menjadi kolom Boolean (True/False) agar muncul Checkbox
+            data_proses = []
+            for l in list_lembaga_memori:
+                status_raw = str(l.get("Status", "")).strip().upper()
+                data_proses.append({
+                    "Nama Lembaga": l.get("Nama Lembaga"),
+                    "SR": True if status_raw == "SR" else False,
+                    "SSR": True if status_raw == "SSR" else False
+                })
+            
+            df_tampilan_editor = pd.DataFrame(data_proses)
+            
+            # 3. Tampilkan tabel dengan Checkbox otomatis
             df_hasil_edit = st.data_editor(
-                df_edit,
+                df_tampilan_editor,
                 column_config={
                     "Nama Lembaga": st.column_config.TextColumn("Nama Lembaga Mitra", disabled=True),
                     "SR": st.column_config.CheckboxColumn("Status SR", help="Centang untuk mengaktifkan peran SR", disabled=not apakah_sr),
@@ -2735,15 +2751,24 @@ elif menu_pilihan == "🏢 Data Lembaga":
                         try:
                             with conn.cursor() as cur:
                                 for _, row in df_hasil_edit.iterrows():
+                                    # Tentukan status tekstual berdasarkan checkbox yang dipilih oleh SR
+                                    if row["SR"]:
+                                        status_baru = "SR"
+                                    elif row["SSR"]:
+                                        status_baru = "SSR"
+                                    else:
+                                        status_baru = "NON_AKTIF" # Jika kedua checkbox dikosongkan
+                                    
+                                    # Kembalikan dan simpan ke struktur kolom database Anda (nama_lembaga & status)
                                     cur.execute("""
                                         UPDATE master_lembaga 
-                                        SET is_sr = %s, is_ssr = %s 
+                                        SET status = %s 
                                         WHERE nama_lembaga = %s;
-                                    """, (bool(row["SR"]), bool(row["SSR"]), row["Nama Lembaga"]))
+                                    """, (status_baru, row["Nama Lembaga"]))
                                 conn.commit()
                             
                             st.success("Perubahan status instansi berhasil disinkronkan ke server Neon PostgreSQL!")
-                            sinkronisasi_master_lembaga()
+                            sinkronisasi_master_lembaga() # Tarik data baru ke session state
                             
                             import time
                             time.sleep(1)
