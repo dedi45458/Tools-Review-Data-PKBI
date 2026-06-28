@@ -2597,102 +2597,118 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
         st.markdown('</div>', unsafe_allow_html=True)
 
 
-
 # ----------------------------------------------------------
-# MENU 3: DATA LEMBAGA
+# MENU 3: DATA LEMBAGA (DIPROTEKSI AKSES TINGKAT SR)
 # ----------------------------------------------------------
 elif menu_pilihan == "🏢 Data Lembaga":
     st.title("🏢 Manajemen Data Lembaga Mitra")
-    st.markdown("Gunakan menu ini untuk memperbarui peran instansi tingkat SR/SSR, memanipulasi status keaktifan mitra kerja, atau menambahkan entitas baru ke dalam sistem.")
+    st.markdown("Gunakan menu ini untuk memanipulasi status keaktifan serta hak akses peran tingkat SR/SSR.")
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # Cek apakah pengguna saat ini adalah tingkat SR
+    apakah_sr = st.session_state.get('current_role') == "SR"
+    
     col_kiri, col_kanan = st.columns([1, 1.5])
     
+    # --- KOLOM KIRI: TAMBAH MITRA BARU (Hanya Terbuka untuk SR) ---
     with col_kiri:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         st.subheader("➕ Tambah Lembaga Baru")
-        with st.form("form_tambah_lembaga", clear_on_submit=True):
-            nama_input = st.text_input("Nama Lembaga:", placeholder="Contoh: PKBI DKI JAKARTA").strip().upper()
+        
+        if apakah_sr:
+            with st.form("form_tambah_lembaga", clear_on_submit=True):
+                nama_input = st.text_input("Nama Lembaga:", placeholder="Contoh: PKBI DKI JAKARTA").strip().upper()
+                switch_sr = st.toggle("Aktif Sebagai SR", value=False)
+                switch_ssr = st.toggle("Aktif Sebagai SSR", value=True)
+                
+                tombol_simpan = st.form_submit_button("Simpan Mitra Baru", use_container_width=True)
+                
+                if tombol_simpan:
+                    if nama_input:
+                        conn = dapatkan_koneksi_neon()
+                        if conn:
+                            try:
+                                with conn.cursor() as cur:
+                                    cur.execute("""
+                                        INSERT INTO master_lembaga (nama_lembaga, is_sr, is_ssr)
+                                        VALUES (%s, %s, %s)
+                                        ON CONFLICT (nama_lembaga) DO NOTHING;
+                                    """, (nama_input, switch_sr, switch_ssr))
+                                    conn.commit()
+                                
+                                st.success(f"Berhasil mengarsipkan '{nama_input}' ke database!")
+                                sinkronisasi_master_lembaga()
+                                
+                                import time
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Gagal menyimpan ke database: {e}")
+                            finally:
+                                conn.close()
+                    else:
+                        st.warning("Nama lembaga tidak boleh kosong!")
+        else:
+            # Tampilan jika diakses oleh SSR
+            st.warning("🔒 **Fitur Terkunci**\n\nAkun Anda (**SSR**) tidak memiliki izin untuk menambahkan lembaga baru ke sistem.")
             
-            # Pengaturan switch toggle status peran awal
-            switch_sr = st.toggle("Aktif Sebagai SR", value=False)
-            switch_ssr = st.toggle("Aktif Sebagai SSR", value=True)
-            
-            tombol_simpan = st.form_submit_button("Simpan Mitra Baru", use_container_width=True)
-            
-            if tombol_simpan:
-                if nama_input:
-                    conn = dapatkan_koneksi_neon()
-                    if conn:
-                        try:
-                            with conn.cursor() as cur:
-                                cur.execute("""
-                                    INSERT INTO master_lembaga (nama_lembaga, is_sr, is_ssr)
-                                    VALUES (%s, %s, %s)
-                                    ON CONFLICT (nama_lembaga) DO NOTHING;
-                                """, (nama_input, switch_sr, switch_ssr))
-                                conn.commit()
-                            
-                            st.success(f"Berhasil mengarsipkan '{nama_input}' ke database!")
-                            sinkronisasi_master_lembaga() # Sinkronisasi State data terbaru
-                            
-                            import time
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Gagal menyimpan ke database: {e}")
-                        finally:
-                            conn.close()
-                else:
-                    st.warning("Nama lembaga tidak diperbolehkan kosong!")
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # --- KOLOM KANAN: EDITOR STATUS AKTIF DENGAN SWITCH (Diproteksi RBAC) ---
     with col_kanan:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
-        # Mengambil data lembaga ter-update dari session state hasil sinkronisasi DB
+        # Ambil data dari database melalui session state
         df_edit = pd.DataFrame(st.session_state.get('master_lembaga', []))
         st.subheader(f"📋 Pengaturan Status Aktif ({len(df_edit)})")
         
         if not df_edit.empty:
+            # Tampilkan tabel interaktif (Checkbox berfungsi sebagai switch aktif/nonaktif)
             df_hasil_edit = st.data_editor(
                 df_edit,
                 column_config={
                     "Nama Lembaga": st.column_config.TextColumn("Nama Lembaga Mitra", disabled=True),
-                    "SR": st.column_config.CheckboxColumn("Status SR", help="Centang jika aktif sebagai SR"),
-                    "SSR": st.column_config.CheckboxColumn("Status SSR", help="Centang jika aktif sebagai SSR")
+                    # Parameter 'disabled=not apakah_sr' akan mengunci switch jika pengguna bukan SR
+                    "SR": st.column_config.CheckboxColumn("Status SR", help="Centang jika aktif SR", disabled=not apakah_sr),
+                    "SSR": st.column_config.CheckboxColumn("Status SSR", help="Centang jika aktif SSR", disabled=not apakah_sr)
                 },
                 hide_index=True,
                 use_container_width=True,
+                disabled=not apakah_sr, # Mengunci baris tabel secara menyeluruh jika bukan SR
                 key="editor_status_lembaga"
             )
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            if st.button("💾 Simpan Perubahan Status", type="primary", use_container_width=True):
-                conn = dapatkan_koneksi_neon()
-                if conn:
-                    try:
-                        with conn.cursor() as cur:
-                            for _, row in df_hasil_edit.iterrows():
-                                cur.execute("""
-                                    UPDATE master_lembaga 
-                                    SET is_sr = %s, is_ssr = %s 
-                                    WHERE nama_lembaga = %s;
-                                """, (bool(row["SR"]), bool(row["SSR"]), row["Nama Lembaga"]))
-                            conn.commit()
-                        
-                        st.success("Perubahan status instansi berhasil disinkronkan ke server Neon PostgreSQL!")
-                        sinkronisasi_master_lembaga() # Refresh memori aplikasi
-                        
-                        import time
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Gagal melakukan pembaharuan database massal: {e}")
-                    finally:
-                        conn.close()
+            # Tombol aksi simpan hanya muncul dan bisa dieksekusi oleh user tingkat SR
+            if apakah_sr:
+                if st.button("💾 Simpan Perubahan Status", type="primary", use_container_width=True):
+                    conn = dapatkan_koneksi_neon()
+                    if conn:
+                        try:
+                            with conn.cursor() as cur:
+                                for _, row in df_hasil_edit.iterrows():
+                                    cur.execute("""
+                                        UPDATE master_lembaga 
+                                        SET is_sr = %s, is_ssr = %s 
+                                        WHERE nama_lembaga = %s;
+                                    """, (bool(row["SR"]), bool(row["SSR"]), row["Nama Lembaga"]))
+                                conn.commit()
+                            
+                            st.success("Perubahan status instansi berhasil disinkronkan ke server Neon PostgreSQL!")
+                            sinkronisasi_master_lembaga()
+                            
+                            import time
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Gagal melakukan pembaharuan database massal: {e}")
+                        finally:
+                            conn.close()
+            else:
+                # Catatan info pelindung di bawah tabel untuk user SSR
+                st.info("ℹ️ **Mode Pratinjau (Read-Only)**: Anda dapat melihat daftar ini, namun perubahan data hanya dapat dilakukan oleh akun tingkat **SR**.")
         else:
             st.info("Belum ada data lembaga di database.")
             
