@@ -1818,7 +1818,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 # Dropdown filter di atas tabel gabungan
                 list_ssr_unik = sorted(df_master["Lembaga SSR"].dropna().unique().tolist())
                 col_ssr, col_kat, col_spacer = st.columns([1.2, 1.2, 2.6])
-                with col_ssr: pilihan_ssr = st.selectbox("🎯 Saring Lembaga SSR:", options=["Semua"] + list_ssr_unik, index=0)
+                with col_ssr: pilihan_ssr = st.selectbox("🎯 Filter Lembaga SSR:", options=["Semua"] + list_ssr_unik, index=0)
                 with col_kat: pilihan_kategori = st.selectbox("📂 Saring Kategori Data:", options=["Semua", "Penjangkauan", "Rujukan"], index=0)
                 
                 if pilihan_ssr != "Semua": df_master = df_master[df_master["Lembaga SSR"] == pilihan_ssr]
