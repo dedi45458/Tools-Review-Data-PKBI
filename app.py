@@ -526,9 +526,9 @@ ATURAN_VALIDASI_RUJUKAN = [
     {"nama": "Ada hasil tes Hep-C tapi kolom pengobatan Hep-C tidak diisi", "periksa": lambda c: str(c['row'].get('Hasil Tes HEPC', '')).split('.')[0].strip() in ['1', '2', '3'] and str(c['row'].get('Menerima Pengobatan HEPC/DAA', '')).split('.')[0].strip() in ['', 'nan']}
 ]
 
-# ==========================================================
-# 2. PANEL SIDEBAR
-# ==========================================================
+# =============================================================================
+# 2. PANEL SIDEBAR NAVIGASI
+# =============================================================================
 with st.sidebar:
     st.markdown("""
         <div style="padding: 10px 0px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 15px;">
@@ -537,14 +537,13 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # --- PENAMBAHAN MENU NAVIGASI (4 MENU SESUAI KONSEP) ---
     menu_pilihan = st.radio(
         "Navigasi Menu", 
         [
             "🎯 Dashboard Review Data", 
             "⚙️ Pengaturan Keyword Medsos",
-            "📊 Tren Agregasi Data",          # Menu Konsep Baru 1
-            "🔍 Riwayat & Log Validasi"       # Menu Konsep Baru 2
+            "🏢 Data Lembaga",              
+            "🔍 Riwayat & Log Validasi"       
         ],
         label_visibility="collapsed"
     )
@@ -710,12 +709,12 @@ with st.sidebar:
             st.caption("Gunakan area utama layar untuk melakukan penambahan, penghapusan, dan visualisasi kata kunci media sosial yang aktif.")
 
     # =================================================================
-    # 3. MENU TREN AGREGASI DATA (KONSEP)
+    # 3. DATA LEMBAGA
     # =================================================================
-    elif menu_pilihan == "📊 Tren Agregasi Data":
+    elif menu_pilihan == "🏢 Data Lembaga":
         with st.container():
-            st.markdown("<b style='color: #10b981; font-size: 0.95rem;'>📊 STATISTIK & TREN</b>", unsafe_allow_html=True)
-            st.caption("Modul ini digunakan untuk memantau performa review data dari waktu ke waktu secara real-time.")
+            st.markdown("<b style='color: #10b981; font-size: 0.95rem;'>🏢 DATA LEMBAGA</b>", unsafe_allow_html=True)
+            st.caption("Modul ini digunakan kontrol akses lembaga sebagai SR-SSR.")
 
     # =================================================================
     # 4. MENU RIWAYAT & LOG VALIDASI (KONSEP)
@@ -2594,5 +2593,107 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
             """, unsafe_allow_html=True)
         else:
             st.info("Belum ada data medsos di database.")
+            
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
+
+# ----------------------------------------------------------
+# MENU 3: DATA LEMBAGA
+# ----------------------------------------------------------
+elif menu_pilihan == "🏢 Data Lembaga":
+    st.title("🏢 Manajemen Data Lembaga Mitra")
+    st.markdown("Gunakan menu ini untuk memperbarui peran instansi tingkat SR/SSR, memanipulasi status keaktifan mitra kerja, atau menambahkan entitas baru ke dalam sistem.")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col_kiri, col_kanan = st.columns([1, 1.5])
+    
+    with col_kiri:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.subheader("➕ Tambah Lembaga Baru")
+        with st.form("form_tambah_lembaga", clear_on_submit=True):
+            nama_input = st.text_input("Nama Lembaga:", placeholder="Contoh: PKBI DKI JAKARTA").strip().upper()
+            
+            # Pengaturan switch toggle status peran awal
+            switch_sr = st.toggle("Aktif Sebagai SR", value=False)
+            switch_ssr = st.toggle("Aktif Sebagai SSR", value=True)
+            
+            tombol_simpan = st.form_submit_button("Simpan Mitra Baru", use_container_width=True)
+            
+            if tombol_simpan:
+                if nama_input:
+                    conn = dapatkan_koneksi_neon()
+                    if conn:
+                        try:
+                            with conn.cursor() as cur:
+                                cur.execute("""
+                                    INSERT INTO master_lembaga (nama_lembaga, is_sr, is_ssr)
+                                    VALUES (%s, %s, %s)
+                                    ON CONFLICT (nama_lembaga) DO NOTHING;
+                                """, (nama_input, switch_sr, switch_ssr))
+                                conn.commit()
+                            
+                            st.success(f"Berhasil mengarsipkan '{nama_input}' ke database!")
+                            sinkronisasi_master_lembaga() # Sinkronisasi State data terbaru
+                            
+                            import time
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Gagal menyimpan ke database: {e}")
+                        finally:
+                            conn.close()
+                else:
+                    st.warning("Nama lembaga tidak diperbolehkan kosong!")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_kanan:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        
+        # Mengambil data lembaga ter-update dari session state hasil sinkronisasi DB
+        df_edit = pd.DataFrame(st.session_state.get('master_lembaga', []))
+        st.subheader(f"📋 Pengaturan Status Aktif ({len(df_edit)})")
+        
+        if not df_edit.empty:
+            df_hasil_edit = st.data_editor(
+                df_edit,
+                column_config={
+                    "Nama Lembaga": st.column_config.TextColumn("Nama Lembaga Mitra", disabled=True),
+                    "SR": st.column_config.CheckboxColumn("Status SR", help="Centang jika aktif sebagai SR"),
+                    "SSR": st.column_config.CheckboxColumn("Status SSR", help="Centang jika aktif sebagai SSR")
+                },
+                hide_index=True,
+                use_container_width=True,
+                key="editor_status_lembaga"
+            )
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            if st.button("💾 Simpan Perubahan Status", type="primary", use_container_width=True):
+                conn = dapatkan_koneksi_neon()
+                if conn:
+                    try:
+                        with conn.cursor() as cur:
+                            for _, row in df_hasil_edit.iterrows():
+                                cur.execute("""
+                                    UPDATE master_lembaga 
+                                    SET is_sr = %s, is_ssr = %s 
+                                    WHERE nama_lembaga = %s;
+                                """, (bool(row["SR"]), bool(row["SSR"]), row["Nama Lembaga"]))
+                            conn.commit()
+                        
+                        st.success("Perubahan status instansi berhasil disinkronkan ke server Neon PostgreSQL!")
+                        sinkronisasi_master_lembaga() # Refresh memori aplikasi
+                        
+                        import time
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Gagal melakukan pembaharuan database massal: {e}")
+                    finally:
+                        conn.close()
+        else:
+            st.info("Belum ada data lembaga di database.")
             
         st.markdown('</div>', unsafe_allow_html=True)
