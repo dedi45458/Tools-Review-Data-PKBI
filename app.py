@@ -101,11 +101,6 @@ def set_modern_theme():
 
 set_modern_theme()
 
-# ==========================================================
-# 0. POPUP ABSENSI & INISIALISASI MASTER LEMBAGA (RBAC SYSTEM)
-# ==========================================================
-from database import dapatkan_koneksi_neon  # Menggunakan utilitas koneksi dari modul database Anda
-
 def sinkronisasi_master_lembaga():
     """Mengambil data lembaga terbaru dari database Neon ke Session State"""
     conn = dapatkan_koneksi_neon()
@@ -124,26 +119,7 @@ def sinkronisasi_master_lembaga():
                 """)
                 conn.commit()
 
-                # 2. Seeding Data Awal jika tabel masih kosong melompong di server
-                cur.execute("SELECT COUNT(*) FROM master_lembaga;")
-                if cur.fetchone()[0] == 0:
-                    data_default = [
-                        ("BINA MUDA GEMILANG", False, True), ("PKBI JAWA BARAT", True, False),
-                        ("GRAPIKS", False, True), ("LEMBAGA KASIH INDONESIA KITA", False, True),
-                        ("LENSA SUKABUMI", False, True), ("PESONA BUMI PASUNDAN", False, True),
-                        ("PETIK", False, True), ("PKBI CABANG SUBANG", False, True),
-                        ("PKBI CIREBON", False, True), ("PKBI GARUT", False, True),
-                        ("WAHANA CITA INDONESIA", False, True), ("YAYASAN PELANGI MALUKU", False, True),
-                        ("YAYASAN PONTIANAK PLUS - OUTREACH", False, True), ("YAYASAN SRIKANDI PASUNDAN", False, True),
-                        ("YAYASAN SRIKANDI PERINTIS", False, True), ("YAYASAN VESTA INDONESIA", False, True)
-                    ]
-                    cur.executemany("""
-                        INSERT INTO master_lembaga (nama_lembaga, is_sr, is_ssr) 
-                        VALUES (%s, %s, %s) ON CONFLICT DO NOTHING;
-                    """, data_default)
-                    conn.commit()
-
-            # 3. Ambil data asli ter-update dari database dengan alias terstandar untuk UI
+            # 2. Ambil data asli ter-update dari database dengan alias terstandar untuk UI
             query = """
                 SELECT nama_lembaga AS "Nama Lembaga", 
                        is_sr AS "SR", 
@@ -152,6 +128,13 @@ def sinkronisasi_master_lembaga():
                 ORDER BY nama_lembaga ASC;
             """
             df_db = pd.read_sql_query(query, conn)
+            
+            # --- PENYESUAIAN PENTING DI SINI ---
+            # Mengubah paksa string 'True'/'False' dari query SQL menjadi tipe data Boolean asli Python
+            df_db["SR"] = df_db["SR"].astype(bool)
+            df_db["SSR"] = df_db["SSR"].astype(bool)
+            # -----------------------------------
+            
             st.session_state.master_lembaga = df_db.to_dict('records')
         except Exception as e:
             st.error(f"Gagal memuat sistem pertukaran data lembaga: {e}")
