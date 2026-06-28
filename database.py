@@ -789,3 +789,30 @@ def ambil_set_error_belum_direvisi():
         return pd.DataFrame()
     finally:
         conn.close()
+
+def sinkronisasi_master_lembaga():
+    """Menarik data terbaru dari database dan menyimpannya ke session_state."""
+    conn = dapatkan_koneksi_neon() # Pastikan nama fungsi koneksi ini sesuai dengan yang Anda buat
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                # 1. Pastikan query memanggil nama_lembaga, is_sr, dan is_ssr secara spesifik
+                cur.execute("SELECT nama_lembaga, is_sr, is_ssr FROM master_lembaga ORDER BY nama_lembaga;")
+                baris_data = cur.fetchall()
+                
+                # 2. Format ulang data menjadi list of dictionaries agar mudah dibaca oleh file UI
+                hasil_sinkronisasi = []
+                for baris in baris_data:
+                    hasil_sinkronisasi.append({
+                        "nama_lembaga": baris[0],
+                        "is_sr": bool(baris[1]),   # Konversi aman ke True/False
+                        "is_ssr": bool(baris[2])   # Konversi aman ke True/False
+                    })
+                
+                # 3. Simpan ke st.session_state
+                st.session_state['master_lembaga'] = hasil_sinkronisasi
+                
+        except Exception as e:
+            st.error(f"Gagal sinkronisasi data lembaga: {e}")
+        finally:
+            conn.close()
