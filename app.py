@@ -2358,7 +2358,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             
             with c_filter1:
                 list_ssr_g = sorted(df_view_gabungan["Lembaga SSR"].dropna().unique().tolist()) if 'df_view_gabungan' in locals() else []
-                filter_ssr = st.selectbox("🎯 Saring Lembaga SSR:", ["Semua Lembaga SSR"] + list_ssr_g, key="sb_grafik_ssr")
+                filter_ssr = st.selectbox("🎯 Filter Lembaga SSR:", ["Semua Lembaga SSR"] + list_ssr_g, key="sb_grafik_ssr")
                 
             with c_filter2:
                 top_n = st.number_input("🔝 Rangking Teratas (N):", min_value=3, max_value=20, value=5, step=1, key="num_top_n")
