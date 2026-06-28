@@ -2714,16 +2714,16 @@ elif menu_pilihan == "🏢 Data Lembaga":
         st.subheader(f"📋 Pengaturan Status Aktif ({len(list_lembaga_memori)})")
         
         if list_lembaga_memori:
-            # 2. PROSES DATA: Mengambil nilai Boolean sesuai nama kolom asli DB Anda
+            # 2. PROSES DATA: Memetakan kolom Boolean secara presisi sesuai skema database Anda
             data_proses = []
             for l in list_lembaga_memori:
-                # Menggunakan "is_sr" dan "is_ssr" (bukan "SR"/"SSR") sesuai struktur CREATE TABLE Anda
-                # Serta antisipasi huruf kecil/besar pada key dictionary jika ada
-                val_sr = bool(l.get("is_sr") if "is_sr" in l else l.get("is_sr", False))
-                val_ssr = bool(l.get("is_ssr") if "is_ssr" in l else l.get("is_ssr", False))
+                # Menggunakan kata kunci asli database 'nama_lembaga', 'is_sr', dan 'is_ssr' (huruf kecil semua)
+                nama_mitra = l.get("nama_lembaga") if "nama_lembaga" in l else l.get("Nama Lembaga")
+                val_sr = bool(l.get("is_sr", False))
+                val_ssr = bool(l.get("is_ssr", False))
                 
                 data_proses.append({
-                    "Nama Lembaga": l.get("nama_lembaga") if "nama_lembaga" in l else l.get("Nama Lembaga"),
+                    "Nama Lembaga": nama_mitra,
                     "SR": val_sr,
                     "SSR": val_ssr
                 })
@@ -2754,7 +2754,7 @@ elif menu_pilihan == "🏢 Data Lembaga":
                         try:
                             with conn.cursor() as cur:
                                 for _, row in df_hasil_edit.iterrows():
-                                    # Ambil nilai boolean terbaru dari UI tabel hasil klik user
+                                    # Ambil nilai boolean terbaru hasil interaksi user di UI tabel
                                     status_sr_baru = bool(row["SR"])
                                     status_ssr_baru = bool(row["SSR"])
                                     
@@ -2768,7 +2768,7 @@ elif menu_pilihan == "🏢 Data Lembaga":
                             
                             st.success("Perubahan status instansi berhasil disinkronkan ke server Neon PostgreSQL!")
                             
-                            # Memperbarui memori aplikasi agar data True/False yang baru langsung terbaca
+                            # Memperbarui memori aplikasi agar data True/False yang baru langsung tersimpan di session state
                             sinkronisasi_master_lembaga() 
                             
                             import time
