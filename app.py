@@ -2598,21 +2598,26 @@ elif menu_pilihan == "⚙️ Pengaturan Keyword Medsos":
 
 
 # ----------------------------------------------------------
-# MENU 3: DATA LEMBAGA (DIPROTEKSI AKSES TINGKAT SR)
+# MENU 3: DATA LEMBAGA (DIPROTEKSI & DILENGKAPI FITUR HAPUS)
 # ----------------------------------------------------------
 elif menu_pilihan == "🏢 Data Lembaga":
     st.title("🏢 Manajemen Data Lembaga Mitra")
-    st.markdown("Gunakan menu ini untuk memanipulasi status keaktifan serta hak akses peran tingkat SR/SSR.")
+    st.markdown("Gunakan menu ini untuk mengubah peran instansi (SR/SSR), mengatur status keaktifan, atau menghapus mitra dari sistem.")
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Cek apakah pengguna saat ini adalah tingkat SR
+    # Cek hak akses (Hanya Role SR yang bisa melakukan Write/Delete)
     apakah_sr = st.session_state.get('current_role') == "SR"
+    list_lembaga_memori = st.session_state.get('master_lembaga', [])
+    df_edit = pd.DataFrame(list_lembaga_memori)
     
     col_kiri, col_kanan = st.columns([1, 1.5])
     
-    # --- KOLOM KIRI: TAMBAH MITRA BARU (Hanya Terbuka untuk SR) ---
+    # ==========================================
+    # --- KOLOM KIRI: AKSI TAMBAH & HAPUS ---
+    # ==========================================
     with col_kiri:
+        # --- BAGIAN 1: TAMBAH LEMBAGA ---
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         st.subheader("➕ Tambah Lembaga Baru")
         
@@ -2637,51 +2642,92 @@ elif menu_pilihan == "🏢 Data Lembaga":
                                     """, (nama_input, switch_sr, switch_ssr))
                                     conn.commit()
                                 
-                                st.success(f"Berhasil mengarsipkan '{nama_input}' ke database!")
+                                st.success(f"Berhasil mengarsipkan '{nama_input}'!")
                                 sinkronisasi_master_lembaga()
                                 
                                 import time
                                 time.sleep(1)
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"Gagal menyimpan ke database: {e}")
+                                st.error(f"Gagal menyimpan data: {e}")
                             finally:
                                 conn.close()
                     else:
                         st.warning("Nama lembaga tidak boleh kosong!")
         else:
-            # Tampilan jika diakses oleh SSR
-            st.warning("🔒 **Fitur Terkunci**\n\nAkun Anda (**SSR**) tidak memiliki izin untuk menambahkan lembaga baru ke sistem.")
-            
+            st.warning("🔒 **Fitur Terkunci**: Akun Anda (**SSR**) tidak diizinkan menambahkan lembaga.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # --- BAGIAN 2: HAPUS LEMBAGA (FITUR BARU) ---
+        st.markdown('<div class="glass-card" style="border-color: rgba(ef, 44, 44, 0.2);">', unsafe_allow_html=True)
+        st.subheader("🗑️ Hapus Lembaga")
+        
+        if apakah_sr:
+            if list_lembaga_memori:
+                pilihan_hapus = [l["Nama Lembaga"] for l in list_lembaga_memori]
+                lembaga_target = st.selectbox("Pilih Lembaga yang akan Dihapus:", ["-- Pilih Lembaga --"] + pilihan_hapus)
+                
+                # Checkbox pengaman tambahan agar tidak asal klik
+                konfirmasi_keamanan = st.checkbox("Saya yakin ingin menghapus lembaga ini secara permanen.")
+                tombol_hapus = st.button("🔴 Eksekusi Hapus Data", use_container_width=True, type="secondary")
+                
+                if tombol_hapus:
+                    if lembaga_target == "-- Pilih Lembaga --":
+                        st.error("Silakan pilih nama lembaga terlebih dahulu!")
+                    elif not konfirmasi_keamanan:
+                        st.warning("Harap centang kotak konfirmasi keamanan di atas sebelum menghapus!")
+                    else:
+                        conn = dapatkan_koneksi_neon()
+                        if conn:
+                            try:
+                                with conn.cursor() as cur:
+                                    cur.execute("DELETE FROM master_lembaga WHERE nama_lembaga = %s;", (lembaga_target,))
+                                    conn.commit()
+                                
+                                st.success(f"Lembaga '{lembaga_target}' telah sukses dihapus dari sistem!")
+                                sinkronisasi_master_lembaga()
+                                
+                                import time
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Gagal menghapus data dari database: {e}")
+                            finally:
+                                conn.close()
+            else:
+                st.info("Tidak ada lembaga yang bisa dihapus.")
+        else:
+            st.warning("🔒 **Fitur Terkunci**: Akun Anda (**SSR**) tidak diizinkan menghapus lembaga.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- KOLOM KANAN: EDITOR STATUS AKTIF DENGAN SWITCH (Diproteksi RBAC) ---
+
+    # ==========================================
+    # --- KOLOM KANAN: TABEL EDIT UTAMA ---
+    # ==========================================
     with col_kanan:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        
-        # Ambil data dari database melalui session state
-        df_edit = pd.DataFrame(st.session_state.get('master_lembaga', []))
         st.subheader(f"📋 Pengaturan Status Aktif ({len(df_edit)})")
         
         if not df_edit.empty:
-            # Tampilkan tabel interaktif (Checkbox berfungsi sebagai switch aktif/nonaktif)
+            # Tampilkan tabel switch interaktif
             df_hasil_edit = st.data_editor(
                 df_edit,
                 column_config={
                     "Nama Lembaga": st.column_config.TextColumn("Nama Lembaga Mitra", disabled=True),
-                    # Parameter 'disabled=not apakah_sr' akan mengunci switch jika pengguna bukan SR
-                    "SR": st.column_config.CheckboxColumn("Status SR", help="Centang jika aktif SR", disabled=not apakah_sr),
-                    "SSR": st.column_config.CheckboxColumn("Status SSR", help="Centang jika aktif SSR", disabled=not apakah_sr)
+                    "SR": st.column_config.CheckboxColumn("Status SR", help="Centang untuk mengaktifkan peran SR", disabled=not apakah_sr),
+                    "SSR": st.column_config.CheckboxColumn("Status SSR", help="Centang untuk mengaktifkan peran SSR", disabled=not apakah_sr)
                 },
                 hide_index=True,
                 use_container_width=True,
-                disabled=not apakah_sr, # Mengunci baris tabel secara menyeluruh jika bukan SR
+                disabled=not apakah_sr,
                 key="editor_status_lembaga"
             )
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # Tombol aksi simpan hanya muncul dan bisa dieksekusi oleh user tingkat SR
+            # Tombol Simpan Perubahan (Hanya untuk SR)
             if apakah_sr:
                 if st.button("💾 Simpan Perubahan Status", type="primary", use_container_width=True):
                     conn = dapatkan_koneksi_neon()
@@ -2703,11 +2749,10 @@ elif menu_pilihan == "🏢 Data Lembaga":
                             time.sleep(1)
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Gagal melakukan pembaharuan database massal: {e}")
+                            st.error(f"Gagal melakukan pembaharuan massal: {e}")
                         finally:
                             conn.close()
             else:
-                # Catatan info pelindung di bawah tabel untuk user SSR
                 st.info("ℹ️ **Mode Pratinjau (Read-Only)**: Anda dapat melihat daftar ini, namun perubahan data hanya dapat dilakukan oleh akun tingkat **SR**.")
         else:
             st.info("Belum ada data lembaga di database.")
