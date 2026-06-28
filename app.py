@@ -104,25 +104,63 @@ set_modern_theme()
 # ==========================================================
 # 0. POPUP ABSENSI & INISIALISASI MASTER LEMBAGA (RBAC SYSTEM)
 # ==========================================================
+from database import dapatkan_koneksi_neon  # Menggunakan utilitas koneksi dari modul database Anda
+
+def sinkronisasi_master_lembaga():
+    """Mengambil data lembaga terbaru dari database Neon ke Session State"""
+    conn = dapatkan_koneksi_neon()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                # 1. Pastikan tabel master_lembaga tersedia di database
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS master_lembaga (
+                        id SERIAL PRIMARY KEY,
+                        nama_lembaga VARCHAR(255) UNIQUE NOT NULL,
+                        is_sr BOOLEAN DEFAULT FALSE,
+                        is_ssr BOOLEAN DEFAULT FALSE,
+                        tanggal_dibuat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                conn.commit()
+
+                # 2. Seeding Data Awal jika tabel masih kosong melompong di server
+                cur.execute("SELECT COUNT(*) FROM master_lembaga;")
+                if cur.fetchone()[0] == 0:
+                    data_default = [
+                        ("BINA MUDA GEMILANG", False, True), ("PKBI JAWA BARAT", True, False),
+                        ("GRAPIKS", False, True), ("LEMBAGA KASIH INDONESIA KITA", False, True),
+                        ("LENSA SUKABUMI", False, True), ("PESONA BUMI PASUNDAN", False, True),
+                        ("PETIK", False, True), ("PKBI CABANG SUBANG", False, True),
+                        ("PKBI CIREBON", False, True), ("PKBI GARUT", False, True),
+                        ("WAHANA CITA INDONESIA", False, True), ("YAYASAN PELANGI MALUKU", False, True),
+                        ("YAYASAN PONTIANAK PLUS - OUTREACH", False, True), ("YAYASAN SRIKANDI PASUNDAN", False, True),
+                        ("YAYASAN SRIKANDI PERINTIS", False, True), ("YAYASAN VESTA INDONESIA", False, True)
+                    ]
+                    cur.executemany("""
+                        INSERT INTO master_lembaga (nama_lembaga, is_sr, is_ssr) 
+                        VALUES (%s, %s, %s) ON CONFLICT DO NOTHING;
+                    """, data_default)
+                    conn.commit()
+
+            # 3. Ambil data asli ter-update dari database dengan alias terstandar untuk UI
+            query = """
+                SELECT nama_lembaga AS "Nama Lembaga", 
+                       is_sr AS "SR", 
+                       is_ssr AS "SSR" 
+                FROM master_lembaga 
+                ORDER BY nama_lembaga ASC;
+            """
+            df_db = pd.read_sql_query(query, conn)
+            st.session_state.master_lembaga = df_db.to_dict('records')
+        except Exception as e:
+            st.error(f"Gagal memuat sistem pertukaran data lembaga: {e}")
+        finally:
+            conn.close()
+
+# Jalankan sinkronisasi database pertama kali sebelum form login muncul
 if "master_lembaga" not in st.session_state:
-    st.session_state.master_lembaga = [
-        {"Nama Lembaga": "BINA MUDA GEMILANG", "Status": "SSR"},
-        {"Nama Lembaga": "PKBI JAWA BARAT", "Status": "SR"},
-        {"Nama Lembaga": "GRAPIKS", "Status": "SSR"},
-        {"Nama Lembaga": "LEMBAGA KASIH INDONESIA KITA", "Status": "SSR"},
-        {"Nama Lembaga": "LENSA SUKABUMI", "Status": "SSR"},
-        {"Nama Lembaga": "PESONA BUMI PASUNDAN", "Status": "SSR"},
-        {"Nama Lembaga": "PETIK", "Status": "SSR"},
-        {"Nama Lembaga": "PKBI CABANG SUBANG", "Status": "SSR"},
-        {"Nama Lembaga": "PKBI CIREBON", "Status": "SSR"},
-        {"Nama Lembaga": "PKBI GARUT", "Status": "SSR"},
-        {"Nama Lembaga": "WAHANA CITA INDONESIA", "Status": "SSR"},
-        {"Nama Lembaga": "YAYASAN PELANGI MALUKU", "Status": "SSR"},
-        {"Nama Lembaga": "YAYASAN PONTIANAK PLUS - OUTREACH", "Status": "SSR"},
-        {"Nama Lembaga": "YAYASAN SRIKANDI PASUNDAN", "Status": "SSR"},
-        {"Nama Lembaga": "YAYASAN SRIKANDI PERINTIS", "Status": "SSR"},
-        {"Nama Lembaga": "YAYASAN VESTA INDONESIA", "Status": "SSR"}
-    ]
+    sinkronisasi_master_lembaga()
 
 if "user_authenticated" not in st.session_state: st.session_state.user_authenticated = False
 if "current_lembaga" not in st.session_state: st.session_state.current_lembaga = None
@@ -131,15 +169,23 @@ if "current_role" not in st.session_state: st.session_state.current_role = None
 @st.dialog("📋 Login Aplikasi")
 def popup_absensi():
     st.write("Silahkan pilih nama instansi/lembaga Anda untuk masuk ke sistem.")
-    list_pilihan = [l["Nama Lembaga"] for l in st.session_state.master_lembaga]
+    list_pilihan = [l["Nama Lembaga"] for l in st.session_state.get('master_lembaga', [])]
     lembaga_pilihan = st.selectbox("Pilih Nama Lembaga:", ["-- Pilih Lembaga --"] + list_pilihan)
     
     if lembaga_pilihan != "-- Pilih Lembaga --":
-        role_terdeteksi = next(l["Status"] for l in st.session_state.master_lembaga if l["Nama Lembaga"] == lembaga_pilihan)
+        # Ambil record lembaga terpilih dari session state hasil DB
+        rec = next(l for l in st.session_state.master_lembaga if l["Nama Lembaga"] == lembaga_pilihan)
+        
+        # Penentuan peran secara dinamis berdasarkan flag boolean database
+        roles = []
+        if rec["SR"]: roles.append("SR")
+        if rec["SSR"]: roles.append("SSR")
+        role_terdeteksi = " / ".join(roles) if roles else "GUEST"
+        
         st.info(f"Sistem mendeteksi peran Anda sebagai: **{role_terdeteksi}**")
         if st.button("Konfirmasi & Masuk Aplikasi", use_container_width=True):
             st.session_state.current_lembaga = lembaga_pilihan
-            st.session_state.current_role = role_terdeteksi
+            st.session_state.current_role = "SR" if "SR" in roles else "SSR"  # Prioritaskan peran SR jika ganda
             st.session_state.user_authenticated = True
             st.rerun()
 
@@ -174,8 +220,6 @@ if ('total_entri_penjangkauan' not in st.session_state or pemicu_baca_ulang):
         conn = dapatkan_koneksi_neon()
         if conn:
             with conn.cursor() as cur:
-                # Mengambil seluruh riwayat metrik akurasi dari yang paling baru
-                # Sesuai dengan kolom di database Anda: total_data_diproses dan tingkat_akurasi
                 cur.execute("""
                     SELECT kategori, total_data_diproses, total_baris_temuan, tingkat_akurasi 
                     FROM akurasi_review_data 
@@ -183,7 +227,6 @@ if ('total_entri_penjangkauan' not in st.session_state or pemicu_baca_ulang):
                 """)
                 rows = cur.fetchall()
                 
-                # Ambil 1 baris terbaru unik untuk masing-masing kategori
                 kategori_terisi = set()
                 for r in rows:
                     kat = str(r[0]).strip().lower()
@@ -198,7 +241,6 @@ if ('total_entri_penjangkauan' not in st.session_state or pemicu_baca_ulang):
                             st.session_state['temuan_rujukan'] = int(r[2])
                             st.session_state['akurasi_rujukan'] = float(r[3])
                             kategori_terisi.add(kat)
-                    # Jika kedua kategori sudah mendapatkan data terbarunya, stop loop
                     if len(kategori_terisi) == 2:
                         break
             conn.close()
@@ -212,7 +254,6 @@ if ('df_penjangkauan' not in st.session_state or st.session_state['df_penjangkau
         df_pj, ts_pj = ambil_agregasi_penjangkauan_terakhir()
         if df_pj is not None and not df_pj.empty:
             st.session_state['df_penjangkauan'] = df_pj
-            # ALIAS: Mengisi nama variabel lama agar dibaca oleh komponen UI lama
             st.session_state['df_tabel_atas'] = df_pj 
             st.session_state['df_tabel_penjangkauan'] = df_pj 
             st.session_state['ts_terakhir_penjangkauan'] = ts_pj
@@ -248,7 +289,6 @@ if ('df_review_utama' not in st.session_state or st.session_state['df_review_uta
         df_ut, ts_ut = ambil_hasil_review_utama_terakhir()
         if df_ut is not None and not df_ut.empty:
             st.session_state['df_review_utama'] = df_ut
-            # ALIAS UTAMA: Mengisi data ke variabel tabel bawah agar UI-nya tidak kosong
             st.session_state['df_tabel_bawah'] = df_ut 
             st.session_state['ts_terakhir_utama'] = ts_ut
         else:
@@ -275,7 +315,6 @@ def ambil_keyword_medsos():
 # --- C. TAMPILAN JUDUL UTAMA ---
 st.markdown('<div class="main-title">📊 Tools Review Data PKBI Jawa Barat</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Sistem Validasi Kualitas Data Penjangkauan & Rujukan</div>', unsafe_allow_html=True)
-
 
 # ==========================================================
 # FUNGSI HELPER
