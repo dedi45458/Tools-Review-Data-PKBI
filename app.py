@@ -1154,9 +1154,9 @@ if tombol_proses:
     else:
         with st.spinner("Sedang memproses validasi data & sinkronisasi database terintegrasi..."):
             
-            # 🔥 AMBIL IDENTITAS LOGIN USER SAAT INI UNTUK PEMISAHAN DATA SR vs SSR
-            role_aktif = st.session_state.get('peran_user', 'SR')
-            lembaga_aktif = st.session_state.get('lembaga_user', None)
+            # 🔥 PERBAIKAN: Gunakan 'current_role' dan 'current_lembaga'
+            role_aktif = st.session_state.get('current_role', 'SR')
+            lembaga_aktif = st.session_state.get('current_lembaga', None)
             
             # 🛠️ Tangkap uploader referensi dengan aman
             file_referensi_aman = st.session_state.get('uploader_master_tunggal', None)
@@ -1638,6 +1638,10 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         # TAB 1: AREA LAYOUT URUTAN TABEL SESUAI PERMINTAAN USER
         # -------------------------------------------------------------------------
         with tab1:
+            # --- AMBIL ROLE SECARA DINAMIS DARI SESSION STATE ---
+            # Jika belum login, default-nya 'SSR' (atau sesuaikan)
+            peran = st.session_state.get('current_role', 'SSR') 
+            
             # --- RENDER UI KARTU SKOR MENGGUNAKAN GLASSMORPHISM ---
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
             tanggal_hari_ini = datetime.now(ZoneInfo('Asia/Jakarta')).strftime('%d %B %Y')
