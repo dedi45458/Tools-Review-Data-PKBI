@@ -1935,7 +1935,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 
                 # Ambil daftar seluruh nama lembaga yang berstatus 'SSR' dari master_lembaga
                 daftar_seluruh_ssr = [
-                    l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"
+                    l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "TRUE"
                 ]
                 daftar_seluruh_ssr = sorted(daftar_seluruh_ssr) 
                 
