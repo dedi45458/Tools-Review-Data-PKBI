@@ -817,38 +817,71 @@ def sinkronisasi_master_lembaga():
         finally:
             conn.close()
 
-def ambil_histori_review():
-    conn = dapatkan_koneksi_neon()  # Memanggil koneksi yang se-file
+def ambil_histori_review_minggu_ini():
+    conn = dapatkan_koneksi_neon()
     if not conn:
-        return pd.DataFrame(columns=["Lembaga SSR", "Tanggal Sesi", "Akurasi Akhir"])
+        return pd.DataFrame(columns=["Lembaga SSR", "Kategori", "Tanggal Sesi", "Akurasi Akhir"])
     
     try:
         with conn.cursor() as cur:
+            # Mengonversi waktu server ke Asia/Jakarta (WIB) sebelum dipotong berdasarkan minggu (DATE_TRUNC)
             cur.execute("""
-                SELECT lembaga_ssr, created_at, tingkat_akurasi 
+                SELECT 
+                    COALESCE(lembaga_ssr, 'PKBI JAWA BARAT') as lembaga_ssr, 
+                    kategori, 
+                    created_at AT TIME ZONE 'Asia/Jakarta' as created_at_wib, 
+                    tingkat_akurasi 
                 FROM public.akurasi_review_data 
+                WHERE created_at AT TIME ZONE 'Asia/Jakarta' >= DATE_TRUNC('week', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')
                 ORDER BY created_at DESC;
             """)
             rows = cur.fetchall()
             
             if not rows:
-                return pd.DataFrame(columns=["Lembaga SSR", "Tanggal Sesi", "Akurasi Akhir"])
+                return pd.DataFrame(columns=["Lembaga SSR", "Kategori", "Tanggal Sesi", "Akurasi Akhir"])
             
             data_ui = []
             for row in rows:
-                tanggal_format = row[1].strftime("%d-%m-%Y") if row[1] else "-"
-                akurasi_format = f"{row[2]}%" if row[2] is not None else "-"
-                
                 data_ui.append({
-                    "Lembaga SSR": row[0],
-                    "Tanggal Sesi": tanggal_format,
-                    "Akurasi Akhir": akurasi_format
+                    "Lembaga SSR": row[0].strip(),
+                    "Kategori": row[1].strip().title() if row[1] else "-",
+                    "Tanggal Sesi": row[2].strftime("%d-%m-%Y") if row[2] else "-",
+                    "Akurasi Akhir": f"{row[3]}%" if row[3] is not None else "-"
                 })
                 
             return pd.DataFrame(data_ui)
             
     except Exception as e:
-        st.error(f"Gagal memuat histori dari database: {e}")
-        return pd.DataFrame(columns=["Lembaga SSR", "Tanggal Sesi", "Akurasi Akhir"])
+        st.error(f"Gagal memuat histori minggu ini: {e}")
+        return pd.DataFrame(columns=["Lembaga SSR", "Kategori", "Tanggal Sesi", "Akurasi Akhir"])
+    finally:
+        conn.close()
+
+
+def ambil_lembaga_belum_validasi_minggu_ini():
+    conn = dapatkan_koneksi_neon()
+    if not conn:
+        return []
+    
+    try:
+        with conn.cursor() as cur:
+            # Menyelaraskan filter waktu sub-query ke Asia/Jakarta (WIB)
+            cur.execute("""
+                SELECT TRIM(nama_lembaga) 
+                FROM public.master_lembaga 
+                WHERE is_ssr = TRUE 
+                  AND TRIM(nama_lembaga) NOT IN (
+                      SELECT DISTINCT TRIM(COALESCE(lembaga_ssr, 'PKBI JAWA BARAT')) 
+                      FROM public.akurasi_review_data 
+                      WHERE created_at AT TIME ZONE 'Asia/Jakarta' >= DATE_TRUNC('week', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')
+                  )
+                ORDER BY nama_lembaga ASC;
+            """)
+            rows = cur.fetchall()
+            return [row[0] for row in rows]
+            
+    except Exception as e:
+        st.error(f"Gagal memuat daftar lembaga belum validasi: {e}")
+        return []
     finally:
         conn.close()
