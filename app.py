@@ -20,7 +20,8 @@ from database import (
     ambil_data_rujukan_hiv_positif,  
     ambil_set_reaktif_sebelumnya,       # ✨ Tambahkan ini untuk validasi is_reaktif_sebelumnya
     ambil_set_layanan_prep_valid,       # ✨ Tambahkan ini untuk validasi PrEP
-    ambil_database_layanan,          
+    ambil_database_layanan,
+    ambil_histori_review,
     
     # 🛠️ PROSES SIMPAN DATA REVIEWS
     simpan_agregasi_ke_neon,          # Untuk Penjangkauan
