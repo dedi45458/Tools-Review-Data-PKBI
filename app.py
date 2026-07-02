@@ -2535,6 +2535,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             df_tren = ambil_data_tren_review(user_lembaga, user_role)
             
             if not df_tren.empty:
+                # Memastikan kolom Tanggal dikonversi ke tipe datetime Pandas secara aman
+                df_tren["Tanggal"] = pd.to_datetime(df_tren["Tanggal"])
                 # Membuat format kolom bulan (YYYY-MM) dari kolom Tanggal untuk keperluan filter
                 df_tren["Bulan"] = df_tren["Tanggal"].dt.strftime("%Y-%m")
                 
@@ -2556,7 +2558,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 with col_fil2:
                     # Filter 2: Lembaga SSR (Hanya aktif/bisa dipilih jika yang login adalah SR)
                     if user_role.upper() == 'SR':
-                        list_lembaga_pilihan = ["Semua Lembaga SSR"] + sorted(df_filtered["Lembaga SSR"].unique().tolist())
+                        # Menggunakan df_tren (data master) agar pilihan dropdown lembaga tetap lengkap & stabil
+                        list_lembaga_pilihan = ["Semua Lembaga SSR"] + sorted(df_tren["Lembaga SSR"].unique().tolist())
                         lembaga_pilihan = st.selectbox(
                             "🏢 Filter Lembaga SSR:",
                             options=list_lembaga_pilihan,
@@ -2575,7 +2578,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
                 
                 with col_fil3:
-                    # Filter 3: Rentang Bulan (Mengambil list bulan unik)
+                    # Filter 3: Rentang Bulan (Mengambil list bulan unik dari data master)
                     list_bulan = sorted(df_tren["Bulan"].unique().tolist())
                     
                     # Cek jika isi list_bulan ada lebih dari 1 bulan (Aman untuk Range Slider)
@@ -2593,7 +2596,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         ]
                     else:
                         # JIKA DATA BARU ADA 1 BULAN (Mencegah Error RangeError)
-                        # Tampilkan slider tunggal (bukan range) agar tidak crash, atau disabled saja
+                        # Tampilkan slider tunggal (bukan range) agar tidak crash, otomatis dalam mode disabled
                         bulan_tunggal = list_bulan[0] if list_bulan else "Tidak Ada Data"
                         st.select_slider(
                             "📅 Pilih Rentang Bulan:",
