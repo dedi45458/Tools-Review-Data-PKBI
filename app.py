@@ -2602,7 +2602,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         if list_bulan:
                             df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
                 
-                # 3. MEMBUAT GRAFIK GARIS (Disesuaikan dengan Kolom Database)
+                # 3. MEMBUAT GRAFIK GARIS (Koreksi AttributeError & Standarisasi Kolom)
                 if not df_filtered.empty:
                     import plotly.express as px
                     
@@ -2612,7 +2612,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     # Mengamankan nama kolom ke huruf kecil murni untuk menghindari isu case-sensitivity
                     df_filtered.columns = df_filtered.columns.str.strip().str.lower()
                     
-                    # Definisikan nama kolom target sesuai struktur database Anda
+                    # Definisikan nama kolom target sesuai struktur database Anda (huruf kecil)
                     kolom_proses = "total_data_diproses"
                     kolom_temuan = "total_baris_temuan"
                     kolom_ssr = "lembaga ssr" if "lembaga ssr" in df_filtered.columns else "lembaga_ssr"
@@ -2620,10 +2620,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     kolom_kategori = "kategori"
                     kolom_akurasi = "tingkat akurasi" if "tingkat akurasi" in df_filtered.columns else "tingkat_akurasi"
                     
-                    # --- FILTERING DATA BERDASARKAN LEMBAGA SSR ---
-                    # Melakukan penyaringan secara aman (menghapus spasi dan mengabaikan huruf besar/kecil)
+                    # --- FILTERING DATA BERDASARKAN LEMBAGA SSR (AMANDEMEN AMAN) ---
+                    # Mengonversi target filter ke huruf kecil biasa (string Python standar)
+                    target_ssr_lower = str(current_ssr).strip().lower()
+                    
+                    # Saring menggunakan kombinasi .astype(str) + .str yang aman dari NaN
                     df_grafik = df_filtered[
-                        df_filtered[kolom_ssr].astype(str).str.strip().str.lower() == str(current_ssr).strip().str.lower()
+                        df_filtered[kolom_ssr].astype(str).str.strip().str.lower() == target_ssr_lower
                     ].copy()
                     
                     if not df_grafik.empty:
@@ -2681,7 +2684,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                                 value=f"{total_temuan:,} data".replace(",", ".")
                             )
                     else:
-                        st.warning(f"⚠️ Tidak ada data review yang tersaring untuk lembaga '{current_ssr}'. Periksa penulisan nama lembaga di database.")
+                        st.warning(f"⚠️ Tidak ada data review yang tersaring untuk lembaga '{current_ssr}'. Periksa pencocokan nama di database.")
                 else:
                     st.warning("⚠️ Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
                 
