@@ -2575,34 +2575,36 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
                 
                 with col_fil3:
-                    # Filter 3: Rentang Bulan (Mengambil list bulan unik yang tersedia di database secara berurutan)
+                    # Filter 3: Rentang Bulan (Mengambil list bulan unik)
                     list_bulan = sorted(df_tren["Bulan"].unique().tolist())
                     
+                    # Cek jika isi list_bulan ada lebih dari 1 bulan (Aman untuk Range Slider)
                     if len(list_bulan) > 1:
-                        # Jika pilihan bulannya ada banyak, tampilkan slider range (Dari Bulan - Sampai Bulan)
                         bulan_pilihan = st.select_slider(
                             "📅 Pilih Rentang Bulan:",
                             options=list_bulan,
-                            value=(list_bulan[0], list_bulan[-1]), # Default: dari bulan terlama hingga terbaru
+                            value=(list_bulan[0], list_bulan[-1]), # Berhasil karena min != max
                             key="filter_bulan_slider"
                         )
-                        # Saring data berdasarkan range slider [Bulan Awal, Bulan Akhir]
+                        # Saring data berdasarkan range slider
                         df_filtered = df_filtered[
                             (df_filtered["Bulan"] >= bulan_pilihan[0]) & 
                             (df_filtered["Bulan"] <= bulan_pilihan[1])
                         ]
-                    elif len(list_bulan) == 1:
-                        # Jika data di database baru ada 1 bulan tunggal
+                    else:
+                        # JIKA DATA BARU ADA 1 BULAN (Mencegah Error RangeError)
+                        # Tampilkan slider tunggal (bukan range) agar tidak crash, atau disabled saja
+                        bulan_tunggal = list_bulan[0] if list_bulan else "Tidak Ada Data"
                         st.select_slider(
                             "📅 Pilih Rentang Bulan:",
-                            options=list_bulan,
-                            value=list_bulan[0],
+                            options=[bulan_tunggal],
+                            value=bulan_tunggal,
                             disabled=True,
-                            key="filter_bulan_single"
+                            key="filter_bulan_tunggal_safe"
                         )
-                        df_filtered = df_filtered[df_filtered["Bulan"] == list_bulan[0]]
-                    else:
-                        st.caption("Bulan tidak tersedia")
+                        # Saring data sesuai satu-satunya bulan yang ada
+                        if list_bulan:
+                            df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
                 
                 # 3. MEMBUAT GRAFIK GARIS (PLOTLY)
                 if not df_filtered.empty:
