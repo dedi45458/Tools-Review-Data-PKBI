@@ -899,7 +899,9 @@ def ambil_data_tren_review(lembaga_user, role_user):
                         COALESCE(lembaga_ssr, 'PKBI JAWA BARAT') as lembaga_ssr,
                         kategori,
                         created_at AT TIME ZONE 'Asia/Jakarta' as tanggal,
-                        tingkat_akurasi
+                        tingkat_akurasi,
+                        total_data_diproses,
+                        total_baris_temuan
                     FROM public.akurasi_review_data
                     WHERE COALESCE(lembaga_ssr, 'PKBI JAWA BARAT') = %s
                     ORDER BY created_at ASC;
@@ -911,7 +913,9 @@ def ambil_data_tren_review(lembaga_user, role_user):
                         COALESCE(lembaga_ssr, 'PKBI JAWA BARAT') as lembaga_ssr,
                         kategori,
                         created_at AT TIME ZONE 'Asia/Jakarta' as tanggal,
-                        tingkat_akurasi
+                        tingkat_akurasi,
+                        total_data_diproses,
+                        total_baris_temuan
                     FROM public.akurasi_review_data
                     ORDER BY created_at ASC;
                 """)
@@ -920,7 +924,15 @@ def ambil_data_tren_review(lembaga_user, role_user):
             if not rows:
                 return pd.DataFrame()
                 
-            return pd.DataFrame(rows, columns=["Lembaga SSR", "Kategori", "Tanggal", "Tingkat Akurasi"])
+            # Kita mapping menggunakan nama kolom berformat snake_case yang konsisten ke Pandas
+            return pd.DataFrame(rows, columns=[
+                "lembaga_ssr", 
+                "kategori", 
+                "tanggal", 
+                "tingkat_akurasi", 
+                "total_data_diproses", 
+                "total_baris_temuan"
+            ])
     except Exception as e:
         st.error(f"Gagal memuat data tren: {e}")
         return pd.DataFrame()
