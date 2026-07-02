@@ -2400,7 +2400,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.error(f"Gagal memproses query data tabel: {e}")
                 finally:
                     conn_grafik.close()
-
+        
             # ---------------------------------------------------------------------
             # FUNGSI LOKAL: FORMATTING DATAFRAME MENJADI TABEL RANKING STANDAR
             # ---------------------------------------------------------------------
@@ -2417,13 +2417,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 df_res['%'] = ((df_res['total'] / total_temuan) * 100).round(1).astype(str) + " %"
                 df_res = df_res.rename(columns={'indikator_kesalahan': 'Indikator Kesalahan data'})
                 
-                # Buat nomor urut
+                # Buat nomor urut (Diseragamkan menggunakan huruf kapital depan 'No.')
                 df_res = df_res.reset_index(drop=True)
-                df_res['no.'] = df_res.index + 1
+                df_res['No.'] = df_res.index + 1
                 
                 # Susun ulang kolom akhir
-                return df_res[["no.", "Indikator Kesalahan data", "Jml. Temuan", "%"]]
-
+                return df_res[["No.", "Indikator Kesalahan data", "Jml. Temuan", "%"]]
+        
             # ---------------------------------------------------------------------
             # BAGIAN A: RENDER TABEL KLASTER REGULER (TIDAK ADA KAT_KONFIRMASI)
             # ---------------------------------------------------------------------
@@ -2447,7 +2447,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.info("Tidak ada temuan data murni pada rujukan bulan ini.")
                     
             st.markdown("<br>", unsafe_allow_html=True)
-
+        
             # ---------------------------------------------------------------------
             # BAGIAN B: RENDER TABEL KLASTER DATA KONFIRMASI (ADA KAT_KONFIRMASI)
             # ---------------------------------------------------------------------
@@ -2469,8 +2469,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.dataframe(df_rjk_kon_fmt, use_container_width=True, hide_index=True)
                 else:
                     st.info("Tidak ada temuan khusus konfirmasi pada rujukan bulan ini.")
-
-    
+        
+            
             # ----------------------------------------------------------
             # BAGIAN C : GRAFIK TREN AKURASI 
             # ----------------------------------------------------------
@@ -2481,7 +2481,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             user_lembaga = st.session_state.current_lembaga
             user_role = st.session_state.current_role
             
-            # 2. Ambil data tren dasar dari database (Sekarang membawa total_data_diproses & total_baris_temuan)
+            # 2. Ambil data tren dasar dari database
             df_tren = ambil_data_tren_review(user_lembaga, user_role)
             
             if not df_tren.empty:
@@ -2529,13 +2529,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 
                 with col_fil3:
                     # Filter 3: Rentang Bulan
-                    list_bulan = sorted(df_tren["bulan"].unique().tolist())
+                    list_bulan_tren = sorted(df_tren["bulan"].unique().tolist())
                     
-                    if len(list_bulan) > 1:
+                    if len(list_bulan_tren) > 1:
                         bulan_pilihan = st.select_slider(
                             "📅 Pilih Rentang Bulan:",
-                            options=list_bulan,
-                            value=(list_bulan[0], list_bulan[-1]),
+                            options=list_bulan_tren,
+                            value=(list_bulan_tren[0], list_bulan_tren[-1]),
                             key="filter_bulan_slider_aktif"
                         )
                         df_filtered = df_filtered[
@@ -2544,7 +2544,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         ]
                     else:
                         # Pengaman jika bulan baru ada 1 (Mencegah RangeError)
-                        bulan_tunggal = list_bulan[0] if list_bulan else "Tidak Ada Data"
+                        bulan_tunggal = list_bulan_tren[0] if list_bulan_tren else "Tidak Ada Data"
                         st.selectbox(
                             "📅 Rentang Bulan (Terkunci):",
                             options=[bulan_tunggal],
@@ -2552,7 +2552,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             disabled=True,
                             key="filter_bulan_selectbox_safe"
                         )
-                        if list_bulan:
+                        if list_bulan_tren:
                             df_filtered = df_filtered[df_filtered["bulan"] == bulan_tunggal]
                 
                 # 3. MEMBUAT GRAFIK GARIS
@@ -2570,9 +2570,10 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         # Mengurutkan data berdasarkan tanggal agar tarikan garis grafiknya rapi kronologis
                         df_grafik = df_grafik.sort_values(by=["tanggal_murni", "kategori"])
                         
-                        # Memastikan tipe data jumlah baris berbentuk numerik utuh (int)
+                        # Memastikan tipe data jumlah baris & akurasi berbentuk numerik utuh demi kestabilan plotly
                         df_grafik["total_data_diproses"] = pd.to_numeric(df_grafik["total_data_diproses"], errors='coerce').fillna(0).astype(int)
                         df_grafik["total_baris_temuan"] = pd.to_numeric(df_grafik["total_baris_temuan"], errors='coerce').fillna(0).astype(int)
+                        df_grafik["tingkat_akurasi"] = pd.to_numeric(df_grafik["tingkat_akurasi"], errors='coerce').fillna(0).astype(float)
                         
                         fig = px.line(
                             df_grafik,
