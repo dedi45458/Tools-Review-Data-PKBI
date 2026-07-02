@@ -2541,7 +2541,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 df_tren["Bulan"] = df_tren["Tanggal"].dt.strftime("%Y-%m")
                 
                 # --- LAYOUT FILTER PROPORSIONAL (3 KOLOM) ---
-                # Kita bagi rasio kolomnya (Kategori: 3, Lembaga: 3, Rentang Bulan: 4) agar pas di layar
                 col_fil1, col_fil2, col_fil3 = st.columns([3, 3, 4])
                 
                 with col_fil1:
@@ -2556,9 +2555,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["Kategori"].str.lower() == kategori_pilihan.lower()]
                 
                 with col_fil2:
-                    # Filter 2: Lembaga SSR (Hanya aktif/bisa dipilih jika yang login adalah SR)
+                    # Filter 2: Lembaga SSR (Hanya aktif jika login sebagai SR)
                     if user_role.upper() == 'SR':
-                        # Menggunakan df_tren (data master) agar pilihan dropdown lembaga tetap lengkap & stabil
                         list_lembaga_pilihan = ["Semua Lembaga SSR"] + sorted(df_tren["Lembaga SSR"].unique().tolist())
                         lembaga_pilihan = st.selectbox(
                             "🏢 Filter Lembaga SSR:",
@@ -2568,7 +2566,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         if lembaga_pilihan != "Semua Lembaga SSR":
                             df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
                     else:
-                        # Jika SSR, otomatis terkunci dan kita tampilkan selectbox yang terkunci (disabled)
                         st.selectbox(
                             "🏢 Filter Lembaga SSR:",
                             options=[user_lembaga],
@@ -2581,13 +2578,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     # Filter 3: Rentang Bulan (Mengambil list bulan unik dari data master)
                     list_bulan = sorted(df_tren["Bulan"].unique().tolist())
                     
-                    # Cek jika isi list_bulan ada lebih dari 1 bulan (Aman untuk Range Slider)
+                    # LOGIKA PENYELAMAT: Gunakan Slider HANYA jika jumlah bulan > 1
                     if len(list_bulan) > 1:
                         bulan_pilihan = st.select_slider(
                             "📅 Pilih Rentang Bulan:",
                             options=list_bulan,
-                            value=(list_bulan[0], list_bulan[-1]), # Berhasil karena min != max
-                            key="filter_bulan_slider"
+                            value=(list_bulan[0], list_bulan[-1]),
+                            key="filter_bulan_slider_aktif"
                         )
                         # Saring data berdasarkan range slider
                         df_filtered = df_filtered[
@@ -2595,15 +2592,14 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             (df_filtered["Bulan"] <= bulan_pilihan[1])
                         ]
                     else:
-                        # JIKA DATA BARU ADA 1 BULAN (Mencegah Error RangeError)
-                        # Tampilkan slider tunggal (bukan range) agar tidak crash, otomatis dalam mode disabled
+                        # SOLUSI ERROR: Jika bulan <= 1, paksa pakai Selectbox agar tidak terjadi RangeError
                         bulan_tunggal = list_bulan[0] if list_bulan else "Tidak Ada Data"
-                        st.select_slider(
-                            "📅 Pilih Rentang Bulan:",
+                        st.selectbox(
+                            "📅 Rentang Bulan (Terkunci):",
                             options=[bulan_tunggal],
-                            value=bulan_tunggal,
+                            index=0,
                             disabled=True,
-                            key="filter_bulan_tunggal_safe"
+                            key="filter_bulan_selectbox_safe"
                         )
                         # Saring data sesuai satu-satunya bulan yang ada
                         if list_bulan:
