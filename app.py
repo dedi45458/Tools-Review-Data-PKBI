@@ -2644,7 +2644,6 @@ elif menu_pilihan == "🏢 Data Lembaga":
         st.markdown("<br>", unsafe_allow_html=True)
         
         # --- BAGIAN 2: HAPUS LEMBAGA (FITUR BARU) ---
-        st.markdown('<div class="glass-card" style="border-color: rgba(ef, 44, 44, 0.2);">', unsafe_allow_html=True)
         st.subheader("🗑️ Hapus Lembaga")
         
         if apakah_sr:
