@@ -2531,17 +2531,17 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             user_lembaga = st.session_state.current_lembaga
             user_role = st.session_state.current_role
             
-            # 2. Ambil data tren dasar dari database
+            # 2. Ambil data tren dasar dari database (Sekarang membawa total_data_diproses & total_baris_temuan)
             df_tren = ambil_data_tren_review(user_lembaga, user_role)
             
             if not df_tren.empty:
                 # Amankan nama kolom dari spasi berlebih
                 df_tren.columns = df_tren.columns.str.strip()
                 
-                # Konversi kolom 'created_at' ke datetime lalu ekstrak murni tanggalnya saja (YYYY-MM-DD)
-                df_tren["tanggal_murni"] = pd.to_datetime(df_tren["created_at"]).dt.date
+                # Konversi dari kolom 'tanggal' hasil query ke tipe datetime murni
+                df_tren["tanggal_murni"] = pd.to_datetime(df_tren["tanggal"]).dt.date
                 # Membuat format kolom bulan (YYYY-MM) untuk keperluan filter rentang bulan
-                df_tren["bulan"] = pd.to_datetime(df_tren["created_at"]).dt.strftime("%Y-%m")
+                df_tren["bulan"] = pd.to_datetime(df_tren["tanggal"]).dt.strftime("%Y-%m")
                 
                 # --- LAYOUT FILTER PROPORSIONAL (3 KOLOM) ---
                 col_fil1, col_fil2, col_fil3 = st.columns([3, 3, 4])
@@ -2554,11 +2554,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         key="filter_kategori_tren"
                     )
                 
-                # Saring berdasarkan kategori terlebih dahulu (menggunakan kolom 'kategori')
+                # Saring berdasarkan kategori terlebih dahulu
                 df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["kategori"].str.lower() == kategori_pilihan.lower()]
                 
                 with col_fil2:
-                    # Filter 2: Lembaga SSR (menggunakan kolom 'lembaga_ssr')
+                    # Filter 2: Lembaga SSR
                     list_lembaga = sorted(df_tren["lembaga_ssr"].unique().tolist())
                     
                     if user_role.upper() == 'SR':
@@ -2578,7 +2578,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         df_filtered = df_filtered[df_filtered["lembaga_ssr"] == user_lembaga]
                 
                 with col_fil3:
-                    # Filter 3: Rentang Bulan (menggunakan kolom buatan 'bulan')
+                    # Filter 3: Rentang Bulan
                     list_bulan = sorted(df_tren["bulan"].unique().tolist())
                     
                     if len(list_bulan) > 1:
@@ -2605,7 +2605,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         if list_bulan:
                             df_filtered = df_filtered[df_filtered["bulan"] == bulan_tunggal]
                 
-                # 3. MEMBUAT GRAFIK GARIS (Menggunakan Kolom Asli Database)
+                # 3. MEMBUAT GRAFIK GARIS
                 if not df_filtered.empty:
                     import plotly.express as px
                     
@@ -2632,7 +2632,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             markers=True,
                             title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
                             labels={"tingkat_akurasi": "Akurasi (%)", "tanggal_murni": "Tanggal Sesi Review", "kategori": "Kategori"},
-                            custom_data=["total_data_diproses", "total_baris_temuan"]  # Sesuai kolom database asli
+                            custom_data=["total_data_diproses", "total_baris_temuan"]
                         )
                         
                         # Konfigurasi Kotak Informasi Pop-up (Hover) saat titik disentuh kursor
