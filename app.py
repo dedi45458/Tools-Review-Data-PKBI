@@ -2613,23 +2613,33 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     
                     fig = px.line(
                         df_filtered,
-                        x="Tanggal_Murni",  # Sumbu X menggunakan tanggal murni (pasti sejajar vertikal)
+                        x="Tanggal_Murni",
                         y="Tingkat Akurasi",
-                        color="Kategori",  # Memisahkan 2 warna garis: Penjangkauan & Rujukan
+                        color="Kategori",
                         markers=True,
                         title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
-                        labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal_Murni": "Tanggal Sesi Review"}
+                        labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal_Murni": "Tanggal Sesi Review"},
+                        # JAWABAN: Daftarkan kolom jumlah baris dari dataframe Anda ke custom_data agar bisa dibaca oleh hover
+                        custom_data=["Total Baris", "Total Temuan"] # Sesuaikan dengan nama asli kolom di df_tren Anda
                     )
                     
-                    # Custom info kotak pop-up (hover) agar hanya memunculkan tanggal murni tanpa jam
+                    # POSISI SANGAT PAS: Tampilkan tepat di kotak informasi saat titik disentuh kursor
                     fig.update_traces(
-                        hovertemplate="<b>Kategori:</b> %{data.name}<br><b>Tanggal:</b> %{x}<br><b>Akurasi:</b> %{y}%<extra></extra>"
+                        hovertemplate=(
+                            "<b>Kategori:</b> %{data.name}<br>"
+                            "<b>Tanggal:</b> %{x}<br>"
+                            "<b>Akurasi:</b> %{y}%<br>"
+                            "----------------------------<br>"
+                            "📊 <b>Baris Diproses:</b> %{customdata[0]} data<br>"
+                            "⚠️ <b>Baris Temuan:</b> %{customdata[1]} data<br>"
+                            "<extra></extra>"
+                        )
                     )
                     
                     # Set batas vertikal sumbu Y dari 0% - 100%
                     fig.update_yaxes(range=[0, 105])
                     
-                    # Tampilkan Grafik ke UI dengan lebar penuh mengikuti container luar
+                    # Tampilkan Grafik ke UI
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.warning("⚠️ Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
