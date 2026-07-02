@@ -2555,17 +2555,19 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["Kategori"].str.lower() == kategori_pilihan.lower()]
                 
                 with col_fil2:
-                    # Filter 2: Lembaga SSR (Hanya aktif jika login sebagai SR)
+                    # Filter 2: Lembaga SSR (Tanpa pilihan 'Semua Lembaga', langsung spesifik nama lembaga)
+                    list_lembaga = sorted(df_tren["Lembaga SSR"].unique().tolist())
+                    
                     if user_role.upper() == 'SR':
-                        list_lembaga_pilihan = ["Semua Lembaga SSR"] + sorted(df_tren["Lembaga SSR"].unique().tolist())
                         lembaga_pilihan = st.selectbox(
                             "🏢 Filter Lembaga SSR:",
-                            options=list_lembaga_pilihan,
+                            options=list_lembaga,
                             key="filter_lembaga_tren"
                         )
-                        if lembaga_pilihan != "Semua Lembaga SSR":
-                            df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
+                        # Saring sesuai lembaga yang sedang dipilih di dropdown
+                        df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
                     else:
+                        # Jika SSR, otomatis terkunci ke nama lembaga milik user sendiri
                         st.selectbox(
                             "🏢 Filter Lembaga SSR:",
                             options=[user_lembaga],
@@ -2578,7 +2580,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     # Filter 3: Rentang Bulan (Mengambil list bulan unik dari data master)
                     list_bulan = sorted(df_tren["Bulan"].unique().tolist())
                     
-                    # LOGIKA PENYELAMAT: Gunakan Slider HANYA jika jumlah bulan > 1
+                    # Logika aman untuk komponen slider Streamlit
                     if len(list_bulan) > 1:
                         bulan_pilihan = st.select_slider(
                             "📅 Pilih Rentang Bulan:",
@@ -2592,7 +2594,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             (df_filtered["Bulan"] <= bulan_pilihan[1])
                         ]
                     else:
-                        # SOLUSI ERROR: Jika bulan <= 1, paksa pakai Selectbox agar tidak terjadi RangeError
+                        # Pengaman jika bulan baru ada 1 (Mencegah RangeError)
                         bulan_tunggal = list_bulan[0] if list_bulan else "Tidak Ada Data"
                         st.selectbox(
                             "📅 Rentang Bulan (Terkunci):",
@@ -2601,21 +2603,23 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             disabled=True,
                             key="filter_bulan_selectbox_safe"
                         )
-                        # Saring data sesuai satu-satunya bulan yang ada
                         if list_bulan:
                             df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
                 
-                # 3. MEMBUAT GRAFIK GARIS (PLOTLY)
+                # 3. MEMBUAT GRAFIK GARIS (Opsi A: Warna dibedakan per Kategori)
                 if not df_filtered.empty:
                     import plotly.express as px
+                    
+                    # Mendapatkan info nama lembaga yang sedang ditampilkan untuk judul grafik
+                    current_ssr = lembaga_pilihan if user_role.upper() == 'SR' else user_lembaga
                     
                     fig = px.line(
                         df_filtered,
                         x="Tanggal",
                         y="Tingkat Akurasi",
-                        color="Lembaga SSR",
+                        color="Kategori",  # 1 Warna untuk Penjangkauan, 1 Warna untuk Rujukan
                         markers=True,
-                        title=f"Tren Tingkat Akurasi (%) - Kategori: {kategori_pilihan}",
+                        title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
                         labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal": "Tanggal Sesi Review"}
                     )
                     
