@@ -2535,6 +2535,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             df_tren = ambil_data_tren_review(user_lembaga, user_role)
             
             if not df_tren.empty:
+                # Amankan nama kolom dari spasi berlebih tanpa mengubah bentuk huruf besarnya
+                df_tren.columns = df_tren.columns.str.strip()
+                
                 # Konversi ke datetime lalu ekstrak murni tanggalnya saja (YYYY-MM-DD)
                 df_tren["Tanggal_Murni"] = pd.to_datetime(df_tren["Tanggal"]).dt.date
                 # Membuat format kolom bulan (YYYY-MM) untuk keperluan filter rentang bulan
@@ -2602,50 +2605,34 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         if list_bulan:
                             df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
                 
-                # 3. MEMBUAT GRAFIK GARIS (Koreksi AttributeError & Standarisasi Kolom)
+                # 3. MEMBUAT GRAFIK GARIS (Menggunakan Kolom Asli Database Sesuai CSV)
                 if not df_filtered.empty:
                     import plotly.express as px
                     
                     current_ssr = lembaga_pilihan if user_role.upper() == 'SR' else user_lembaga
                     
-                    # --- STANDARISASI KOLOM DATAFRAME ---
-                    # Mengamankan nama kolom ke huruf kecil murni untuk menghindari isu case-sensitivity
-                    df_filtered.columns = df_filtered.columns.str.strip().str.lower()
-                    
-                    # Definisikan nama kolom target sesuai struktur database Anda (huruf kecil)
-                    kolom_proses = "total_data_diproses"
-                    kolom_temuan = "total_baris_temuan"
-                    kolom_ssr = "lembaga ssr" if "lembaga ssr" in df_filtered.columns else "lembaga_ssr"
-                    kolom_tanggal = "tanggal_murni"
-                    kolom_kategori = "kategori"
-                    kolom_akurasi = "tingkat akurasi" if "tingkat akurasi" in df_filtered.columns else "tingkat_akurasi"
-                    
-                    # --- FILTERING DATA BERDASARKAN LEMBAGA SSR (AMANDEMEN AMAN) ---
-                    # Mengonversi target filter ke huruf kecil biasa (string Python standar)
-                    target_ssr_lower = str(current_ssr).strip().lower()
-                    
-                    # Saring menggunakan kombinasi .astype(str) + .str yang aman dari NaN
+                    # Saring data agar presisi hanya milik lembaga terpilih (Case-Insensitive)
                     df_grafik = df_filtered[
-                        df_filtered[kolom_ssr].astype(str).str.strip().str.lower() == target_ssr_lower
+                        df_filtered["Lembaga SSR"].astype(str).str.strip().str.lower() == str(current_ssr).strip().lower()
                     ].copy()
                     
                     if not df_grafik.empty:
                         # Mengurutkan data berdasarkan tanggal agar tarikan garis grafiknya rapi kronologis
-                        df_grafik = df_grafik.sort_values(by=[kolom_tanggal, kolom_kategori])
+                        df_grafik = df_grafik.sort_values(by=["Tanggal_Murni", "Kategori"])
                         
-                        # Memastikan tipe data jumlah baris berbentuk numerik agar bisa dijumlahkan (.sum())
-                        df_grafik[kolom_proses] = pd.to_numeric(df_grafik[kolom_proses], errors='coerce').fillna(0)
-                        df_grafik[kolom_temuan] = pd.to_numeric(df_grafik[kolom_temuan], errors='coerce').fillna(0)
+                        # Memastikan tipe data jumlah baris berbentuk numerik utuh (int)
+                        df_grafik["Total_Data_Diproses"] = pd.to_numeric(df_grafik["Total_Data_Diproses"], errors='coerce').fillna(0).astype(int)
+                        df_grafik["Total_Baris_Temuan"] = pd.to_numeric(df_grafik["Total_Baris_Temuan"], errors='coerce').fillna(0).astype(int)
                         
                         fig = px.line(
                             df_grafik,
-                            x=kolom_tanggal,
-                            y=kolom_akurasi,
-                            color=kolom_kategori,
+                            x="Tanggal_Murni",
+                            y="Tingkat Akurasi",
+                            color="Kategori",
                             markers=True,
                             title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
-                            labels={kolom_akurasi: "Akurasi (%)", kolom_tanggal: "Tanggal Sesi Review"},
-                            custom_data=[kolom_proses, kolom_temuan]  # Mengirimkan data asli ke mesin Plotly
+                            labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal_Murni": "Tanggal Sesi Review"},
+                            custom_data=["Total_Data_Diproses", "Total_Baris_Temuan"]  # Sesuai kolom database asli
                         )
                         
                         # Konfigurasi Kotak Informasi Pop-up (Hover) saat titik disentuh kursor
@@ -2672,21 +2659,23 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         col_m1, col_m2 = st.columns(2)
                         
                         with col_m1:
-                            total_proses = int(df_grafik[kolom_proses].sum())
+                            total_proses = int(df_grafik["Total_Data_Diproses"].sum())
                             st.metric(
                                 label="Total Baris Diproses", 
                                 value=f"{total_proses:,} data".replace(",", ".")
                             )
                         with col_m2:
-                            total_temuan = int(df_grafik[kolom_temuan].sum())
+                            total_temuan = int(df_grafik["Total_Baris_Temuan"].sum())
                             st.metric(
                                 label="Total Baris Temuan", 
                                 value=f"{total_temuan:,} data".replace(",", ".")
                             )
                     else:
-                        st.warning(f"⚠️ Tidak ada data review yang tersaring untuk lembaga '{current_ssr}'. Periksa pencocokan nama di database.")
+                        st.warning(f"⚠️ Tidak ada data review yang tersaring untuk lembaga '{current_ssr}'. Periksa kembali penulisan nama lembaga di database.")
                 else:
                     st.warning("⚠️ Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
+            else:
+                st.info("ℹ️ Belum ada data riwayat review yang mencukupi untuk memetakan grafik tren.")
                 
 
 # ----------------------------------------------------------
