@@ -2535,10 +2535,10 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             df_tren = ambil_data_tren_review(user_lembaga, user_role)
             
             if not df_tren.empty:
-                # Memastikan kolom Tanggal dikonversi ke tipe datetime Pandas secara aman
-                df_tren["Tanggal"] = pd.to_datetime(df_tren["Tanggal"])
-                # Membuat format kolom bulan (YYYY-MM) dari kolom Tanggal untuk keperluan filter
-                df_tren["Bulan"] = df_tren["Tanggal"].dt.strftime("%Y-%m")
+                # Konversi ke datetime lalu ekstrak murni tanggalnya saja (YYYY-MM-DD)
+                df_tren["Tanggal_Murni"] = pd.to_datetime(df_tren["Tanggal"]).dt.date
+                # Membuat format kolom bulan (YYYY-MM) untuk keperluan filter rentang bulan
+                df_tren["Bulan"] = pd.to_datetime(df_tren["Tanggal"]).dt.strftime("%Y-%m")
                 
                 # --- LAYOUT FILTER PROPORSIONAL (3 KOLOM) ---
                 col_fil1, col_fil2, col_fil3 = st.columns([3, 3, 4])
@@ -2555,7 +2555,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["Kategori"].str.lower() == kategori_pilihan.lower()]
                 
                 with col_fil2:
-                    # Filter 2: Lembaga SSR (Tanpa pilihan 'Semua Lembaga', langsung spesifik nama lembaga)
+                    # Filter 2: Lembaga SSR
                     list_lembaga = sorted(df_tren["Lembaga SSR"].unique().tolist())
                     
                     if user_role.upper() == 'SR':
@@ -2564,10 +2564,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             options=list_lembaga,
                             key="filter_lembaga_tren"
                         )
-                        # Saring sesuai lembaga yang sedang dipilih di dropdown
                         df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
                     else:
-                        # Jika SSR, otomatis terkunci ke nama lembaga milik user sendiri
                         st.selectbox(
                             "🏢 Filter Lembaga SSR:",
                             options=[user_lembaga],
@@ -2577,10 +2575,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
                 
                 with col_fil3:
-                    # Filter 3: Rentang Bulan (Mengambil list bulan unik dari data master)
+                    # Filter 3: Rentang Bulan
                     list_bulan = sorted(df_tren["Bulan"].unique().tolist())
                     
-                    # Logika aman untuk komponen slider Streamlit
                     if len(list_bulan) > 1:
                         bulan_pilihan = st.select_slider(
                             "📅 Pilih Rentang Bulan:",
@@ -2588,7 +2585,6 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             value=(list_bulan[0], list_bulan[-1]),
                             key="filter_bulan_slider_aktif"
                         )
-                        # Saring data berdasarkan range slider
                         df_filtered = df_filtered[
                             (df_filtered["Bulan"] >= bulan_pilihan[0]) & 
                             (df_filtered["Bulan"] <= bulan_pilihan[1])
@@ -2606,27 +2602,34 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         if list_bulan:
                             df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
                 
-                # 3. MEMBUAT GRAFIK GARIS (Opsi A: Warna dibedakan per Kategori)
+                # 3. MEMBUAT GRAFIK GARIS (Menggunakan Tanggal_Murni)
                 if not df_filtered.empty:
                     import plotly.express as px
                     
-                    # Mendapatkan info nama lembaga yang sedang ditampilkan untuk judul grafik
                     current_ssr = lembaga_pilihan if user_role.upper() == 'SR' else user_lembaga
+                    
+                    # Mengurutkan data berdasarkan tanggal agar tarikan garis grafiknya rapi kronologis
+                    df_filtered = df_filtered.sort_values(by=["Tanggal_Murni", "Kategori"])
                     
                     fig = px.line(
                         df_filtered,
-                        x="Tanggal",
+                        x="Tanggal_Murni",  # Sumbu X menggunakan tanggal murni (pasti sejajar vertikal)
                         y="Tingkat Akurasi",
-                        color="Kategori",  # 1 Warna untuk Penjangkauan, 1 Warna untuk Rujukan
+                        color="Kategori",  # Memisahkan 2 warna garis: Penjangkauan & Rujukan
                         markers=True,
                         title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
-                        labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal": "Tanggal Sesi Review"}
+                        labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal_Murni": "Tanggal Sesi Review"}
                     )
                     
-                    # Set batas vertikal sumbu Y dari 0% - 100% agar stabil dilihat
+                    # Custom info kotak pop-up (hover) agar hanya memunculkan tanggal murni tanpa jam
+                    fig.update_traces(
+                        hovertemplate="<b>Kategori:</b> %{data.name}<br><b>Tanggal:</b> %{x}<br><b>Akurasi:</b> %{y}%<extra></extra>"
+                    )
+                    
+                    # Set batas vertikal sumbu Y dari 0% - 100%
                     fig.update_yaxes(range=[0, 105])
                     
-                    # Tampilkan Grafik ke UI dengan lebar penuh mengikuti container
+                    # Tampilkan Grafik ke UI dengan lebar penuh mengikuti container luar
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.warning("⚠️ Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
