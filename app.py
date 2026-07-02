@@ -2697,13 +2697,38 @@ elif menu_pilihan == "🏢 Data Lembaga":
         st.subheader(f"📋 Pengaturan Status Aktif ({len(list_lembaga_memori)})")
         
         if list_lembaga_memori:
-            # 2. PROSES DATA: Memetakan kolom Boolean secara presisi sesuai skema database Anda
+            # 2. PROSES DATA: Memetakan kolom Boolean secara presisi dan fleksibel
             data_proses = []
+            
+            # Fungsi pembantu untuk memastikan nilai String 'TRUE'/'FALSE' atau Boolean asli terkonversi dengan benar
+            def ke_boolean(nilai):
+                if isinstance(nilai, str):
+                    return nilai.strip().upper() in ["TRUE", "1", "Y", "YES"]
+                return bool(nilai)
+
             for l in list_lembaga_memori:
-                # Menggunakan kata kunci asli database 'nama_lembaga', 'is_sr', dan 'is_ssr' (huruf kecil semua)
+                # Ambil nama lembaga secara fleksibel
                 nama_mitra = l.get("nama_lembaga") if "nama_lembaga" in l else l.get("Nama Lembaga")
-                val_sr = bool(l.get("is_sr", False))
-                val_ssr = bool(l.get("is_ssr", False))
+                
+                # --- DETEKSI STATUS SR ---
+                val_sr = False
+                if "is_sr" in l:
+                    val_sr = ke_boolean(l.get("is_sr"))
+                elif "SR" in l:
+                    val_sr = ke_boolean(l.get("SR"))
+                elif "Status" in l:
+                    # Antisipasi jika session_state menggunakan struktur teks kolom tunggal seperti Gambar 1
+                    val_sr = str(l.get("Status")).strip().upper() == "SR"
+                
+                # --- DETEKSI STATUS SSR ---
+                val_ssr = False
+                if "is_ssr" in l:
+                    val_ssr = ke_boolean(l.get("is_ssr"))
+                elif "SSR" in l:
+                    val_ssr = ke_boolean(l.get("SSR"))
+                elif "Status" in l:
+                    # Antisipasi jika session_state menggunakan struktur teks kolom tunggal seperti Gambar 1
+                    val_ssr = str(l.get("Status")).strip().upper() == "SSR"
                 
                 data_proses.append({
                     "Nama Lembaga": nama_mitra,
