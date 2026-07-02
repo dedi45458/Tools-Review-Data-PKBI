@@ -2535,13 +2535,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             df_tren = ambil_data_tren_review(user_lembaga, user_role)
             
             if not df_tren.empty:
-                # Amankan nama kolom dari spasi berlebih tanpa mengubah bentuk huruf besarnya
+                # Amankan nama kolom dari spasi berlebih
                 df_tren.columns = df_tren.columns.str.strip()
                 
-                # Konversi ke datetime lalu ekstrak murni tanggalnya saja (YYYY-MM-DD)
-                df_tren["Tanggal_Murni"] = pd.to_datetime(df_tren["Tanggal"]).dt.date
+                # Konversi kolom 'created_at' ke datetime lalu ekstrak murni tanggalnya saja (YYYY-MM-DD)
+                df_tren["tanggal_murni"] = pd.to_datetime(df_tren["created_at"]).dt.date
                 # Membuat format kolom bulan (YYYY-MM) untuk keperluan filter rentang bulan
-                df_tren["Bulan"] = pd.to_datetime(df_tren["Tanggal"]).dt.strftime("%Y-%m")
+                df_tren["bulan"] = pd.to_datetime(df_tren["created_at"]).dt.strftime("%Y-%m")
                 
                 # --- LAYOUT FILTER PROPORSIONAL (3 KOLOM) ---
                 col_fil1, col_fil2, col_fil3 = st.columns([3, 3, 4])
@@ -2554,12 +2554,12 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         key="filter_kategori_tren"
                     )
                 
-                # Saring berdasarkan kategori terlebih dahulu
-                df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["Kategori"].str.lower() == kategori_pilihan.lower()]
+                # Saring berdasarkan kategori terlebih dahulu (menggunakan kolom 'kategori')
+                df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["kategori"].str.lower() == kategori_pilihan.lower()]
                 
                 with col_fil2:
-                    # Filter 2: Lembaga SSR
-                    list_lembaga = sorted(df_tren["Lembaga SSR"].unique().tolist())
+                    # Filter 2: Lembaga SSR (menggunakan kolom 'lembaga_ssr')
+                    list_lembaga = sorted(df_tren["lembaga_ssr"].unique().tolist())
                     
                     if user_role.upper() == 'SR':
                         lembaga_pilihan = st.selectbox(
@@ -2567,7 +2567,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             options=list_lembaga,
                             key="filter_lembaga_tren"
                         )
-                        df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
+                        df_filtered = df_filtered[df_filtered["lembaga_ssr"] == lembaga_pilihan]
                     else:
                         st.selectbox(
                             "🏢 Filter Lembaga SSR:",
@@ -2575,11 +2575,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             disabled=True,
                             key="filter_lembaga_disabled"
                         )
-                        df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
+                        df_filtered = df_filtered[df_filtered["lembaga_ssr"] == user_lembaga]
                 
                 with col_fil3:
-                    # Filter 3: Rentang Bulan
-                    list_bulan = sorted(df_tren["Bulan"].unique().tolist())
+                    # Filter 3: Rentang Bulan (menggunakan kolom buatan 'bulan')
+                    list_bulan = sorted(df_tren["bulan"].unique().tolist())
                     
                     if len(list_bulan) > 1:
                         bulan_pilihan = st.select_slider(
@@ -2589,8 +2589,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             key="filter_bulan_slider_aktif"
                         )
                         df_filtered = df_filtered[
-                            (df_filtered["Bulan"] >= bulan_pilihan[0]) & 
-                            (df_filtered["Bulan"] <= bulan_pilihan[1])
+                            (df_filtered["bulan"] >= bulan_pilihan[0]) & 
+                            (df_filtered["bulan"] <= bulan_pilihan[1])
                         ]
                     else:
                         # Pengaman jika bulan baru ada 1 (Mencegah RangeError)
@@ -2603,9 +2603,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             key="filter_bulan_selectbox_safe"
                         )
                         if list_bulan:
-                            df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
+                            df_filtered = df_filtered[df_filtered["bulan"] == bulan_tunggal]
                 
-                # 3. MEMBUAT GRAFIK GARIS (Menggunakan Kolom Asli Database Sesuai CSV)
+                # 3. MEMBUAT GRAFIK GARIS (Menggunakan Kolom Asli Database)
                 if not df_filtered.empty:
                     import plotly.express as px
                     
@@ -2613,26 +2613,26 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     
                     # Saring data agar presisi hanya milik lembaga terpilih (Case-Insensitive)
                     df_grafik = df_filtered[
-                        df_filtered["Lembaga SSR"].astype(str).str.strip().str.lower() == str(current_ssr).strip().lower()
+                        df_filtered["lembaga_ssr"].astype(str).str.strip().str.lower() == str(current_ssr).strip().lower()
                     ].copy()
                     
                     if not df_grafik.empty:
                         # Mengurutkan data berdasarkan tanggal agar tarikan garis grafiknya rapi kronologis
-                        df_grafik = df_grafik.sort_values(by=["Tanggal_Murni", "Kategori"])
+                        df_grafik = df_grafik.sort_values(by=["tanggal_murni", "kategori"])
                         
                         # Memastikan tipe data jumlah baris berbentuk numerik utuh (int)
-                        df_grafik["Total_Data_Diproses"] = pd.to_numeric(df_grafik["Total_Data_Diproses"], errors='coerce').fillna(0).astype(int)
-                        df_grafik["Total_Baris_Temuan"] = pd.to_numeric(df_grafik["Total_Baris_Temuan"], errors='coerce').fillna(0).astype(int)
+                        df_grafik["total_data_diproses"] = pd.to_numeric(df_grafik["total_data_diproses"], errors='coerce').fillna(0).astype(int)
+                        df_grafik["total_baris_temuan"] = pd.to_numeric(df_grafik["total_baris_temuan"], errors='coerce').fillna(0).astype(int)
                         
                         fig = px.line(
                             df_grafik,
-                            x="Tanggal_Murni",
-                            y="Tingkat Akurasi",
-                            color="Kategori",
+                            x="tanggal_murni",
+                            y="tingkat_akurasi",
+                            color="kategori",
                             markers=True,
                             title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
-                            labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal_Murni": "Tanggal Sesi Review"},
-                            custom_data=["Total_Data_Diproses", "Total_Baris_Temuan"]  # Sesuai kolom database asli
+                            labels={"tingkat_akurasi": "Akurasi (%)", "tanggal_murni": "Tanggal Sesi Review", "kategori": "Kategori"},
+                            custom_data=["total_data_diproses", "total_baris_temuan"]  # Sesuai kolom database asli
                         )
                         
                         # Konfigurasi Kotak Informasi Pop-up (Hover) saat titik disentuh kursor
@@ -2659,13 +2659,13 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         col_m1, col_m2 = st.columns(2)
                         
                         with col_m1:
-                            total_proses = int(df_grafik["Total_Data_Diproses"].sum())
+                            total_proses = int(df_grafik["total_data_diproses"].sum())
                             st.metric(
                                 label="Total Baris Diproses", 
                                 value=f"{total_proses:,} data".replace(",", ".")
                             )
                         with col_m2:
-                            total_temuan = int(df_grafik["Total_Baris_Temuan"].sum())
+                            total_temuan = int(df_grafik["total_baris_temuan"].sum())
                             st.metric(
                                 label="Total Baris Temuan", 
                                 value=f"{total_temuan:,} data".replace(",", ".")
