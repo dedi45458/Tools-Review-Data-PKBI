@@ -2333,15 +2333,21 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             df_histori = ambil_histori_review_minggu_ini()
             list_belum_validasi = ambil_lembaga_belum_validasi_minggu_ini()
             
-            # 2. TAMPILKAN MONITORING UNTUK SR (Lembaga yang belum melakukan tindakan)
+            # 2. TAMPILKAN MONITORING UNTUK SR (Dibuat Grid 3 Kolom agar tidak memanjang)
             st.markdown("### ⚠️ Lembaga SSR Belum Validasi Minggu Ini")
             if list_belum_validasi:
-                # Menampilkan jumlah lembaga yang belum absen minggu ini
                 st.error(f"Ada {len(list_belum_validasi)} lembaga SSR yang belum melakukan validasi data pada minggu ini:")
                 
-                # Menampilkan daftar nama lembaga dengan rapi (Bullet Points)
-                for lembaga in list_belum_validasi:
-                    st.markdown(f"- **{lembaga}**")
+                # Membuat layout grid dengan 3 kolom
+                kolom_grid = st.columns(3)
+                
+                # Mendistribusikan nama lembaga secara merata ke setiap kolom
+                for idx, lembaga in enumerate(list_belum_validasi):
+                    # Menentukan index kolom (0, 1, atau 2) menggunakan operasi modulus %
+                    target_kolom = kolom_grid[idx % 3]
+                    
+                    # Menampilkan nama lembaga di dalam kolom target
+                    target_kolom.markdown(f"🔹 **{lembaga}**")
             else:
                 st.success("🎉 Luar biasa! Semua lembaga SSR telah melakukan validasi data untuk minggu ini.")
             
