@@ -856,32 +856,3 @@ def ambil_histori_review_minggu_ini():
         return pd.DataFrame(columns=["Lembaga SSR", "Kategori", "Tanggal Sesi", "Akurasi Akhir"])
     finally:
         conn.close()
-
-
-def ambil_lembaga_belum_validasi_minggu_ini():
-    conn = dapatkan_koneksi_neon()
-    if not conn:
-        return []
-    
-    try:
-        with conn.cursor() as cur:
-            # Menyelaraskan filter waktu sub-query ke Asia/Jakarta (WIB)
-            cur.execute("""
-                SELECT TRIM(nama_lembaga) 
-                FROM public.master_lembaga 
-                WHERE is_ssr = TRUE 
-                  AND TRIM(nama_lembaga) NOT IN (
-                      SELECT DISTINCT TRIM(COALESCE(lembaga_ssr, 'PKBI JAWA BARAT')) 
-                      FROM public.akurasi_review_data 
-                      WHERE created_at AT TIME ZONE 'Asia/Jakarta' >= DATE_TRUNC('week', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')
-                  )
-                ORDER BY nama_lembaga ASC;
-            """)
-            rows = cur.fetchall()
-            return [row[0] for row in rows]
-            
-    except Exception as e:
-        st.error(f"Gagal memuat daftar lembaga belum validasi: {e}")
-        return []
-    finally:
-        conn.close()
