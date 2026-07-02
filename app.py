@@ -2522,163 +2522,163 @@ if menu_pilihan == "🎯 Dashboard Review Data":
 
     
             # ----------------------------------------------------------
-        # BAGIAN C : GRAFIK TREN AKURASI 
-        # ----------------------------------------------------------
-        st.write("---")
-        st.markdown("### 📈 Grafik Tren Akurasi Hasil Review")
-        
-        # 1. Mengambil info user yang sedang login
-        user_lembaga = st.session_state.current_lembaga
-        user_role = st.session_state.current_role
-        
-        # 2. Ambil data tren dasar dari database
-        df_tren = ambil_data_tren_review(user_lembaga, user_role)
-        
-        if not df_tren.empty:
-            # Konversi ke datetime lalu ekstrak murni tanggalnya saja (YYYY-MM-DD)
-            df_tren["Tanggal_Murni"] = pd.to_datetime(df_tren["Tanggal"]).dt.date
-            # Membuat format kolom bulan (YYYY-MM) untuk keperluan filter rentang bulan
-            df_tren["Bulan"] = pd.to_datetime(df_tren["Tanggal"]).dt.strftime("%Y-%m")
+            # BAGIAN C : GRAFIK TREN AKURASI 
+            # ----------------------------------------------------------
+            st.write("---")
+            st.markdown("### 📈 Grafik Tren Akurasi Hasil Review")
             
-            # --- LAYOUT FILTER PROPORSIONAL (3 KOLOM) ---
-            col_fil1, col_fil2, col_fil3 = st.columns([3, 3, 4])
+            # 1. Mengambil info user yang sedang login
+            user_lembaga = st.session_state.current_lembaga
+            user_role = st.session_state.current_role
             
-            with col_fil1:
-                # Filter 1: Kategori Data
-                kategori_pilihan = st.selectbox(
-                    "🎯 Filter Kategori Data:", 
-                    options=["Semua", "Penjangkauan", "Rujukan"],
-                    key="filter_kategori_tren"
-                )
+            # 2. Ambil data tren dasar dari database
+            df_tren = ambil_data_tren_review(user_lembaga, user_role)
             
-            # Saring berdasarkan kategori terlebih dahulu
-            df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["Kategori"].str.lower() == kategori_pilihan.lower()]
-            
-            with col_fil2:
-                # Filter 2: Lembaga SSR
-                list_lembaga = sorted(df_tren["Lembaga SSR"].unique().tolist())
+            if not df_tren.empty:
+                # Konversi ke datetime lalu ekstrak murni tanggalnya saja (YYYY-MM-DD)
+                df_tren["Tanggal_Murni"] = pd.to_datetime(df_tren["Tanggal"]).dt.date
+                # Membuat format kolom bulan (YYYY-MM) untuk keperluan filter rentang bulan
+                df_tren["Bulan"] = pd.to_datetime(df_tren["Tanggal"]).dt.strftime("%Y-%m")
                 
-                if user_role.upper() == 'SR':
-                    lembaga_pilihan = st.selectbox(
-                        "🏢 Filter Lembaga SSR:",
-                        options=list_lembaga,
-                        key="filter_lembaga_tren"
+                # --- LAYOUT FILTER PROPORSIONAL (3 KOLOM) ---
+                col_fil1, col_fil2, col_fil3 = st.columns([3, 3, 4])
+                
+                with col_fil1:
+                    # Filter 1: Kategori Data
+                    kategori_pilihan = st.selectbox(
+                        "🎯 Filter Kategori Data:", 
+                        options=["Semua", "Penjangkauan", "Rujukan"],
+                        key="filter_kategori_tren"
                     )
-                    df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
-                else:
-                    st.selectbox(
-                        "🏢 Filter Lembaga SSR:",
-                        options=[user_lembaga],
-                        disabled=True,
-                        key="filter_lembaga_disabled"
-                    )
-                    df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
-            
-            with col_fil3:
-                # Filter 3: Rentang Bulan
-                list_bulan = sorted(df_tren["Bulan"].unique().tolist())
                 
-                if len(list_bulan) > 1:
-                    bulan_pilihan = st.select_slider(
-                        "📅 Pilih Rentang Bulan:",
-                        options=list_bulan,
-                        value=(list_bulan[0], list_bulan[-1]),
-                        key="filter_bulan_slider_aktif"
-                    )
-                    df_filtered = df_filtered[
-                        (df_filtered["Bulan"] >= bulan_pilihan[0]) & 
-                        (df_filtered["Bulan"] <= bulan_pilihan[1])
-                    ]
-                else:
-                    # Pengaman jika bulan baru ada 1 (Mencegah RangeError)
-                    bulan_tunggal = list_bulan[0] if list_bulan else "Tidak Ada Data"
-                    st.selectbox(
-                        "📅 Rentang Bulan (Terkunci):",
-                        options=[bulan_tunggal],
-                        index=0,
-                        disabled=True,
-                        key="filter_bulan_selectbox_safe"
-                    )
-                    if list_bulan:
-                        df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
-            
-            # 3. MEMBUAT GRAFIK GARIS (Dengan Pembersihan Kolom & Jaring Pengaman)
-            if not df_filtered.empty:
-                import plotly.express as px
+                # Saring berdasarkan kategori terlebih dahulu
+                df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["Kategori"].str.lower() == kategori_pilihan.lower()]
                 
-                current_ssr = lembaga_pilihan if user_role.upper() == 'SR' else user_lembaga
-                
-                # -----------------------------------------------------------------
-                # PROSES STRIP & STANDARISASI KOLOM DATAFRAME
-                # -----------------------------------------------------------------
-                # Menghapus spasi di awal/akhir nama kolom dan mengubah ke huruf kecil
-                df_filtered.columns = df_filtered.columns.str.strip().str.lower()
-                
-                # Cek ketersediaan kolom target setelah dibersihkan
-                target_proses = "total_data_diproses"
-                target_temuan = "total_baris_temuan"
-                
-                # Jaring Pengaman: Jika kolom tidak ada di dataframe, buat otomatis dengan isi 0 agar Plotly tidak crash
-                if target_proses not in df_filtered.columns:
-                    df_filtered[target_proses] = 0
+                with col_fil2:
+                    # Filter 2: Lembaga SSR
+                    list_lembaga = sorted(df_tren["Lembaga SSR"].unique().tolist())
                     
-                if target_temuan not in df_filtered.columns:
-                    df_filtered[target_temuan] = 0
-                # -----------------------------------------------------------------
+                    if user_role.upper() == 'SR':
+                        lembaga_pilihan = st.selectbox(
+                            "🏢 Filter Lembaga SSR:",
+                            options=list_lembaga,
+                            key="filter_lembaga_tren"
+                        )
+                        df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
+                    else:
+                        st.selectbox(
+                            "🏢 Filter Lembaga SSR:",
+                            options=[user_lembaga],
+                            disabled=True,
+                            key="filter_lembaga_disabled"
+                        )
+                        df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
                 
-                # Mengurutkan data berdasarkan tanggal agar tarikan garis grafiknya rapi kronologis
-                df_filtered = df_filtered.sort_values(by=["tanggal_murni", "kategori"])
+                with col_fil3:
+                    # Filter 3: Rentang Bulan
+                    list_bulan = sorted(df_tren["Bulan"].unique().tolist())
+                    
+                    if len(list_bulan) > 1:
+                        bulan_pilihan = st.select_slider(
+                            "📅 Pilih Rentang Bulan:",
+                            options=list_bulan,
+                            value=(list_bulan[0], list_bulan[-1]),
+                            key="filter_bulan_slider_aktif"
+                        )
+                        df_filtered = df_filtered[
+                            (df_filtered["Bulan"] >= bulan_pilihan[0]) & 
+                            (df_filtered["Bulan"] <= bulan_pilihan[1])
+                        ]
+                    else:
+                        # Pengaman jika bulan baru ada 1 (Mencegah RangeError)
+                        bulan_tunggal = list_bulan[0] if list_bulan else "Tidak Ada Data"
+                        st.selectbox(
+                            "📅 Rentang Bulan (Terkunci):",
+                            options=[bulan_tunggal],
+                            index=0,
+                            disabled=True,
+                            key="filter_bulan_selectbox_safe"
+                        )
+                        if list_bulan:
+                            df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
                 
-                fig = px.line(
-                    df_filtered,
-                    x="tanggal_murni",
-                    y="tingkat akurasi",  # Pastikan nama kolom sumbu Y juga disesuaikan jika berubah case
-                    color="kategori",
-                    markers=True,
-                    title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
-                    labels={"tingkat akurasi": "Akurasi (%)", "tanggal_murni": "Tanggal Sesi Review"},
-                    custom_data=[target_proses, target_temuan]  # Menggunakan variabel target yang sudah aman
-                )
-                
-                # Konfigurasi Kotak Informasi Pop-up (Hover) saat titik disentuh kursor
-                fig.update_traces(
-                    hovertemplate=(
-                        "<b>Kategori:</b> %{data.name}<br>"
-                        "<b>Tanggal:</b> %{x}<br>"
-                        "<b>Akurasi:</b> %{y}%<br>"
-                        "----------------------------<br>"
-                        "📊 <b>Baris Diproses:</b> %{customdata[0]} data<br>"
-                        "⚠️ <b>Baris Temuan:</b> %{customdata[1]} data<br>"
-                        "<extra></extra>"
+                # 3. MEMBUAT GRAFIK GARIS (Dengan Pembersihan Kolom & Jaring Pengaman)
+                if not df_filtered.empty:
+                    import plotly.express as px
+                    
+                    current_ssr = lembaga_pilihan if user_role.upper() == 'SR' else user_lembaga
+                    
+                    # -----------------------------------------------------------------
+                    # PROSES STRIP & STANDARISASI KOLOM DATAFRAME
+                    # -----------------------------------------------------------------
+                    # Menghapus spasi di awal/akhir nama kolom dan mengubah ke huruf kecil
+                    df_filtered.columns = df_filtered.columns.str.strip().str.lower()
+                    
+                    # Cek ketersediaan kolom target setelah dibersihkan
+                    target_proses = "total_data_diproses"
+                    target_temuan = "total_baris_temuan"
+                    
+                    # Jaring Pengaman: Jika kolom tidak ada di dataframe, buat otomatis dengan isi 0 agar Plotly tidak crash
+                    if target_proses not in df_filtered.columns:
+                        df_filtered[target_proses] = 0
+                        
+                    if target_temuan not in df_filtered.columns:
+                        df_filtered[target_temuan] = 0
+                    # -----------------------------------------------------------------
+                    
+                    # Mengurutkan data berdasarkan tanggal agar tarikan garis grafiknya rapi kronologis
+                    df_filtered = df_filtered.sort_values(by=["tanggal_murni", "kategori"])
+                    
+                    fig = px.line(
+                        df_filtered,
+                        x="tanggal_murni",
+                        y="tingkat akurasi",  # Pastikan nama kolom sumbu Y juga disesuaikan jika berubah case
+                        color="kategori",
+                        markers=True,
+                        title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
+                        labels={"tingkat akurasi": "Akurasi (%)", "tanggal_murni": "Tanggal Sesi Review"},
+                        custom_data=[target_proses, target_temuan]  # Menggunakan variabel target yang sudah aman
                     )
-                )
-                
-                # Set batas vertikal sumbu Y dari 0% - 100%
-                fig.update_yaxes(range=[0, 105])
-                
-                # Tampilkan Grafik ke UI
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # --- BERIKUT RINGKASAN KARTU METRIK DI BAWAH GRAFIK ---
-                st.markdown("##### 📊 Akumulasi Ringkasan Data (Rentang Terpilih):")
-                col_m1, col_m2 = st.columns(2)
-                
-                with col_m1:
-                    total_proses = int(df_filtered[target_proses].sum())
-                    st.metric(
-                        label="Total Baris Diproses", 
-                        value=f"{total_proses:,} data".replace(",", ".")
+                    
+                    # Konfigurasi Kotak Informasi Pop-up (Hover) saat titik disentuh kursor
+                    fig.update_traces(
+                        hovertemplate=(
+                            "<b>Kategori:</b> %{data.name}<br>"
+                            "<b>Tanggal:</b> %{x}<br>"
+                            "<b>Akurasi:</b> %{y}%<br>"
+                            "----------------------------<br>"
+                            "📊 <b>Baris Diproses:</b> %{customdata[0]} data<br>"
+                            "⚠️ <b>Baris Temuan:</b> %{customdata[1]} data<br>"
+                            "<extra></extra>"
+                        )
                     )
-                with col_m2:
-                    total_temuan = int(df_filtered[target_temuan].sum())
-                    st.metric(
-                        label="Total Baris Temuan", 
-                        value=f"{total_temuan:,} data".replace(",", ".")
-                    )
+                    
+                    # Set batas vertikal sumbu Y dari 0% - 100%
+                    fig.update_yaxes(range=[0, 105])
+                    
+                    # Tampilkan Grafik ke UI
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # --- BERIKUT RINGKASAN KARTU METRIK DI BAWAH GRAFIK ---
+                    st.markdown("##### 📊 Akumulasi Ringkasan Data (Rentang Terpilih):")
+                    col_m1, col_m2 = st.columns(2)
+                    
+                    with col_m1:
+                        total_proses = int(df_filtered[target_proses].sum())
+                        st.metric(
+                            label="Total Baris Diproses", 
+                            value=f"{total_proses:,} data".replace(",", ".")
+                        )
+                    with col_m2:
+                        total_temuan = int(df_filtered[target_temuan].sum())
+                        st.metric(
+                            label="Total Baris Temuan", 
+                            value=f"{total_temuan:,} data".replace(",", ".")
+                        )
+                else:
+                    st.warning("⚠️ Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
             else:
-                st.warning("⚠️ Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
-        else:
-            st.info("ℹ️ Belum ada data riwayat review yang mencukupi untuk memetakan grafik tren.")
+                st.info("ℹ️ Belum ada data riwayat review yang mencukupi untuk memetakan grafik tren.")
                 
 
 # ----------------------------------------------------------
