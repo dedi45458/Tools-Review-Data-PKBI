@@ -1933,9 +1933,10 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 # ---------------------------------------------------------------------
                 st.markdown(f"### 🏛️ {lembaga_aktif}") 
                 
-                # Ambil daftar seluruh nama lembaga yang berstatus 'SSR' dari master_lembaga
+                # --- PENYESUAIAN 1 ---
+                # Ambil daftar seluruh nama lembaga yang berstatus 'SSR' menggunakan flag boolean baru
                 daftar_seluruh_ssr = [
-                    l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "TRUE"
+                    l["Nama Lembaga"] for l in st.session_state.master_lembaga if l.get("SSR") == True
                 ]
                 daftar_seluruh_ssr = sorted(daftar_seluruh_ssr) 
                 
@@ -1989,24 +1990,19 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # =========================================================================
             # BLOK ANTI-BOCOR: FILTER DATAFRAME MURNI BERDASARKAN STATUS 'SSR'
             # =========================================================================
-            # Kita ambil data global sementara dari session
             _raw_master = st.session_state.get('df_tabel_bawah', st.session_state.get('df_review_utama', pd.DataFrame()))
             _raw_atas = st.session_state.get('df_tabel_atas', pd.DataFrame())
             _raw_sumber = st.session_state.get('df_rujukan', pd.DataFrame())
         
-            # Fungsi Gembok: Paksa hapus baris yang bukan milik SSR, atau kosongkan jika tidak ada kolom role_reviewer
             def filter_murni_ssr(df):
                 if df is None or df.empty: 
                     return pd.DataFrame()
                 
-                # Cari kolom yang mengandung nama 'role'
                 col_role = [c for c in df.columns if 'role' in str(c).lower()]
                 if col_role:
-                    # Saring mutlak: Hanya baris dengan role_reviewer == 'SSR' yang diloloskan!
                     df_filtered = df[df[col_role[0]].astype(str).str.upper() == 'SSR'].copy()
                     return df_filtered
                 
-                # Jika tabel dari session belum punya kolom role_reviewer, berarti itu murni data Tab 1 (SR). KOSONGKAN!
                 return pd.DataFrame()
         
             # Eksekusi Gembok
@@ -2044,17 +2040,17 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             else:
                 tot_err_penj_tab2 = 0
                 tot_err_ruj_tab2 = 0
-            
+        
             akurasi_penj_tab2 = (100.0 if tot_data_penj_tab2 == 0 else max(0.0, (tot_data_penj_tab2 - tot_err_penj_tab2) / tot_data_penj_tab2 * 100))
             akurasi_ruj_tab2 = (100.0 if tot_data_ruj_tab2 == 0 else max(0.0, (tot_data_ruj_tab2 - tot_err_ruj_tab2) / tot_data_ruj_tab2 * 100))
-            
+        
             teks_akurasi_penj_tab2 = f"{akurasi_penj_tab2:.2f}%" if tot_data_penj_tab2 > 0 else "100.00%"
             teks_akurasi_ruj_tab2 = f"{akurasi_ruj_tab2:.2f}%" if tot_data_ruj_tab2 > 0 else "100.00%"
-
+        
             tanggal_hari_ini = datetime.now(ZoneInfo('Asia/Jakarta')).strftime('%d %B %Y')
             st.markdown(f"""
                 <p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;'>
-                    📅 <b>Executive Review Dashboard</b> | Tanggal Sesi: {tanggal_hari_ini} | Akses: <span style='color:#38bdf8; font-weight:700;'>{peran}</span>
+                    📅 <b>Executive Review Dashboard</b> | Tanggal Sesi: {tanggal_hari_ini} | Akses: <span style='color:#38bdf8; font-weight:700;'>{role_aktif}</span>
                 </p>
             """, unsafe_allow_html=True)
             
@@ -2107,7 +2103,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         }
                         st.dataframe(df_display_tab2, use_container_width=True, column_config=config_t2_penj, hide_index=True)
                     else:
-                        list_nama_ssr_master = [l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"]
+                        # --- PENYESUAIAN 2 ---
+                        # Ganti filter status lama dengan pengecekan flag boolean .get("SSR") == True
+                        list_nama_ssr_master = [l["Nama Lembaga"] for l in st.session_state.master_lembaga if l.get("SSR") == True]
                         kolom_ssr_ada = [c for c in df_render_tab2.columns if c in list_nama_ssr_master]
                         
                         if kolom_ssr_ada:
@@ -2161,7 +2159,9 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                             df_render_ruj_t2 = df_render_ruj_t2.groupby([kolom_indikator, 'LEMBAGA SSR']).size().unstack(fill_value=0)
                         df_render_ruj_t2 = df_render_ruj_t2.reset_index()
         
-                    list_nama_ssr_master = [l["Nama Lembaga"] for l in st.session_state.master_lembaga if l["Status"] == "SSR"]
+                    # --- PENYESUAIAN 3 ---
+                    # Ganti filter status lama dengan pengecekan flag boolean .get("SSR") == True
+                    list_nama_ssr_master = [l["Nama Lembaga"] for l in st.session_state.master_lembaga if l.get("SSR") == True]
                     
                     if ssr_terpilih != "✨ Semua SSR":
                         kolom_aktif_t2 = [ssr_terpilih] if ssr_terpilih in df_render_ruj_t2.columns else []
