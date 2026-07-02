@@ -2619,11 +2619,10 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         markers=True,
                         title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
                         labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal_Murni": "Tanggal Sesi Review"},
-                        # JAWABAN: Daftarkan kolom jumlah baris dari dataframe Anda ke custom_data agar bisa dibaca oleh hover
-                        custom_data=["Total Baris", "Total Temuan"] # Sesuaikan dengan nama asli kolom di df_tren Anda
+                        custom_data=["Total Baris", "Total Temuan"]  # Memasukkan data ke dalam Plotly Engine
                     )
                     
-                    # POSISI SANGAT PAS: Tampilkan tepat di kotak informasi saat titik disentuh kursor
+                    # Konfigurasi Kotak Informasi Pop-up (Hover) saat titik disentuh kursor
                     fig.update_traces(
                         hovertemplate=(
                             "<b>Kategori:</b> %{data.name}<br>"
@@ -2641,6 +2640,23 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     
                     # Tampilkan Grafik ke UI
                     st.plotly_chart(fig, use_container_width=True)
+                    
+                    # --- BERIKUT ADALAH TAMBAHAN RINGKASAN KARTU METRIK DI BAWAH GRAFIK ---
+                    st.markdown("##### 📊 Akumulasi Ringkasan Data (Rentang Terpilih):")
+                    col_m1, col_m2 = st.columns(2)
+                    
+                    with col_m1:
+                        total_proses = int(df_filtered["Total Baris"].sum())
+                        st.metric(
+                            label="Total Baris Diproses", 
+                            value=f"{total_proses:,} data".replace(",", ".")
+                        )
+                    with col_m2:
+                        total_temuan = int(df_filtered["Total Temuan"].sum())
+                        st.metric(
+                            label="Total Baris Temuan", 
+                            value=f"{total_temuan:,} data".replace(",", ".")
+                        )
                 else:
                     st.warning("⚠️ Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
             else:
