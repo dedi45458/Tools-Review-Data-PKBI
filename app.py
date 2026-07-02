@@ -2521,6 +2521,87 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     st.info("Tidak ada temuan khusus konfirmasi pada rujukan bulan ini.")
 
     
+            # ----------------------------------------------------------
+        # BAGIAN C : GRAFIK TREN AKURASI 
+        # ----------------------------------------------------------
+        st.write("---")
+        st.markdown("### 📈 Grafik Tren Akurasi Hasil Review")
+        
+        # 1. Mengambil info user yang sedang login
+        user_lembaga = st.session_state.current_lembaga
+        user_role = st.session_state.current_role
+        
+        # 2. Ambil data tren dasar dari database
+        df_tren = ambil_data_tren_review(user_lembaga, user_role)
+        
+        if not df_tren.empty:
+            # Konversi ke datetime lalu ekstrak murni tanggalnya saja (YYYY-MM-DD)
+            df_tren["Tanggal_Murni"] = pd.to_datetime(df_tren["Tanggal"]).dt.date
+            # Membuat format kolom bulan (YYYY-MM) untuk keperluan filter rentang bulan
+            df_tren["Bulan"] = pd.to_datetime(df_tren["Tanggal"]).dt.strftime("%Y-%m")
+            
+            # --- LAYOUT FILTER PROPORSIONAL (3 KOLOM) ---
+            col_fil1, col_fil2, col_fil3 = st.columns([3, 3, 4])
+            
+            with col_fil1:
+                # Filter 1: Kategori Data
+                kategori_pilihan = st.selectbox(
+                    "🎯 Filter Kategori Data:", 
+                    options=["Semua", "Penjangkauan", "Rujukan"],
+                    key="filter_kategori_tren"
+                )
+            
+            # Saring berdasarkan kategori terlebih dahulu
+            df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["Kategori"].str.lower() == kategori_pilihan.lower()]
+            
+            with col_fil2:
+                # Filter 2: Lembaga SSR
+                list_lembaga = sorted(df_tren["Lembaga SSR"].unique().tolist())
+                
+                if user_role.upper() == 'SR':
+                    lembaga_pilihan = st.selectbox(
+                        "🏢 Filter Lembaga SSR:",
+                        options=list_lembaga,
+                        key="filter_lembaga_tren"
+                    )
+                    df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
+                else:
+                    st.selectbox(
+                        "🏢 Filter Lembaga SSR:",
+                        options=[user_lembaga],
+                        disabled=True,
+                        key="filter_lembaga_disabled"
+                    )
+                    df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
+            
+            with col_fil3:
+                # Filter 3: Rentang Bulan
+                list_bulan = sorted(df_tren["Bulan"].unique().tolist())
+                
+                if len(list_bulan) > 1:
+                    bulan_pilihan = st.select_slider(
+                        "📅 Pilih Rentang Bulan:",
+                        options=list_bulan,
+                        value=(list_bulan[0], list_bulan[-1]),
+                        key="filter_bulan_slider_aktif"
+                    )
+                    df_filtered = df_filtered[
+                        (df_filtered["Bulan"] >= bulan_pilihan[0]) & 
+                        (df_filtered["Bulan"] <= bulan_pilihan[1])
+                    ]
+                else:
+                    # Pengaman jika bulan baru ada 1 (Mencegah RangeError)
+                    bulan_tunggal = list_bulan[0] if list_bulan else "Tidak Ada Data"
+                    st.selectbox(
+                        "📅 Rentang Bulan (Terkunci):",
+                        options=[bulan_tunggal],
+                        index=0,
+                        disabled=True,
+                        key="filter_bulan_selectbox_safe"
+                    )
+                    if list_bulan:
+                        df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
+            
             # 3. MEMBUAT GRAFIK GARIS (Dengan Pembersihan Kolom & Jaring Pengaman)
             if not df_filtered.empty:
                 import plotly.express as px
