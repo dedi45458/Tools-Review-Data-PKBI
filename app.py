@@ -24,6 +24,7 @@ from database import (
     ambil_histori_review_minggu_ini,
     ambil_lembaga_belum_validasi_minggu_ini,
     ambil_data_tren_review,
+    ambil_set_error_belum_direvisi,
     
     # 🛠️ PROSES SIMPAN DATA REVIEWS
     simpan_agregasi_ke_neon,          # Untuk Penjangkauan
@@ -816,12 +817,15 @@ def jalankan_review_data(
     # Ekstrak log historis dari df_log_review jika dilempar dari Pre-Processing
     set_id_berulang_log = set()
     if df_log_review is not None and not df_log_review.empty:
+        # 🔥 FIX: Paksa semua kolom menjadi UPPERCASE agar tidak KeyError
+        df_log_review.columns = [str(c).strip().upper() for c in df_log_review.columns]
+        
         if 'TANGGAL' in df_log_review.columns:
             df_log_review['Tanggal_Clean'] = df_log_review['TANGGAL'].astype(str).str.split(' ').str[0].str.strip()
         else:
             df_log_review['Tanggal_Clean'] = ""
 
-        # SINKRONISASI KUNCI UTAMA (Selaraskan struktur pemisah string dengan key_db database)
+        # SINKRONISASI KUNCI UTAMA
         df_log_review['key_log'] = (
             df_log_review['KATEGORI DATA'].astype(str).str.strip().str.upper() + "_" +
             df_log_review['LEMBAGA SSR'].astype(str).str.strip().str.upper() + "_" +
@@ -1234,13 +1238,13 @@ if tombol_proses:
             # =========================================================================
             # PROSES RENAME KOLOM DAN SINKRONISASI DATABASE
             # =========================================================================
-            df_bawah = pd.DataFrame()
+            df_bawah_full = pd.DataFrame()
             if all_errs:
-                df_bawah = pd.concat(all_errs, ignore_index=True)
+                df_bawah_full = pd.concat(all_errs, ignore_index=True)
                 
                 # RENAME KOLOM (Standarisasi UPPERCASE)
                 rename_map = {}
-                for c in df_bawah.columns:
+                for c in df_bawah_full.columns:
                     c_clean = str(c).strip().upper()
                     if 'KATEGORI' in c_clean: rename_map[c] = 'KATEGORI DATA'
                     elif 'LEMBAGA SSR' in c_clean or 'NAMA SSR' in c_clean: rename_map[c] = 'LEMBAGA SSR'
@@ -1255,27 +1259,27 @@ if tombol_proses:
                     elif 'VALIDASI' in c_clean: rename_map[c] = 'VALIDASI HASIL REVIEW'
                     elif 'JUSTIFIKASI' in c_clean: rename_map[c] = 'JUSTIFIKASI'
                 
-                df_bawah = df_bawah.rename(columns=rename_map)
-                df_bawah = df_bawah.loc[:, ~df_bawah.columns.duplicated()].copy()
+                df_bawah_full = df_bawah_full.rename(columns=rename_map)
+                df_bawah_full = df_bawah_full.loc[:, ~df_bawah_full.columns.duplicated()].copy()
 
             # 🎯 Simpan total entri global ke memory Streamlit
             st.session_state['total_entri'] = total_records
             st.session_state['total_entri_penjangkauan'] = total_proses_pjj
             st.session_state['total_entri_rujukan'] = total_proses_rjk
             
-            # CLEANSING DATA AWAL SEBELUM FILTER DUPLIKAT
-            if not df_bawah.empty:
+            # CLEANSING DATA AWAL (BERLAKU UNTUK UI DAN DB)
+            if not df_bawah_full.empty:
                 kolom_wajib = [
                     'KATEGORI DATA', 'LEMBAGA SSR', 'TANGGAL', 'ID KLIEN', 'KODE PETUGAS', 
                     'NAMA KOTA', 'NAMA LAYANAN', 'NIK', 'TIPE SASARAN', 
                     'INDIKATOR KESALAHAN DATA', 'VALIDASI HASIL REVIEW', 'JUSTIFIKASI'
                 ]
                 for col in kolom_wajib:
-                    if col not in df_bawah.columns: df_bawah[col] = "-"
-                    df_bawah[col] = df_bawah[col].fillna('-').astype(str).str.strip()
-                    df_bawah[col] = df_bawah[col].replace({'nan': '-', 'None': '-', '': '-', 'NAN': '-'})
+                    if col not in df_bawah_full.columns: df_bawah_full[col] = "-"
+                    df_bawah_full[col] = df_bawah_full[col].fillna('-').astype(str).str.strip()
+                    df_bawah_full[col] = df_bawah_full[col].replace({'nan': '-', 'None': '-', '': '-', 'NAN': '-'})
                 
-                df_bawah['TIPE SASARAN'] = df_bawah['TIPE SASARAN'].str.replace('.0', '', regex=False)
+                df_bawah_full['TIPE SASARAN'] = df_bawah_full['TIPE SASARAN'].str.replace('.0', '', regex=False)
                 
                 def sesuaikan_nama_layanan(row_data):
                     kat = str(row_data['KATEGORI DATA']).strip().lower()
@@ -1284,44 +1288,14 @@ if tombol_proses:
                         return layanan if layanan not in ['', '-', 'nan', 'None'] else "-"
                     return "-"
                 
-                df_bawah['NAMA LAYANAN'] = df_bawah.apply(sesuaikan_nama_layanan, axis=1)
+                df_bawah_full['NAMA LAYANAN'] = df_bawah_full.apply(sesuaikan_nama_layanan, axis=1)
 
-                # 🔥 1. AMBIL DUPLIKAT KEY DARI DATABASE NEON
-                existing_master_keys = set()
-                try:
-                    from database import dapatkan_koneksi_neon
-                    conn = dapatkan_koneksi_neon()
-                    if conn:
-                        with conn.cursor() as cur:
-                            cur.execute("SELECT LOWER(kategori_data), LOWER(lembaga_ssr), LOWER(tanggal), LOWER(id_klien), LOWER(indikator_kesalahan), LOWER(COALESCE(role_reviewer, 'SR')) FROM hasil_review_data;")
-                            for r in cur.fetchall():
-                                existing_master_keys.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip(), str(r[4]).strip(), str(r[5]).strip()))
-                        conn.close()
-                except Exception: pass
+                # 🔥 1. UI HARUS MENGGUNAKAN DATA PENUH (Termasuk Jika Duplikat) AGAR TIDAK KOSONG!
+                st.session_state['df_tabel_bawah'] = df_bawah_full.copy()
 
-                # 🔥 2. PILAH MANA DATA YANG DUPLIKAT (HANYA UNTUK FILTER MASUK DB)
-                indices_to_drop = []
-                for idx, row in df_bawah.iterrows():
-                    kat = str(row.get('KATEGORI DATA', '')).strip().lower()
-                    ssr = str(row.get('LEMBAGA SSR', '')).strip().lower()
-                    tgl = str(row.get('TANGGAL', '')).strip().lower() 
-                    id_klien = str(row.get('ID KLIEN', '')).strip().lower()
-                    ind = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
-                    role_key = role_aktif.strip().lower()
-                    
-                    if (kat, ssr, tgl, id_klien, ind, role_key) in existing_master_keys:
-                        indices_to_drop.append(idx)
-                
-                # 🔥 PERBAIKAN BERKAITAN DENGAN AGREGASI:
-                # Kita buat df_hanya_baru untuk dimasukkan ke database agar metrik tabel 1, 2, dan 3 sinkron hanya memproses data baru.
-                if indices_to_drop:
-                    df_hanya_baru = df_bawah.drop(index=indices_to_drop).reset_index(drop=True)
-                else:
-                    df_hanya_baru = df_bawah.copy()
-                
-                # Pemisahan scorecard lokal UI (tetap menggunakan total temuan file aktif saat ini)
-                df_pjj_raw = df_bawah[df_bawah['KATEGORI DATA'].str.upper() == 'PENJANGKAUAN'].copy()
-                df_rjk_raw = df_bawah[df_bawah['KATEGORI DATA'].str.upper() == 'RUJUKAN'].copy()
+                # Hitung Scorecard Murni Berdasarkan File Aktif
+                df_pjj_raw = df_bawah_full[df_bawah_full['KATEGORI DATA'].str.upper() == 'PENJANGKAUAN'].copy()
+                df_rjk_raw = df_bawah_full[df_bawah_full['KATEGORI DATA'].str.upper() == 'RUJUKAN'].copy()
                 st.session_state['df_err_penj'] = df_pjj_raw
                 st.session_state['df_err_ruj'] = df_rjk_raw
                 
@@ -1335,6 +1309,38 @@ if tombol_proses:
                 st.session_state['akurasi_rujukan'] = akurasi_rjk
                 st.session_state['temuan_penjangkauan'] = total_temuan_pjj
                 st.session_state['temuan_rujukan'] = total_temuan_rjk
+
+                # 🔥 2. AMBIL DUPLIKAT KEY DARI DATABASE NEON UNTUK FILTER PENYIMPANAN
+                existing_master_keys = set()
+                try:
+                    from database import dapatkan_koneksi_neon
+                    conn = dapatkan_koneksi_neon()
+                    if conn:
+                        with conn.cursor() as cur:
+                            cur.execute("SELECT LOWER(kategori_data), LOWER(lembaga_ssr), LOWER(tanggal), LOWER(id_klien), LOWER(indikator_kesalahan), LOWER(COALESCE(role_reviewer, 'SR')) FROM hasil_review_data;")
+                            for r in cur.fetchall():
+                                existing_master_keys.add((str(r[0]).strip(), str(r[1]).strip(), str(r[2]).strip(), str(r[3]).strip(), str(r[4]).strip(), str(r[5]).strip()))
+                        conn.close()
+                except Exception: pass
+
+                # 🔥 3. PILAH DATA BARU UNTUK DISIMPAN KE DB (AGAR TIDAK DUPLIKAT DI SERVER)
+                indices_to_drop = []
+                for idx, row in df_bawah_full.iterrows():
+                    kat = str(row.get('KATEGORI DATA', '')).strip().lower()
+                    ssr = str(row.get('LEMBAGA SSR', '')).strip().lower()
+                    tgl = str(row.get('TANGGAL', '')).strip().lower() 
+                    id_klien = str(row.get('ID KLIEN', '')).strip().lower()
+                    ind = str(row.get('INDIKATOR KESALAHAN DATA', '')).strip().lower()
+                    role_key = role_aktif.strip().lower()
+                    
+                    if (kat, ssr, tgl, id_klien, ind, role_key) in existing_master_keys:
+                        indices_to_drop.append(idx)
+                
+                if indices_to_drop:
+                    df_hanya_baru = df_bawah_full.drop(index=indices_to_drop).reset_index(drop=True)
+                else:
+                    df_hanya_baru = df_bawah_full.copy()
+                
                 st.session_state['db_tercatat_batch'] = False
 
                 # Simpan Metrik Akurasi Master
@@ -1346,21 +1352,18 @@ if tombol_proses:
                         simpan_metrik_akurasi_db('rujukan', total_proses_rjk, total_temuan_rjk, akurasi_rjk, role_reviewer=role_aktif, lembaga_ssr=lembaga_aktif)
                     st.session_state['db_tercatat_batch'] = True
                 except Exception as e:
-                    st.error(f"Gagal memproses pencatatan metrik ke database Neon: {e}")
+                    pass
 
-                # 🔥 3. SIMPAN KE 3 TABEL DETAIL AGREGASI (MENGGUNAKAN DATA YANG SUDAH JELAS BARU)
+                # 🔥 4. SIMPAN HANYA DATA BARU KE 3 TABEL DETAIL AGREGASI
                 try:
                     from database import simpan_paket_validasi_ke_tiga_tabel
                     
                     if not df_hanya_baru.empty:
-                        # AGREGASI MENGGUNAKAN DATA BARU AGAR TIDAK DOUBLE-COUNT DI DB
                         df_pjj_only = df_hanya_baru[df_hanya_baru['KATEGORI DATA'].str.title() == 'Penjangkauan']
-                        
                         list_insert_tabel_1 = []
                         if not df_pjj_only.empty:
                             DAFTAR_INDIKATOR_AKTIF = [r["nama"] for r in (ATURAN_VALIDASI_BAWAAN + st.session_state.get('aturan_kustom', []))]
                             active_ssrs_pjj = sorted(list(df_pjj_only['LEMBAGA SSR'].unique()))
-                            
                             for ind_err in DAFTAR_INDIKATOR_AKTIF:
                                 for ssr_name in active_ssrs_pjj:
                                     hitung_kesalahan = len(df_pjj_only[(df_pjj_only['INDIKATOR KESALAHAN DATA'] == ind_err) & (df_pjj_only['LEMBAGA SSR'] == ssr_name)])
@@ -1380,26 +1383,18 @@ if tombol_proses:
                                     int(row_aggr.get('JUMLAH KESALAHAN', 0))
                                 ))
                         
-                        # INSERT DETAIL TABEL 3
                         list_insert_tabel_3 = []
                         for _, row_all in df_hanya_baru.iterrows():
                             pesan_validasi = str(row_all.get('VALIDASI HASIL REVIEW', '-')).strip()
                             list_insert_tabel_3.append((
-                                str(row_all.get('KATEGORI DATA', '-')), 
-                                str(row_all.get('LEMBAGA SSR', '-')),
-                                str(row_all.get('KODE PETUGAS', '-')), 
-                                str(row_all.get('NAMA KOTA', '-')),
-                                str(row_all.get('NAMA LAYANAN', '-')), 
-                                str(row_all.get('TANGGAL', '-')),
-                                str(row_all.get('ID KLIEN', '-')), 
-                                str(row_all.get('NIK', '-')),
-                                str(row_all.get('TIPE SASARAN', '-')), 
-                                str(row_all.get('INDIKATOR KESALAHAN DATA', '-')),
-                                pesan_validasi, 
-                                str(row_all.get('JUSTIFIKASI', '-'))
+                                str(row_all.get('KATEGORI DATA', '-')), str(row_all.get('LEMBAGA SSR', '-')),
+                                str(row_all.get('KODE PETUGAS', '-')), str(row_all.get('NAMA KOTA', '-')),
+                                str(row_all.get('NAMA LAYANAN', '-')), str(row_all.get('TANGGAL', '-')),
+                                str(row_all.get('ID KLIEN', '-')), str(row_all.get('NIK', '-')),
+                                str(row_all.get('TIPE SASARAN', '-')), str(row_all.get('INDIKATOR KESALAHAN DATA', '-')),
+                                pesan_validasi, str(row_all.get('JUSTIFIKASI', '-'))
                             ))
                         
-                        # Jalankan query multi-tabel dengan menyertakan role_reviewer
                         sukses = simpan_paket_validasi_ke_tiga_tabel(list_insert_tabel_1, list_insert_tabel_2, list_insert_tabel_3, role_reviewer=role_aktif)
                         if sukses:
                             st.toast("💾 Sinkronisasi 3 tabel Agregasi dan detil per baris telah berhasil!", icon="✅")
@@ -1409,51 +1404,23 @@ if tombol_proses:
                     st.error(f"⚠️ Gagal mengeksekusi sinkronisasi database (Sistem Crash): {str(e)}")
 
             # =========================================================================
-            # AUTO-REFRESH UI DENGAN DATA DARI DB (KONSISTENSI NAMA KOLOM UI)
+            # AUTO-REFRESH UI: TARIK TABEL AGREGASI LALU SELESAIKAN PROSES
             # =========================================================================
             try:
-                from database import (
-                    ambil_agregasi_penjangkauan_terakhir, 
-                    ambil_agregasi_rujukan_terakhir, 
-                    ambil_hasil_review_utama_terakhir,
-                    ambil_set_error_belum_direvisi  
-                )
+                from database import ambil_agregasi_penjangkauan_terakhir, ambil_agregasi_rujukan_terakhir
                 
                 df_pjj_db, ts_pjj = ambil_agregasi_penjangkauan_terakhir(role_reviewer=role_aktif)
                 df_rjk_db, ts_rjk = ambil_agregasi_rujukan_terakhir(role_reviewer=role_aktif)
-                df_utama_db, ts_utama = ambil_hasil_review_utama_terakhir(role_reviewer=role_aktif)
-                set_error_historis = ambil_set_error_belum_direvisi()
                 
                 st.session_state['df_tabel_atas'] = df_pjj_db 
-                st.session_state['df_tabel_penjangkauan'] = df_pjj_db
                 st.session_state['df_rujukan'] = df_rjk_db
-                st.session_state['df_tabel_rujukan'] = df_rjk_db
-                
-                # REPEAT ERROR DETECTION LOGIC
-                if df_utama_db is not None and not df_utama_db.empty and set_error_historis is not None and not set_error_historis.empty:
-                    df_utama_db.columns = df_utama_db.columns.str.upper()
-                    
-                    # (Gunakan logika pencocokan kamus riwayat revisi Anda yang sudah ada di sini...)
-                    # ...
-                    
-                    for idx_db, row_db in df_utama_db.iterrows():
-                        # Pastikan modifikasi penulisan hanya pada satu kolom UPPERCASE agar sinkron dengan rename_map
-                        df_utama_db.at[idx_db, 'VALIDASI HASIL REVIEW'] = pesan
-
-                if 'indeks_master_terpilih' in st.session_state and st.session_state['indeks_master_terpilih']:
-                    idx_diapus = st.session_state['indeks_master_terpilih']
-                    df_utama_db = df_utama_db.drop(index=idx_diapus, errors='ignore').reset_index(drop=True)
-                    st.session_state['indeks_master_terpilih'] = []
-            
-                st.session_state['df_tabel_bawah'] = df_utama_db
-                st.session_state['ts_terakhir_utama'] = ts_utama
                 st.session_state['tanggal_terakhir_review'] = ts_pjj
                 
                 if ts_rjk:
                     st.session_state['tanggal_terakhir_rujukan_str'] = ts_rjk.strftime('%d-%m-%Y pukul %H:%M WIB') if hasattr(ts_rjk, 'strftime') else str(ts_rjk)
-            
+                
             except Exception as e:
-                st.warning(f"⚠️ Berhasil simpan data, namun gagal me-refresh visualisasi dashboard UI ({e})")
+                st.warning(f"⚠️ Berhasil simpan data, namun gagal me-refresh visualisasi dashboard agregasi ({e})")
             
             st.session_state['proses_selesai'] = True
             import time
@@ -1522,8 +1489,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         # DEKLARASI TAB LAYOUT UTAMA & LOGIKAL OTOMATIS PINDAH TAB SESUAI ROLE
         # =========================================================================
         
-        # Ambil role user secara konsisten (gunakan st.session_state.get('peran_user') atau 'current_role')
-        peran = st.session_state.get('peran_user', 'SSR')
+        # Ambil role user secara konsisten 
+        peran = st.session_state.get('current_role', 'SSR')  # 🔥 FIX: Harus current_role, bukan peran_user
 
         # Inisialisasi state untuk melacak indeks tab aktif jika belum ada
         if "active_tab_index" not in st.session_state:
