@@ -21,7 +21,8 @@ from database import (
     ambil_set_reaktif_sebelumnya,       # ✨ Tambahkan ini untuk validasi is_reaktif_sebelumnya
     ambil_set_layanan_prep_valid,       # ✨ Tambahkan ini untuk validasi PrEP
     ambil_database_layanan,
-    ambil_histori_review,
+    ambil_histori_review_minggu_ini,
+    ambil_lembaga_belum_validasi_minggu_ini,
     
     # 🛠️ PROSES SIMPAN DATA REVIEWS
     simpan_agregasi_ke_neon,          # Untuk Penjangkauan
@@ -2326,16 +2327,32 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         # TAB 3: ANALISIS PROFIL KLASTER TEMUAN (FORMAT TABEL DUAL SCREEN)
         # -------------------------------------------------------------------------
         with tab3:
-            st.subheader("📜 Histori Riwayat Tindakan Absensi Review")
+            st.subheader("📜 Monitoring & Histori Absensi Review (Minggu Ini)")
             
-            # Memanggil data terbaru langsung dari database PostgreSQL
-            df_histori = ambil_histori_review()
+            # 1. AMBIL DATA DARI DATABASE
+            df_histori = ambil_histori_review_minggu_ini()
+            list_belum_validasi = ambil_lembaga_belum_validasi_minggu_ini()
             
-            # Cek jika data tersedia di database
+            # 2. TAMPILKAN MONITORING UNTUK SR (Lembaga yang belum melakukan tindakan)
+            st.markdown("### ⚠️ Lembaga SSR Belum Validasi Minggu Ini")
+            if list_belum_validasi:
+                # Menampilkan jumlah lembaga yang belum absen minggu ini
+                st.error(f"Ada {len(list_belum_validasi)} lembaga SSR yang belum melakukan validasi data pada minggu ini:")
+                
+                # Menampilkan daftar nama lembaga dengan rapi (Bullet Points)
+                for lembaga in list_belum_validasi:
+                    st.markdown(f"- **{lembaga}**")
+            else:
+                st.success("🎉 Luar biasa! Semua lembaga SSR telah melakukan validasi data untuk minggu ini.")
+            
+            st.write("---") # Garis pembatas
+            
+            # 3. TAMPILKAN TABEL HISTORI TINDAKAN MINGGU INI
+            st.markdown("### 📋 Tabel Riwayat Tindakan")
             if not df_histori.empty:
                 st.table(df_histori)
             else:
-                st.info("Belum ada riwayat tindakan absensi review yang tercatat di database.")
+                st.info("Belum ada riwayat tindakan absensi review yang tercatat untuk minggu ini (Otomatis kosong kembali setiap hari Senin).")
             
             st.markdown("---")
             st.subheader("📋 Analisis Profil Klaster Temuan (Tabel Ranking Kesalahan)")
