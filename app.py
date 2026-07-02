@@ -2527,44 +2527,82 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             st.write("---")
             st.markdown("### 📈 Grafik Tren Akurasi Hasil Review")
             
-            #1. Mengambil info user yang sedang login berdasarkan key session state Anda
+            # 1. Mengambil info user yang sedang login
             user_lembaga = st.session_state.current_lembaga
             user_role = st.session_state.current_role
             
-            # 2. Ambil data tren dari database yang sudah ter-filter hak akses level SQL
+            # 2. Ambil data tren dasar dari database
             df_tren = ambil_data_tren_review(user_lembaga, user_role)
             
             if not df_tren.empty:
-                # Layout Filter: Menggunakan columns agar filter berjajar rapi ke samping
-                col_fil1, col_fil2 = st.columns(2)
+                # Membuat format kolom bulan (YYYY-MM) dari kolom Tanggal untuk keperluan filter
+                df_tren["Bulan"] = df_tren["Tanggal"].dt.strftime("%Y-%m")
+                
+                # --- LAYOUT FILTER PROPORSIONAL (3 KOLOM) ---
+                # Kita bagi rasio kolomnya (Kategori: 3, Lembaga: 3, Rentang Bulan: 4) agar pas di layar
+                col_fil1, col_fil2, col_fil3 = st.columns([3, 3, 4])
                 
                 with col_fil1:
-                    # Filter 1: Kategori (Penjangkauan / Rujukan / Semua)
+                    # Filter 1: Kategori Data
                     kategori_pilihan = st.selectbox(
-                        "Pilih Kategori Data:", 
+                        "🎯 Filter Kategori Data:", 
                         options=["Semua", "Penjangkauan", "Rujukan"],
                         key="filter_kategori_tren"
                     )
                 
-                # Filter berdasarkan Kategori terlebih dahulu
+                # Saring berdasarkan kategori terlebih dahulu
                 df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["Kategori"].str.lower() == kategori_pilihan.lower()]
                 
-                # Filter 2: Lembaga (Hanya muncul jika yang login terdeteksi sebagai SR)
-                if user_role.upper() == 'SR':
-                    with col_fil2:
-                        # Mengambil daftar lembaga unik yang ada di data untuk dijadikan pilihan filter
-                        list_lembaga_pilihan = ["Semua Lembaga"] + sorted(df_filtered["Lembaga SSR"].unique().tolist())
+                with col_fil2:
+                    # Filter 2: Lembaga SSR (Hanya aktif/bisa dipilih jika yang login adalah SR)
+                    if user_role.upper() == 'SR':
+                        list_lembaga_pilihan = ["Semua Lembaga SSR"] + sorted(df_filtered["Lembaga SSR"].unique().tolist())
                         lembaga_pilihan = st.selectbox(
-                            "Pilih Lembaga SSR:",
+                            "🏢 Filter Lembaga SSR:",
                             options=list_lembaga_pilihan,
                             key="filter_lembaga_tren"
                         )
+                        if lembaga_pilihan != "Semua Lembaga SSR":
+                            df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
+                    else:
+                        # Jika SSR, otomatis terkunci dan kita tampilkan selectbox yang terkunci (disabled)
+                        st.selectbox(
+                            "🏢 Filter Lembaga SSR:",
+                            options=[user_lembaga],
+                            disabled=True,
+                            key="filter_lembaga_disabled"
+                        )
+                        df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
+                
+                with col_fil3:
+                    # Filter 3: Rentang Bulan (Mengambil list bulan unik yang tersedia di database secara berurutan)
+                    list_bulan = sorted(df_tren["Bulan"].unique().tolist())
                     
-                    if lembaga_pilihan != "Semua Lembaga":
-                        df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
-                else:
-                    # Jika yang login SSR, data otomatis terkunci ke lembaganya sendiri tanpa pilihan filter kedua
-                    df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
+                    if len(list_bulan) > 1:
+                        # Jika pilihan bulannya ada banyak, tampilkan slider range (Dari Bulan - Sampai Bulan)
+                        bulan_pilihan = st.select_slider(
+                            "📅 Pilih Rentang Bulan:",
+                            options=list_bulan,
+                            value=(list_bulan[0], list_bulan[-1]), # Default: dari bulan terlama hingga terbaru
+                            key="filter_bulan_slider"
+                        )
+                        # Saring data berdasarkan range slider [Bulan Awal, Bulan Akhir]
+                        df_filtered = df_filtered[
+                            (df_filtered["Bulan"] >= bulan_pilihan[0]) & 
+                            (df_filtered["Bulan"] <= bulan_pilihan[1])
+                        ]
+                    elif len(list_bulan) == 1:
+                        # Jika data di database baru ada 1 bulan tunggal
+                        st.select_slider(
+                            "📅 Pilih Rentang Bulan:",
+                            options=list_bulan,
+                            value=list_bulan[0],
+                            disabled=True,
+                            key="filter_bulan_single"
+                        )
+                        df_filtered = df_filtered[df_filtered["Bulan"] == list_bulan[0]]
+                    else:
+                        st.caption("Bulan tidak tersedia")
                 
                 # 3. MEMBUAT GRAFIK GARIS (PLOTLY)
                 if not df_filtered.empty:
@@ -2574,7 +2612,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         df_filtered,
                         x="Tanggal",
                         y="Tingkat Akurasi",
-                        color="Lembaga SSR",  # Membedakan warna garis per lembaga
+                        color="Lembaga SSR",
                         markers=True,
                         title=f"Tren Tingkat Akurasi (%) - Kategori: {kategori_pilihan}",
                         labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal": "Tanggal Sesi Review"}
@@ -2583,12 +2621,12 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     # Set batas vertikal sumbu Y dari 0% - 100% agar stabil dilihat
                     fig.update_yaxes(range=[0, 105])
                     
-                    # Tampilkan Grafik ke UI
+                    # Tampilkan Grafik ke UI dengan lebar penuh mengikuti container
                     st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.warning("Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
+                    st.warning("⚠️ Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
             else:
-                st.info("Belum ada data riwayat review yang mencukupi untuk memetakan grafik tren.")
+                st.info("ℹ️ Belum ada data riwayat review yang mencukupi untuk memetakan grafik tren.")
                 
 
 # ----------------------------------------------------------
