@@ -2596,8 +2596,8 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     )
             else:
                 st.warning("⚠️ Tidak ada data review yang cocok dengan kombinasi filter yang dipilih.")
-            else:
-                st.info("ℹ️ Belum ada data riwayat review yang mencukupi untuk memetakan grafik tren.")
+        else:
+            st.info("ℹ️ Belum ada data riwayat review yang mencukupi untuk memetakan grafik tren.")
                 
 
 # ----------------------------------------------------------
