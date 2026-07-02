@@ -2327,12 +2327,15 @@ if menu_pilihan == "🎯 Dashboard Review Data":
         # -------------------------------------------------------------------------
         with tab3:
             st.subheader("📜 Histori Riwayat Tindakan Absensi Review")
-            if 'log_histori_absensi_review' not in st.session_state:
-                st.session_state['log_histori_absensi_review'] = [
-                    {"Lembaga SSR": "BINA MUDA GEMILANG", "Tanggal Sesi": datetime.now().strftime("%d-%m-%Y"), "Akurasi Akhir": teks_akurasi_penj},
-                    {"Lembaga SSR": "PKBI JAWA BARAT", "Tanggal Sesi": datetime.now().strftime("%d-%m-%Y"), "Akurasi Akhir": teks_akurasi_ruj}
-                ]
-            st.table(pd.DataFrame(st.session_state['log_histori_absensi_review']))
+            
+            # Memanggil data terbaru langsung dari database PostgreSQL
+            df_histori = ambil_histori_review()
+            
+            # Cek jika data tersedia di database
+            if not df_histori.empty:
+                st.table(df_histori)
+            else:
+                st.info("Belum ada riwayat tindakan absensi review yang tercatat di database.")
             
             st.markdown("---")
             st.subheader("📋 Analisis Profil Klaster Temuan (Tabel Ranking Kesalahan)")
