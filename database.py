@@ -884,3 +884,45 @@ def ambil_lembaga_belum_validasi_minggu_ini():
         return []
     finally:
         conn.close()
+
+def ambil_data_tren_review(lembaga_user, role_user):
+    conn = dapatkan_koneksi_neon()
+    if not conn:
+        return pd.DataFrame()
+    
+    try:
+        with conn.cursor() as cur:
+            # Jika user yang login adalah SSR, kita kunci query hanya untuk lembaganya saja
+            if role_user.upper() == 'SSR':
+                cur.execute("""
+                    SELECT 
+                        COALESCE(lembaga_ssr, 'PKBI JAWA BARAT') as lembaga_ssr,
+                        kategori,
+                        created_at AT TIME ZONE 'Asia/Jakarta' as tanggal,
+                        tingkat_akurasi
+                    FROM public.akurasi_review_data
+                    WHERE COALESCE(lembaga_ssr, 'PKBI JAWA BARAT') = %s
+                    ORDER BY created_at ASC;
+                """, (lembaga_user,))
+            else:
+                # Jika yang login adalah SR, ambil semua data tanpa filter lembaga di SQL-nya
+                cur.execute("""
+                    SELECT 
+                        COALESCE(lembaga_ssr, 'PKBI JAWA BARAT') as lembaga_ssr,
+                        kategori,
+                        created_at AT TIME ZONE 'Asia/Jakarta' as tanggal,
+                        tingkat_akurasi
+                    FROM public.akurasi_review_data
+                    ORDER BY created_at ASC;
+                """)
+                
+            rows = cur.fetchall()
+            if not rows:
+                return pd.DataFrame()
+                
+            return pd.DataFrame(rows, columns=["Lembaga SSR", "Kategori", "Tanggal", "Tingkat Akurasi"])
+    except Exception as e:
+        st.error(f"Gagal memuat data tren: {e}")
+        return pd.DataFrame()
+    finally:
+        conn.close()
