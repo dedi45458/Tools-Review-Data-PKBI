@@ -816,3 +816,39 @@ def sinkronisasi_master_lembaga():
             st.error(f"Gagal sinkronisasi data lembaga: {e}")
         finally:
             conn.close()
+
+def ambil_histori_review():
+    conn = dapatkan_koneksi_neon()  # Memanggil koneksi yang se-file
+    if not conn:
+        return pd.DataFrame(columns=["Lembaga SSR", "Tanggal Sesi", "Akurasi Akhir"])
+    
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT lembaga_ssr, created_at, tingkat_akurasi 
+                FROM public.akurasi_review_data 
+                ORDER BY created_at DESC;
+            """)
+            rows = cur.fetchall()
+            
+            if not rows:
+                return pd.DataFrame(columns=["Lembaga SSR", "Tanggal Sesi", "Akurasi Akhir"])
+            
+            data_ui = []
+            for row in rows:
+                tanggal_format = row[1].strftime("%d-%m-%Y") if row[1] else "-"
+                akurasi_format = f"{row[2]}%" if row[2] is not None else "-"
+                
+                data_ui.append({
+                    "Lembaga SSR": row[0],
+                    "Tanggal Sesi": tanggal_format,
+                    "Akurasi Akhir": akurasi_format
+                })
+                
+            return pd.DataFrame(data_ui)
+            
+    except Exception as e:
+        st.error(f"Gagal memuat histori dari database: {e}")
+        return pd.DataFrame(columns=["Lembaga SSR", "Tanggal Sesi", "Akurasi Akhir"])
+    finally:
+        conn.close()
