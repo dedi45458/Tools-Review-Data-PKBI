@@ -627,69 +627,11 @@ with st.sidebar:
             
             if files_review:
                 st.info(f"📁 {len(files_review)} file siap diproses.")
-                
-                # 🛠️ TOMBOL EKSEKUSI TERINTEGRASI ENGINE VALIDASI UTAMA
-                if st.button("🔍 Jalankan Review Validasi Data", type="primary", key="btn_jalankan_review"):
-                    with st.spinner("Sedang membaca dan menganalisis berkas sesuai aturan validasi..."):
-                        list_df = []
-                        for f in files_review:
-                            try:
-                                if f.name.endswith('.csv'):
-                                    df_individual = pd.read_csv(f)
-                                else:
-                                    df_individual = pd.read_excel(f)
-                                list_df.append(df_individual)
-                            except Exception as e:
-                                st.error(f"Gagal membaca file {f.name}: {e}")
-                        
-                        if list_df:
-                            # 1. Gabungkan semua file mentah yang di-upload
-                            df_gabungan_raw = pd.concat(list_df, ignore_index=True)
-                            
-                            # 2. Ambil parameter role user yang sedang login (Default ke 'SR' jika tidak ketemu)
-                            role_aktif = st.session_state.get('peran', 'SR')
-                            
-                            # 3. PANGGIL ENGINE VALIDASI UTAMA ANDA DI SINI
-                            # Semua parameter cross-check ditarik aman dari session_state bawaan sistem
-                            df_hasil_kesalahan = jalankan_review_data(
-                                df_asli=df_gabungan_raw,
-                                df_ref=st.session_state.get('df_database_hiv', None),
-                                nama_file=", ".join([f.name for f in files_review]),
-                                set_ssr_id_penjangkauan=st.session_state.get('set_ssr_id_penjangkauan', None),
-                                set_nik_reaktif=st.session_state.get('set_nik_reaktif', None),
-                                set_ssr_id_reaktif=st.session_state.get('set_ssr_id_reaktif', None),
-                                set_prep_valid=st.session_state.get('set_prep_valid', None),
-                                df_log_review=st.session_state.get('df_log_review', None),
-                                role_reviewer=role_aktif
-                            )
-                            
-                            # 4. Hitung Scorecard Metrics dari DATA MENTAH (df_gabungan_raw)
-                            # Mencari kolom kategori secara cerdas
-                            kolom_kat = [c for c in df_gabungan_raw.columns if "kategori" in str(c).lower() or "tipe" in str(c).lower()]
-                            if kolom_kat:
-                                mask_penj = df_gabungan_raw[kolom_kat[0]].astype(str).str.lower().str.contains("penjangkauan")
-                                tot_entri_penj = len(df_gabungan_raw[mask_penj])
-                                tot_entri_ruj = len(df_gabungan_raw[~mask_penj])
-                            else:
-                                # Fallback jika kolom tidak spesifik
-                                tot_entri_penj = len(df_gabungan_raw)
-                                tot_entri_ruj = len(df_gabungan_raw)
-                            
-                            # 5. Simpan Hasil ke Session State agar langsung dibaca Tab 1 & Tab 2
-                            st.session_state['df_review_utama'] = df_gabungan_raw # Simpan data mentah asli jika dibutuhkan
-                            st.session_state['df_tabel_bawah'] = df_hasil_kesalahan # Hasil temuan anomali/kesalahan data
-                            st.session_state['total_entri_penjangkauan'] = tot_entri_penj
-                            st.session_state['total_entri_rujukan'] = tot_entri_ruj
-                            
-                            st.success(f"🎉 Validasi Selesai! Berhasil mendeteksi {len(df_hasil_kesalahan)} baris indikasi kesalahan data.")
-                            
-                            # Force refresh halaman agar data langsung menembus filter Tab 1 / Tab 2
-                            import time
-                            time.sleep(1.0)
-                            st.rerun()
     
         st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
         st.markdown("""<div style="margin-top: 35px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);"></div>""", unsafe_allow_html=True)
+        
+        # Tombol eksekusi utama yang aman (terhubung ke engine bawah)
         tombol_proses = st.button("🚀 Jalankan Validasi", type="primary", use_container_width=True)
             
         st.markdown("### ⚙️ Manajemen Akhir Periode")
