@@ -2524,12 +2524,11 @@ if menu_pilihan == "🎯 Dashboard Review Data":
             # BAGIAN C : GRAFIK TREN AKURASI 
             # ----------------------------------------------------------
             st.write("---")
-            st.markdown("### 📈 Grafik Tren Akurasi Hasil Review Data")
+            st.markdown("### 📈 Grafik Tren Akurasi Hasil Review")
             
-            # 1. Mengambil info user yang sedang login dari session state Anda
-            # (Pastikan nama key session_state ini sesuai dengan sistem login Anda)
-            user_lembaga = st.session_state.get('lembaga', 'PKBI JAWA BARAT')
-            user_role = st.session_state.get('role', 'SR') 
+            #1. Mengambil info user yang sedang login berdasarkan key session state Anda
+            user_lembaga = st.session_state.current_lembaga
+            user_role = st.session_state.current_role
             
             # 2. Ambil data tren dari database yang sudah ter-filter hak akses level SQL
             df_tren = ambil_data_tren_review(user_lembaga, user_role)
@@ -2549,7 +2548,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                 # Filter berdasarkan Kategori terlebih dahulu
                 df_filtered = df_tren if kategori_pilihan == "Semua" else df_tren[df_tren["Kategori"].str.lower() == kategori_pilihan.lower()]
                 
-                # Filter 2: Lembaga (Hanya muncul jika yang login adalah SR)
+                # Filter 2: Lembaga (Hanya muncul jika yang login terdeteksi sebagai SR)
                 if user_role.upper() == 'SR':
                     with col_fil2:
                         # Mengambil daftar lembaga unik yang ada di data untuk dijadikan pilihan filter
@@ -2563,7 +2562,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     if lembaga_pilihan != "Semua Lembaga":
                         df_filtered = df_filtered[df_filtered["Lembaga SSR"] == lembaga_pilihan]
                 else:
-                    # Jika yang login SSR, data otomatis terkunci ke lembaganya saja tanpa pilihan filter kedua
+                    # Jika yang login SSR, data otomatis terkunci ke lembaganya sendiri tanpa pilihan filter kedua
                     df_filtered = df_filtered[df_filtered["Lembaga SSR"] == user_lembaga]
                 
                 # 3. MEMBUAT GRAFIK GARIS (PLOTLY)
