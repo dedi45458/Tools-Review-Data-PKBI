@@ -2602,7 +2602,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         if list_bulan:
                             df_filtered = df_filtered[df_filtered["Bulan"] == bulan_tunggal]
                 
-                # 3. MEMBUAT GRAFIK GARIS (Menggunakan Tanggal_Murni)
+                # 3. MEMBUAT GRAFIK GARIS (Menggunakan Kolom Database yang Benar)
                 if not df_filtered.empty:
                     import plotly.express as px
                     
@@ -2619,7 +2619,7 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                         markers=True,
                         title=f"Tren Tingkat Akurasi (%) - Lembaga: {current_ssr} (Kategori: {kategori_pilihan})",
                         labels={"Tingkat Akurasi": "Akurasi (%)", "Tanggal_Murni": "Tanggal Sesi Review"},
-                        custom_data=["Total Baris", "Total Temuan"]  # Memasukkan data ke dalam Plotly Engine
+                        custom_data=["total_data_diproses", "total_baris_temuan"]  # Menggunakan nama kolom asli Anda
                     )
                     
                     # Konfigurasi Kotak Informasi Pop-up (Hover) saat titik disentuh kursor
@@ -2641,18 +2641,18 @@ if menu_pilihan == "🎯 Dashboard Review Data":
                     # Tampilkan Grafik ke UI
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # --- BERIKUT ADALAH TAMBAHAN RINGKASAN KARTU METRIK DI BAWAH GRAFIK ---
+                    # --- BERIKUT RINGKASAN KARTU METRIK DI BAWAH GRAFIK ---
                     st.markdown("##### 📊 Akumulasi Ringkasan Data (Rentang Terpilih):")
                     col_m1, col_m2 = st.columns(2)
                     
                     with col_m1:
-                        total_proses = int(df_filtered["Total Baris"].sum())
+                        total_proses = int(df_filtered["total_data_diproses"].sum())
                         st.metric(
                             label="Total Baris Diproses", 
                             value=f"{total_proses:,} data".replace(",", ".")
                         )
                     with col_m2:
-                        total_temuan = int(df_filtered["Total Temuan"].sum())
+                        total_temuan = int(df_filtered["total_baris_temuan"].sum())
                         st.metric(
                             label="Total Baris Temuan", 
                             value=f"{total_temuan:,} data".replace(",", ".")
