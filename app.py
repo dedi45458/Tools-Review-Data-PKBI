@@ -23,7 +23,7 @@ from database import (
     ambil_database_layanan,
     ambil_histori_review_minggu_ini,
     ambil_lembaga_belum_validasi_minggu_ini,
-    ambil_data_tren_review
+    ambil_data_tren_review,
     
     # 🛠️ PROSES SIMPAN DATA REVIEWS
     simpan_agregasi_ke_neon,          # Untuk Penjangkauan
